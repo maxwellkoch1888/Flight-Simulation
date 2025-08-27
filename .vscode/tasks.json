@@ -1,0 +1,25 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Fortran Active File",
+            "type": "shell",
+            "command": "gfortran",
+            "args": [
+                "${file}",
+                "-o", "${fileDirname}\\${fileBasenameNoExtension}.exe",
+                "-mconsole"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Run Fortran Active File",
+            "type": "shell",
+            "command": "${fileDirname}\\${fileBasenameNoExtension}.exe",
+            "dependsOn": "Build Fortran Active File"
+        }
+    ]
+}
