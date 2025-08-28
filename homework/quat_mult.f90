@@ -4,28 +4,32 @@ program quat_mult
 
     contains
     
-    function quaternion_product(quatA, quatB) result(quatC)
+    function quaternion_product(quat_a, quat_b) result(quat_c)
         real, dimension(4), intent(in) :: quatA, quatB
         real, dimension(4) :: quatC
-        real :: A0, AX, AY, AZ
-        real :: B0, BX, BY, BZ
+        real :: a0, ax, ay, az
+        real :: b0, bx, by, bz
  
         ! EXTRACT THE VALUES FROM THE TWO QUATERNIONS
-        A0 = quatA(1)
-        AX = quatA(2)
-        AY = quatA(3)
-        AZ = quatA(4)
+        a0 = quat_a(1)
+        ax = quat_a(2)
+        ay = quat_a(3)
+        az = quat_a(4)
 
-        B0 = quatB(1)
-        BX = quatB(2)
-        BY = quatB(3)
-        BZ = quatB(4)
+        b0 = quat_b(1)
+        bx = quat_b(2)
+        by = quat_b(3)
+        bz = quat_b(4)
 
         ! BUILD THE 0, X, Y, AND Z COMPONENTS OF THE NEW QUATERNION
-        C0 = 2
-        CX = 1
-        CY = 3
-        CZ = 3
+        c0 = a0*b0 - ax*bx - ay*by - az*bz
+        cx = a0*bx + ax*b0 + ay*bz - az*by
+        cy = a0*by - ax*bz + ay*b0 + az*bx
+        cz = a0*bz + ax*by - ay*bx + az*b0
+
+        ! BUILD THE RESULT OF THE QUATERNION PRODUCT
+        quat_c = 
+
 
 
         
