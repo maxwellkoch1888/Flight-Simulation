@@ -5,8 +5,8 @@ program quat_mult
     contains
     
     function quaternion_product(quat_a, quat_b) result(quat_c)
-        real, dimension(4), intent(in) :: quatA, quatB
-        real, dimension(4) :: quatC
+        real, dimension(4), intent(in) :: quat_a, quat_b
+        real, dimension(4) :: quat_c
         real :: a0, ax, ay, az
         real :: b0, bx, by, bz
  
@@ -28,7 +28,10 @@ program quat_mult
         cz = a0*bz + ax*by - ay*bx + az*b0
 
         ! BUILD THE RESULT OF THE QUATERNION PRODUCT
-        quat_c = 
+        quat_c = (/c0, cx, cy, cz/)
+    end function quaternion_product
+
+end program quat_mult
 
 
 
