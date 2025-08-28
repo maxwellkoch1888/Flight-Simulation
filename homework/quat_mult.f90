@@ -1,14 +1,29 @@
-program quat_mult
+program quaternion_multiplication
     ! WRITE A FUNCTION NAMED quat_mult THAT ACCEPTS TWO ARRAYS OF LENGTH FOUR.
     ! REPRESENTS TWO QUATERNIONS AND RETURNS THE QUATERNION PRODUCT. 
+    real(8), dimension(4) :: quaternion, velocity, inertial_velocity, quaternion_conj, temporary_quat
 
+    ! TEST USING EXAMPLE 11.7.1 MECHANICS OF FLIGHT
+    quaternion = (/0.79212226029964539, 0.18231628330847405, 0.32686024176107303, 0.48214674108020061/)
+    quaternion_conj = (/0.79212226029964539, -0.18231628330847405, -0.32686024176107303, -0.48214674108020061/)
+    velocity = (/ 0.0, 825.96, 300.63, 476.87/)
+
+    temporary_quat = quat_mult(velocity, quaternion_conj)
+    WRITE(*,*) temporary_quat
+
+    inertial_velocity = quat_mult(quaternion, temporary_quat)
+
+    WRITE(*,*) inertial_velocity
+
+    
     contains
     
-    function quaternion_product(quat_a, quat_b) result(quat_c)
-        real, dimension(4), intent(in) :: quat_a, quat_b
-        real, dimension(4) :: quat_c
-        real :: a0, ax, ay, az
-        real :: b0, bx, by, bz
+    function quat_mult(quat_a, quat_b) result(quat_c)
+        real(8), dimension(4), intent(in) :: quat_a, quat_b
+        real(8), dimension(4) :: quat_c
+        real(8) :: a0, ax, ay, az
+        real(8) :: b0, bx, by, bz
+        real(8) :: c0, cx, cy, cz
  
         ! EXTRACT THE VALUES FROM THE TWO QUATERNIONS
         a0 = quat_a(1)
@@ -29,9 +44,9 @@ program quat_mult
 
         ! BUILD THE RESULT OF THE QUATERNION PRODUCT
         quat_c = (/c0, cx, cy, cz/)
-    end function quaternion_product
+    end function quat_mult
 
-end program quat_mult
+end program quaternion_multiplication
 
 
 
