@@ -48,7 +48,5 @@ program quaternion_multiplication
 
 end program quaternion_multiplication
 
-
-
         
             

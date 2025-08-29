@@ -28,10 +28,18 @@ program euler_quaternion_conversions
         azimuth_angle = euler_angles(3) * pi / 180
 
         ! CALCULATE e0, ex, ey, ez
-        e0 = COS(bank_angle/2) * COS(pitch_angle/2) * COS(azimuth_angle/2) + SIN(bank_angle/2) * SIN(pitch_angle/2) * SIN(azimuth_angle/2)
-        ex = SIN(bank_angle/2) * COS(pitch_angle/2) * COS(azimuth_angle/2) - COS(bank_angle/2) * SIN(pitch_angle/2) * SIN(azimuth_angle/2)
-        ey = COS(bank_angle/2) * SIN(pitch_angle/2) * COS(azimuth_angle/2) + SIN(bank_angle/2) * COS(pitch_angle/2) * SIN(azimuth_angle/2)
-        ez = COS(bank_angle/2) * COS(pitch_angle/2) * SIN(azimuth_angle/2) - SIN(bank_angle/2) * SIN(pitch_angle/2) * COS(azimuth_angle/2)
+        e0 = COS(bank_angle/2) * COS(pitch_angle/2) * &
+             COS(azimuth_angle/2) + SIN(bank_angle/2) * &
+             SIN(pitch_angle/2) * SIN(azimuth_angle/2)
+        ex = SIN(bank_angle/2) * COS(pitch_angle/2) * &
+             COS(azimuth_angle/2) - COS(bank_angle/2) * &
+             SIN(pitch_angle/2) * SIN(azimuth_angle/2)
+        ey = COS(bank_angle/2) * SIN(pitch_angle/2) * &
+             COS(azimuth_angle/2) + SIN(bank_angle/2) * &
+             COS(pitch_angle/2) * SIN(azimuth_angle/2)
+        ez = COS(bank_angle/2) * COS(pitch_angle/2) * &
+             SIN(azimuth_angle/2) - SIN(bank_angle/2) * &
+             SIN(pitch_angle/2) * COS(azimuth_angle/2)
 
         ! BUILD THE QUATERNION
         quaternion = (/e0, ex, ey, ez/)
