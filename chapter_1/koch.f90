@@ -8,10 +8,10 @@ module koch_m
 ! PROBLEM 1.8.3
     function quat_mult(quat_a, quat_b) result(quat_c)
         implicit none
-        real(8), dimension(4), intent(in) :: quat_a, quat_b
-        real(8), dimension(4) :: quat_c
-        real(8) :: a0, ax, ay, az
-        real(8) :: b0, bx, by, bz
+        real, dimension(4), intent(in) :: quat_a, quat_b
+        real, dimension(4) :: quat_c
+        real :: a0, ax, ay, az
+        real :: b0, bx, by, bz
  
         ! EXTRACT THE VALUES FROM THE TWO QUATERNIONS
         a0 = quat_a(1)
@@ -33,15 +33,15 @@ module koch_m
     end function quat_mult
 ! -------------------------------------------------------------------------
 ! PROBLEM 1.8.4
-    function quat_base_to_dependent(quat, base_vec) result(dependent_vec)
+    function quat_base_to_dependent(base_vec, quat) result(dependent_vec)
         implicit none
-        real(8), dimension(4), intent(in) :: quat
-        real(8), dimension(3), intent(in) :: base_vec
-        real(8), dimension(3) :: dependent_vec
-        real(8), dimension(4) :: vec_quat, quat_conj, temp_quat, quat_sol
+        real, dimension(4), intent(in) :: quat
+        real, dimension(3), intent(in) :: base_vec
+        real, dimension(3) :: dependent_vec
+        real, dimension(4) :: vec_quat, quat_conj, temp_quat, quat_sol
         
         ! BUILD VARIABLES FROM EQUATION 1.5.4 
-        vec_quat = (/0.0d0, base_vec(1), base_vec(2), base_vec(3)/)
+        vec_quat = (/0.0, base_vec(1), base_vec(2), base_vec(3)/)
         quat_conj = (/quat(1), -quat(2), -quat(3), -quat(4)/)
 
         ! FIRST ROTATION FROM 1.5.4
@@ -54,15 +54,15 @@ module koch_m
     end function quat_base_to_dependent
 ! -------------------------------------------------------------------------
 ! PROBLEM 1.8.5
-    function quat_dependent_to_base(quat, dependent_vec) result(base_vec)
+    function quat_dependent_to_base(dependent_vec, quat) result(base_vec)
         implicit none
-        real(8), dimension(4), intent(in) :: quat
-        real(8), dimension(3), intent(in) :: dependent_vec
-        real(8), dimension(3) :: base_vec
-        real(8), dimension(4) :: vec_quat, quat_conj, temp_quat, quat_sol
+        real, dimension(4), intent(in) :: quat
+        real, dimension(3), intent(in) :: dependent_vec
+        real, dimension(3) :: base_vec
+        real, dimension(4) :: vec_quat, quat_conj, temp_quat, quat_sol
 
         ! BUILD VARIABLES FROM EQUATION 1.5.4 
-        vec_quat = (/0.0d0, dependent_vec(1), dependent_vec(2), dependent_vec(3)/)
+        vec_quat = (/0.0, dependent_vec(1), dependent_vec(2), dependent_vec(3)/)
         quat_conj = (/quat(1), -quat(2), -quat(3), -quat(4)/)
         
         ! FIRST ROTATION FROM 1.5.4
@@ -75,8 +75,8 @@ module koch_m
 ! -------------------------------------------------------------------------
 ! PROBLEM 1.8.6
     subroutine quat_norm (quat)
-        real(8), dimension(4), intent(inout) :: quat
-        real(8) :: quat_mag
+        real, dimension(4), intent(inout) :: quat
+        real :: quat_mag
 
         ! FIND QUATERNION MAGNITUDE
         quat_mag = (quat(1)**2 + quat(2)**2 + quat(3)**2 + quat(4)**2)**0.5
@@ -91,44 +91,40 @@ module koch_m
 ! -------------------------------------------------------------------------
 ! PROBLEM 1.8.7
     function euler_to_quat(euler_angles) result(quat)
-        real(8), dimension(3), intent(in) :: euler_angles
-        real(8), dimension(4) :: quat
-        real(8) :: pitch_angle, bank_angle, azimuth_angle
-        real(8) :: e0, ex, ey, ez
-        real(8) :: pi 
-        pi = 4.D0 * DATAN(1.D0)
+        real, dimension(3), intent(in) :: euler_angles
+        real, dimension(4) :: quat
+        real :: pitch_angle, bank_angle, azimuth_angle
+        real :: e0, ex, ey, ez, cb, sb, cp, sp, ca, sa
 
         ! EXTRACT THE PITCH, BANK, AND AZIMUTH ANGLES
-        pitch_angle = euler_angles(2) * pi / 180
-        bank_angle = euler_angles(1) * pi / 180
-        azimuth_angle = euler_angles(3) * pi / 180
+        pitch_angle = euler_angles(2)
+        bank_angle = euler_angles(1)
+        azimuth_angle = euler_angles(3)
+
+        ! BUILD THE SIN AND COSINE VARIABLES
+        cb = COS(bank_angle/2)
+        sb = SIN(bank_angle/2)
+        cp = COS(pitch_angle/2)
+        sp = SIN(pitch_angle/2)
+        ca = COS(azimuth_angle/2)
+        sa = SIN(azimuth_angle/2)
 
         ! CALCULATE e0, ex, ey, ez
-        e0 = COS(bank_angle/2) * COS(pitch_angle/2) * &
-             COS(azimuth_angle/2) + SIN(bank_angle/2) * &
-             SIN(pitch_angle/2) * SIN(azimuth_angle/2)
-        ex = SIN(bank_angle/2) * COS(pitch_angle/2) * &
-             COS(azimuth_angle/2) - COS(bank_angle/2) * &
-             SIN(pitch_angle/2) * SIN(azimuth_angle/2)
-        ey = COS(bank_angle/2) * SIN(pitch_angle/2) * &
-             COS(azimuth_angle/2) + SIN(bank_angle/2) * &
-             COS(pitch_angle/2) * SIN(azimuth_angle/2)
-        ez = COS(bank_angle/2) * COS(pitch_angle/2) * &
-             SIN(azimuth_angle/2) - SIN(bank_angle/2) * &
-             SIN(pitch_angle/2) * COS(azimuth_angle/2)
+        e0 = cb * cp * ca + sb * sp * sa
+        ex = sb * cp * ca - cb * sp * sa
+        ey = cb * sp * ca + sb * cp * sa
+        ez = cb * cp * sa - sb * sp * ca
 
-        ! BUILD THE quat
+        ! BUILD THE QUATERNION
         quat = (/e0, ex, ey, ez/)
     end function euler_to_quat 
 ! -------------------------------------------------------------------------
 ! PROBLEM 1.8.8
     function quat_to_euler(quat) result(euler_angles)
-        real(8), dimension(4), intent(in) :: quat
-        real(8), dimension(3) :: euler_angles
-        real(8) :: pitch_angle, bank_angle, azimuth_angle
-        real(8) :: e0, ex, ey, ez
-        real(8) :: pi 
-        pi = 4.D0 * DATAN(1.D0)
+        real, dimension(4), intent(in) :: quat
+        real, dimension(3) :: euler_angles
+        real :: pitch_angle, bank_angle, azimuth_angle
+        real :: e0, ex, ey, ez
 
         ! EXTRACT e0, ex, ey, AND ez FROM THE quat
         e0 = quat(1)
@@ -136,10 +132,10 @@ module koch_m
         ey = quat(3)
         ez = quat(4)
 
-        ! CALCULATE THE EQUIVALENT EULER ANGLES IN DEGREES
-        bank_angle = ATAN2(2*(e0*ex + ey*ez), (e0**2 + ez**2 - ex**2 - ey**2)) * 180 / pi
-        pitch_angle = ASIN(2*(e0*ey - ex*ez)) * 180 / pi
-        azimuth_angle = ATAN2(2*(e0*ez + ex*ey), (e0**2 + ex**2 - ey**2 - ez**2)) * 180 / pi
+        ! CALCULATE THE EQUIVALENT EULER ANGLES
+        bank_angle = ATAN2(2*(e0*ex + ey*ez), (e0**2 + ez**2 - ex**2 - ey**2))
+        pitch_angle = ASIN(2*(e0*ey - ex*ez))
+        azimuth_angle = ATAN2(2*(e0*ez + ex*ey), (e0**2 + ex**2 - ey**2 - ez**2))
 
         ! RETURN THE EULER ANGLE
         euler_angles = (/bank_angle, pitch_angle, azimuth_angle/)
