@@ -1,6 +1,6 @@
 module koch_m
     implicit none
-    real, parameter :: pi = 3.1415926535897932384626433832795
+    REAL, PARAMETER :: PI = 3.14159265358979323846264338327950288419716939937510
     real, parameter :: tol = 1.0e-12
 
     contains
@@ -91,6 +91,7 @@ module koch_m
 ! -------------------------------------------------------------------------
 ! PROBLEM 1.8.7
     function euler_to_quat(euler_angles) result(quat)
+        implicit none
         real, dimension(3), intent(in) :: euler_angles
         real, dimension(4) :: quat
         real :: pitch_angle, bank_angle, azimuth_angle
@@ -102,21 +103,37 @@ module koch_m
         azimuth_angle = euler_angles(3)
 
         ! BUILD THE SIN AND COSINE VARIABLES
-        cb = COS(bank_angle/2)
-        sb = SIN(bank_angle/2)
-        cp = COS(pitch_angle/2)
-        sp = SIN(pitch_angle/2)
-        ca = COS(azimuth_angle/2)
-        sa = SIN(azimuth_angle/2)
+        cb = COS(bank_angle/2.0)
+        sb = SIN(bank_angle/2.0)
+        cp = COS(pitch_angle/2.0)
+        sp = SIN(pitch_angle/2.0)
+        ca = COS(azimuth_angle/2.0)
+        sa = SIN(azimuth_angle/2.0)
 
         ! CALCULATE e0, ex, ey, ez
-        e0 = cb * cp * ca + sb * sp * sa
-        ex = sb * cp * ca - cb * sp * sa
-        ey = cb * sp * ca + sb * cp * sa
-        ez = cb * cp * sa - sb * sp * ca
+        e0 = cb*cp*ca + sb*sp*sa
+        ex = sb*cp*ca - cb*sp*sa
+        ey = cb*sp*ca + sb*cp*sa
+        ez = cb*cp*sa - sb*sp*ca
 
         ! BUILD THE QUATERNION
         quat = (/e0, ex, ey, ez/)
+
+        ! BUILD A LOCAL FUNCTION TO CORRECT ROUNDING ERRORS FOR PI
+        ! contains
+        !     function clean_value(x) result(y)
+        !         real, intent(in) :: x
+        !         real :: y
+        !         if(abs(x) < tol) then
+        !             y = 0
+        !         else if(abs(x - 1) < tol) then
+        !             y = 1
+        !         else if(abs(x+1) < tol) then
+        !             y = -1
+        !         else
+        !             y = x 
+        !         end if 
+        !     end function clean_value
     end function euler_to_quat 
 ! -------------------------------------------------------------------------
 ! PROBLEM 1.8.8
@@ -124,7 +141,7 @@ module koch_m
         real, dimension(4), intent(in) :: quat
         real, dimension(3) :: euler_angles
         real :: pitch_angle, bank_angle, azimuth_angle
-        real :: e0, ex, ey, ez
+        real :: e0, ex, ey, ez, res
 
         ! EXTRACT e0, ex, ey, AND ez FROM THE quat
         e0 = quat(1)
@@ -132,10 +149,23 @@ module koch_m
         ey = quat(3)
         ez = quat(4)
 
+        ! CALCULATE RESULT FOR GIMBLE LOCK
+        res = e0*ey - ex*ez
+
         ! CALCULATE THE EQUIVALENT EULER ANGLES
-        bank_angle = ATAN2(2*(e0*ex + ey*ez), (e0**2 + ez**2 - ex**2 - ey**2))
-        pitch_angle = ASIN(2*(e0*ey - ex*ez))
-        azimuth_angle = ATAN2(2*(e0*ez + ex*ey), (e0**2 + ex**2 - ey**2 - ez**2))
+        if(abs(res - 0.5) < tol) then
+            azimuth_angle = 0
+            bank_angle = 2*ASIN(ex/COS(pi/4) + azimuth_angle)
+            pitch_angle = pi/2
+        else if(abs(res + 0.5) < tol) then
+            azimuth_angle = 0
+            bank_angle = 2*ASIN(ex/COS(pi/4) - azimuth_angle)
+            pitch_angle = -pi/2
+        else
+            bank_angle = ATAN2(2*(e0*ex + ey*ez), (e0**2 + ez**2 - ex**2 - ey**2))
+            pitch_angle = ASIN(2*(e0*ey - ex*ez))
+            azimuth_angle = ATAN2(2*(e0*ez + ex*ey), (e0**2 + ex**2 - ey**2 - ez**2))
+        end if
 
         ! RETURN THE EULER ANGLE
         euler_angles = (/bank_angle, pitch_angle, azimuth_angle/)
