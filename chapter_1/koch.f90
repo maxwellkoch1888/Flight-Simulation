@@ -75,6 +75,7 @@ module koch_m
 ! -------------------------------------------------------------------------
 ! PROBLEM 1.8.6
     subroutine quat_norm (quat)
+        implicit none
         real, dimension(4), intent(inout) :: quat
         real :: quat_mag
 
@@ -118,26 +119,11 @@ module koch_m
 
         ! BUILD THE QUATERNION
         quat = (/e0, ex, ey, ez/)
-
-        ! BUILD A LOCAL FUNCTION TO CORRECT ROUNDING ERRORS FOR PI
-        ! contains
-        !     function clean_value(x) result(y)
-        !         real, intent(in) :: x
-        !         real :: y
-        !         if(abs(x) < tol) then
-        !             y = 0
-        !         else if(abs(x - 1) < tol) then
-        !             y = 1
-        !         else if(abs(x+1) < tol) then
-        !             y = -1
-        !         else
-        !             y = x 
-        !         end if 
-        !     end function clean_value
     end function euler_to_quat 
 ! -------------------------------------------------------------------------
 ! PROBLEM 1.8.8
     function quat_to_euler(quat) result(euler_angles)
+        implicit none
         real, dimension(4), intent(in) :: quat
         real, dimension(3) :: euler_angles
         real :: pitch_angle, bank_angle, azimuth_angle
@@ -154,17 +140,17 @@ module koch_m
 
         ! CALCULATE THE EQUIVALENT EULER ANGLES
         if(abs(res - 0.5) < tol) then
-            azimuth_angle = 0
-            bank_angle = 2*ASIN(ex/COS(pi/4) + azimuth_angle)
-            pitch_angle = pi/2
+            azimuth_angle = 0.0
+            bank_angle = 2*ASIN(ex/COS(pi/4.0) + azimuth_angle)
+            pitch_angle = pi/2.0
         else if(abs(res + 0.5) < tol) then
-            azimuth_angle = 0
-            bank_angle = 2*ASIN(ex/COS(pi/4) - azimuth_angle)
+            azimuth_angle = 0.0
+            bank_angle = 2.0*ASIN(ex/COS(pi/4.0) - azimuth_angle)
             pitch_angle = -pi/2
         else
-            bank_angle = ATAN2(2*(e0*ex + ey*ez), (e0**2 + ez**2 - ex**2 - ey**2))
-            pitch_angle = ASIN(2*(e0*ey - ex*ez))
-            azimuth_angle = ATAN2(2*(e0*ez + ex*ey), (e0**2 + ex**2 - ey**2 - ez**2))
+            bank_angle = ATAN2(2.0*(e0*ex + ey*ez), (e0**2 + ez**2 - ex**2 - ey**2))
+            pitch_angle = ASIN(2.0*(e0*ey - ex*ez))
+            azimuth_angle = ATAN2(2.0*(e0*ez + ex*ey), (e0**2 + ex**2 - ey**2 - ez**2))
         end if
 
         ! RETURN THE EULER ANGLE
@@ -173,4 +159,97 @@ module koch_m
 ! -------------------------------------------------------------------------
 ! PROBLEM 1.8.9
 ! MODIFY THE CODE TO MAKE IT RUN AS QUICKLY AS POSSIBLE
+! -------------------------------------------------------------------------
+!PROBLEM 3.13.1
+! WRITE A FUNCTION TO COMPUTE THE GRAVITY AS A FUNCTION OF ALTITUDE USING EQ 3.2.1 IN SI UNITS
+    function gravity_at_altitude_SI(geometric_altitude_m) result(gravity_m_per_sec2)
+        implicit none
+        real, intent(in) :: geometric_altitude_m
+        real :: gravity_m_per_sec2, gssl, Rez
+        
+        ! DEFINE GRAVITY AT STANDARD SEA LEVEL AND RADIUS OF EARTH IN THE US
+        gssl = 9.80665
+        Rez = 6356766.0
+
+        ! CALCULATE GRAVITY AT ALTITUDE
+        gravity_m_per_sec2 = gssl * (Rez / (Rez + geometric_altitude_m)) ** 2
+    end function gravity_at_altitude_SI
+! -------------------------------------------------------------------------
+
+! PROBLEM 3.13.2 WRITE A FUNCTION TO COMPUTE THE GRAVITY AS A FUNCTION OF GEOMETRIC ALTITUDE IN ENGLISH UNITS
+    function gravity_at_altitude_imperial(geometric_altitude_ft) result(gravity_ft_per_sec2)
+        implicit none
+        real, intent(in) :: geometric_altitude_ft
+        real :: gravity_ft_per_sec2, gssl, Rez 
+        ! DEFINE GRAVITY AT STANDARD SEA LEVEL AND RADIUS OF EARTH IN THE US
+        gssl = 9.80665 / 0.3048
+        Rez = 6356766.0 / 0.3048
+
+        ! CALCULATE GRAVITY AT ALTITUDE
+        gravity_ft_per_sec2 = gssl * (Rez / (Rez + geometric_altitude_ft)) ** 2
+    end function gravity_at_altitude_imperial
+! -------------------------------------------------------------------------
+
+! PROBLEM 3.13.3 WRITE A FUNCTION TO COMPUTE STANDARD ATMOSPHERIC PROPERTIES IN SI UNITS
+    subroutine atmospheric_properties_SI(&
+        geometric_altitude_m, geopotential_altitude_m, & 
+        temp_k, pressure_N_per_m2, density_kg_per_m2, sos_m_per_sec)
+        implicit none
+        real, intent(in) :: geometric_altitude_m
+        real, intent(out) :: geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m2, sos_m_per_sec
+        real, dimension(8) :: ti, ti_prime
+        real, dimension(8) :: p_i
+        real, dimension(9) :: zi
+        real :: Rez, R, gssl, power
+        logical :: altitude_condition = .false.
+        integer :: i
+
+        ! DEFINE RADIUS OF EARTH IN US, GAS CONSTANT, INITIAL PRESSURE, AND THE TEMPERATURE VARIATION TABLE
+        Rez = 6356766.0
+        gssl = 9.80665
+        R = 287.0528
+        p_i(1) = 101325.0
+        zi = (/0.0, 11000.0, 20000.0, 32000.0, 47000.0, 52000.0, 61000.0, 79000.0, 90000.0/)
+        ti = (/288.150, 216.650, 216.650, 228.650, 270.650, 270.650, 252.650, 180.650/)
+        ti_prime = (/-6.5, 0.0, 1.0, 2.8, 0.0, -2.0, -4.0, 0.0/)
+
+        ! CALCULATE THE GEOPOTENTIAL ALTITUDE
+        geopotential_altitude_m = Rez * geometric_altitude_m / (Rez + geometric_altitude_m)
+
+        write(*,*) geopotential_altitude_m
+
+        ! COMPUTE THE PRESSURE RANGES
+        i = 1
+        do while (i < 8)
+            if (ti_prime(i) == 0.0) then
+                power = -(gssl * (zi(i+1) - zi(i))) / (R * ti(i))
+                p_i(i+1) = p_i(i) * exp(power)
+
+            else
+                power = gssl / (R * ti_prime(i))
+                p_i(i+1) = p_i(i) * ((ti(i) + ti_prime(i) * (zi(i+1) - zi(i))) / (ti(i))) ** (power)
+            end if
+            altitude_condition = geopotential_altitude_m <= zi(i)
+            i = i + 1
+            write(*, *) power
+
+        end do 
+
+        write(*,*) p_i
+
+        ! CALCULATE THE TEMPERATURE AND PRESSURE
+        temp_k = 0
+        pressure_N_per_m2 = 0.0
+
+        ! CALCULATE THE DENSITY 3.2.8
+        density_kg_per_m2 = 0.0
+
+        ! CALCULATE THE SPEED OF SOUND 3.2.9
+        sos_m_per_sec = 0.0
+    end subroutine atmospheric_properties_SI
+
+
+! -------------------------------------------------------------------------
+
+! PROBLEM 3.13.4 WRITE A FUNCTION TO COMPUTE STANDARD ATMOSPHERIC PROPERTIES IN IMPERIAL UNITS
 end module koch_m
