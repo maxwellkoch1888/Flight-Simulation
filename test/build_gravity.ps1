@@ -1,1 +1,0 @@
-gfortran -fdefault-real-8 -Wall chapter_1/koch.f90 test/gravity_test.f90 -o test/gravity_test.exe

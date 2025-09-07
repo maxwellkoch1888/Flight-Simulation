@@ -200,52 +200,79 @@ module koch_m
         real, dimension(8) :: ti, ti_prime
         real, dimension(8) :: p_i
         real, dimension(9) :: zi
-        real :: Rez, R, gssl, power
+        real :: Rez, R, gssl, power, gamma
         logical :: altitude_condition = .false.
-        integer :: i
+        integer :: i, j
 
         ! DEFINE RADIUS OF EARTH IN US, GAS CONSTANT, INITIAL PRESSURE, AND THE TEMPERATURE VARIATION TABLE
         Rez = 6356766.0
         gssl = 9.80665
         R = 287.0528
+        gamma = 1.4
         p_i(1) = 101325.0
         zi = (/0.0, 11000.0, 20000.0, 32000.0, 47000.0, 52000.0, 61000.0, 79000.0, 90000.0/)
         ti = (/288.150, 216.650, 216.650, 228.650, 270.650, 270.650, 252.650, 180.650/)
-        ti_prime = (/-6.5, 0.0, 1.0, 2.8, 0.0, -2.0, -4.0, 0.0/)
+        ti_prime = (/-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0020, -0.004, 0.0/)
 
-        ! CALCULATE THE GEOPOTENTIAL ALTITUDE
+        ! CALCULATE THE GEOPOTENTIAL ALTITUDE IN km
         geopotential_altitude_m = Rez * geometric_altitude_m / (Rez + geometric_altitude_m)
 
-        write(*,*) geopotential_altitude_m
+        ! print*, "Geometric Altitude"
+        ! print*, geometric_altitude_m
+        ! print*, ""
+        ! print*, "Geopotential Altitude" 
+        ! print*, geopotential_altitude_m
+        ! print*, ""
+
+        ! CALCULATE THE TEMPERATURE
+        i = 1
+        do while (zi(i) <= geopotential_altitude_m)
+            i = i + 1
+        end do 
+        i = i - 1
+
+        temp_k = ti(i) + ti_prime(i) * (geopotential_altitude_m - zi(i))
+
+        ! print*, "Base temp range"
+        ! print*, ti(i)
+        ! print*, ""
+        ! print*, "Base T prime"
+        ! print*, ti_prime(i)
+        ! print*, "" 
 
         ! COMPUTE THE PRESSURE RANGES
-        i = 1
-        do while (i < 8)
-            if (ti_prime(i) == 0.0) then
-                power = -(gssl * (zi(i+1) - zi(i))) / (R * ti(i))
-                p_i(i+1) = p_i(i) * exp(power)
+        j = 1
+        do while (j < 8)
+            if (ti_prime(j) == 0.0) then
+                power = -(gssl * (zi(j+1) - zi(j))) / (R * ti(j))
+                p_i(j+1) = p_i(j) * exp(power)
 
             else
-                power = gssl / (R * ti_prime(i))
-                p_i(i+1) = p_i(i) * ((ti(i) + ti_prime(i) * (zi(i+1) - zi(i))) / (ti(i))) ** (power)
+                power = -gssl / (R * ti_prime(j))
+                p_i(j+1) = p_i(j) * ((ti(j) + ti_prime(j) * (zi(j+1) - zi(j))) / (ti(j))) ** (power)
             end if
-            altitude_condition = geopotential_altitude_m <= zi(i)
-            i = i + 1
-            write(*, *) power
-
+            altitude_condition = geopotential_altitude_m <= zi(j)
+            j = j + 1
         end do 
 
-        write(*,*) p_i
+        if (ti_prime(i) == 0.0) then
+            power = -(gssl * (geopotential_altitude_m - zi(i))) / (R * ti(i))
+            pressure_N_per_m2 = p_i(i) * exp(power)
 
-        ! CALCULATE THE TEMPERATURE AND PRESSURE
-        temp_k = 0
-        pressure_N_per_m2 = 0.0
+        else
+            power = -gssl / (R * ti_prime(i))
+            pressure_N_per_m2 = p_i(i) * ((ti(i) + ti_prime(i) * (geopotential_altitude_m - zi(i))) / (ti(i))) ** (power)
+        end if
+
+        ! print*, "Base pressure range"
+        ! print*, p_i(i)
+        ! print*, ""
 
         ! CALCULATE THE DENSITY 3.2.8
-        density_kg_per_m2 = 0.0
+        density_kg_per_m2 = pressure_N_per_m2 / (R * temp_k)
 
         ! CALCULATE THE SPEED OF SOUND 3.2.9
-        sos_m_per_sec = 0.0
+        sos_m_per_sec = (gamma * R * temp_k) ** 0.5
     end subroutine atmospheric_properties_SI
 
 
