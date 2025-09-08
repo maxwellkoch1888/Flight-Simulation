@@ -2,7 +2,7 @@ program atmosphere_test
     use koch_m
     implicit none
     real :: geometric_altitude_m, geopotential_altitude_m
-    real :: temp_k, pressure_N_per_m2, density_kg_per_m2, sos_m_per_sec
+    real :: temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec
     real, dimension(6) :: res
     integer :: i, io_unit
 
@@ -19,9 +19,9 @@ program atmosphere_test
         geometric_altitude_m = real(i)
 
         call atmospheric_properties_SI(geometric_altitude_m, geopotential_altitude_m, & 
-            temp_k, pressure_N_per_m2, density_kg_per_m2, sos_m_per_sec)
+            temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec)
 
-        res = (/geometric_altitude_m, geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m2, sos_m_per_sec/)
+        res = (/geometric_altitude_m, geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec/)
 
         write(io_unit,'(6ES26.12)') res
 

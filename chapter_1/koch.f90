@@ -193,10 +193,10 @@ module koch_m
 ! PROBLEM 3.13.3 WRITE A FUNCTION TO COMPUTE STANDARD ATMOSPHERIC PROPERTIES IN SI UNITS
     subroutine atmospheric_properties_SI(&
         geometric_altitude_m, geopotential_altitude_m, & 
-        temp_k, pressure_N_per_m2, density_kg_per_m2, sos_m_per_sec)
+        temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec)
         implicit none
         real, intent(in) :: geometric_altitude_m
-        real, intent(out) :: geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m2, sos_m_per_sec
+        real, intent(out) :: geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec
         real, dimension(8) :: ti, ti_prime
         real, dimension(8) :: p_i
         real, dimension(9) :: zi
@@ -269,7 +269,7 @@ module koch_m
         ! print*, ""
 
         ! CALCULATE THE DENSITY 3.2.8
-        density_kg_per_m2 = pressure_N_per_m2 / (R * temp_k)
+        density_kg_per_m3 = pressure_N_per_m2 / (R * temp_k)
 
         ! CALCULATE THE SPEED OF SOUND 3.2.9
         sos_m_per_sec = (gamma * R * temp_k) ** 0.5
@@ -279,4 +279,30 @@ module koch_m
 ! -------------------------------------------------------------------------
 
 ! PROBLEM 3.13.4 WRITE A FUNCTION TO COMPUTE STANDARD ATMOSPHERIC PROPERTIES IN IMPERIAL UNITS
+    subroutine atmospheric_properties_imperial(&
+        geometric_altitude_ft, geopotential_altitude_ft, & 
+        temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, sos_ft_per_sec)
+        
+        implicit none
+        real, intent(in) :: geometric_altitude_ft
+        real, intent(out) :: geopotential_altitude_ft, temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, sos_ft_per_sec
+        real :: geometric_altitude_m, geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec
+
+        ! CONVERT THE ALTITUDE TO FT
+        geometric_altitude_m = geometric_altitude_ft * 0.3048
+
+        ! USE THE SI VERSION OF ATMOSPHERE PROPERTIES
+        call atmospheric_properties_SI(geometric_altitude_m, geopotential_altitude_m, & 
+        temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec)
+
+        ! CONVERT THE UNITS BACK TO IMPERIAL
+        geopotential_altitude_ft = geopotential_altitude_m / 0.3048
+        temp_R = (temp_k * 1.8) 
+        pressure_lbf_per_ft2 = pressure_N_per_m2 / 47.880258
+        density_slugs_per_ft3 = density_kg_per_m3 / 515.379
+        sos_ft_per_sec = sos_m_per_sec / 0.3048
+    
+    end subroutine atmospheric_properties_imperial
+        
+
 end module koch_m
