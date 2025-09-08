@@ -162,7 +162,7 @@ module koch_m
 ! -------------------------------------------------------------------------
 !PROBLEM 3.13.1
 ! WRITE A FUNCTION TO COMPUTE THE GRAVITY AS A FUNCTION OF ALTITUDE USING EQ 3.2.1 IN SI UNITS
-    function gravity_at_altitude_SI(geometric_altitude_m) result(gravity_m_per_sec2)
+    function gravity_SI(geometric_altitude_m) result(gravity_m_per_sec2)
         implicit none
         real, intent(in) :: geometric_altitude_m
         real :: gravity_m_per_sec2, gssl, Rez
@@ -173,11 +173,11 @@ module koch_m
 
         ! CALCULATE GRAVITY AT ALTITUDE
         gravity_m_per_sec2 = gssl * (Rez / (Rez + geometric_altitude_m)) ** 2
-    end function gravity_at_altitude_SI
+    end function gravity_SI
 ! -------------------------------------------------------------------------
 
 ! PROBLEM 3.13.2 WRITE A FUNCTION TO COMPUTE THE GRAVITY AS A FUNCTION OF GEOMETRIC ALTITUDE IN ENGLISH UNITS
-    function gravity_at_altitude_imperial(geometric_altitude_ft) result(gravity_ft_per_sec2)
+    function gravity_English(geometric_altitude_ft) result(gravity_ft_per_sec2)
         implicit none
         real, intent(in) :: geometric_altitude_ft
         real :: gravity_ft_per_sec2, gssl, Rez 
@@ -187,11 +187,11 @@ module koch_m
 
         ! CALCULATE GRAVITY AT ALTITUDE
         gravity_ft_per_sec2 = gssl * (Rez / (Rez + geometric_altitude_ft)) ** 2
-    end function gravity_at_altitude_imperial
+    end function gravity_English
 ! -------------------------------------------------------------------------
 
 ! PROBLEM 3.13.3 WRITE A FUNCTION TO COMPUTE STANDARD ATMOSPHERIC PROPERTIES IN SI UNITS
-    subroutine atmospheric_properties_SI(&
+    subroutine std_atm_SI(&
         geometric_altitude_m, geopotential_altitude_m, & 
         temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec)
         implicit none
@@ -273,13 +273,13 @@ module koch_m
 
         ! CALCULATE THE SPEED OF SOUND 3.2.9
         sos_m_per_sec = (gamma * R * temp_k) ** 0.5
-    end subroutine atmospheric_properties_SI
+    end subroutine std_atm_SI
 
 
 ! -------------------------------------------------------------------------
 
 ! PROBLEM 3.13.4 WRITE A FUNCTION TO COMPUTE STANDARD ATMOSPHERIC PROPERTIES IN IMPERIAL UNITS
-    subroutine atmospheric_properties_imperial(&
+    subroutine std_atm_English(&
         geometric_altitude_ft, geopotential_altitude_ft, & 
         temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, sos_ft_per_sec)
         
@@ -292,7 +292,7 @@ module koch_m
         geometric_altitude_m = geometric_altitude_ft * 0.3048
 
         ! USE THE SI VERSION OF ATMOSPHERE PROPERTIES
-        call atmospheric_properties_SI(geometric_altitude_m, geopotential_altitude_m, & 
+        call std_atm_SI(geometric_altitude_m, geopotential_altitude_m, & 
         temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec)
 
         ! CONVERT THE UNITS BACK TO IMPERIAL
@@ -302,7 +302,7 @@ module koch_m
         density_slugs_per_ft3 = density_kg_per_m3 / 515.379
         sos_ft_per_sec = sos_m_per_sec / 0.3048
     
-    end subroutine atmospheric_properties_imperial
+    end subroutine std_atm_English
         
 
 end module koch_m
