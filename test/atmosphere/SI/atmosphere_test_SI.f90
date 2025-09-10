@@ -18,7 +18,7 @@ program atmosphere_test
     do i = 0, 90000, 5000
         geometric_altitude_m = real(i)
 
-        call atmospheric_properties_SI(geometric_altitude_m, geopotential_altitude_m, & 
+        call std_atm_SI(geometric_altitude_m, geopotential_altitude_m, & 
             temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec)
 
         res = (/geometric_altitude_m, geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec/)

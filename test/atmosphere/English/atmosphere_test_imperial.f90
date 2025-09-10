@@ -6,7 +6,7 @@ program atmosphere_test_imperial
     real, dimension(6) :: res
     integer :: i, io_unit
 
-    ! OPEN A OUTPUT FILE
+    ! OPEN AN OUTPUT FILE
     open(newunit=io_unit, file='3.13.6_output.txt', status='replace', action='write')
 
     ! BUILD THE HEADER
@@ -18,7 +18,7 @@ program atmosphere_test_imperial
     do i = 0, 200000, 10000
         geometric_altitude_ft = real(i)
 
-        call atmospheric_properties_imperial(geometric_altitude_ft, geopotential_altitude_ft, & 
+        call std_atm_English(geometric_altitude_ft, geopotential_altitude_ft, & 
         temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, sos_ft_per_sec)
     
         res = (/geometric_altitude_ft, geopotential_altitude_ft, temp_R, &

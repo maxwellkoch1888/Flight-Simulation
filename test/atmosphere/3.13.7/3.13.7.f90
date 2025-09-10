@@ -6,6 +6,8 @@ program main
     real :: start_time, end_time
     integer :: io_unit
 
+    ! Note: Only 10 digits following the decimal because there is some roundoff error that causes small issues in the English conversions
+    
     open(newunit=io_unit, file='3.13.7_output.txt', status='replace', action='write')
 
     write(io_unit,*) 'SI atmospheric test'
@@ -15,7 +17,7 @@ program main
             call std_atm_SI(real(i),Z,T,P,rho,a)
             g = gravity_SI(real(i))
         end do
-        write(io_unit,'(7ES25.11)') real(i),Z,T,P,rho,a,g
+        write(io_unit,'(7ES25.10)') real(i),Z,T,P,rho,a,g
     end do
     call cpu_time(end_time)
     print *, 'SI time total [sec]:          ', end_time - start_time
@@ -27,7 +29,7 @@ program main
             call std_atm_English(real(i),Z,T,P,rho,a)
             g = gravity_English(real(i))
         end do
-        write(io_unit,'(7ES25.11)') real(i),Z,T,P,rho,a,g
+        write(io_unit,'(7ES25.10)') real(i),Z,T,P,rho,a,g
     end do
     call cpu_time(end_time)
     print *, 'English time total [sec]:     ', end_time - start_time

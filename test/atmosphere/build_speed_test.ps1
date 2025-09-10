@@ -1,1 +1,0 @@
-gfortran -fdefault-real-8 -Wall chapter_1/koch.f90 test/atmosphere/3.13.7.f90 -o test/atmosphere/atmosphere_test_imperial.exe 
