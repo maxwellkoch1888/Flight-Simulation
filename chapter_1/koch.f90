@@ -355,7 +355,7 @@ module koch_m
             y1 = runge_kutta(t0, y0, delta_t)
 
             ! WRITE VALUES TO THE TABLE
-            write(io_unit, '(7F15.6)') t0, y1, k1, k2, k3, k4, y1
+            write(io_unit, '(7F15.6)') t0, y0, k1, k2, k3, k4, y1
             
             ! UPDATE VALUES FOR t0 AND y0
             t0 = t0 + delta_t
@@ -390,7 +390,7 @@ module koch_m
 
         ! DEFINE THE DIFFERENTIAL EQUATION
         dy_dt(1) = t + y(2)**2 * sin(y(1))
-        dy_dt(2) = t + y(1)**2 * cos(y(2))
+        dy_dt(2) = t + y(1) * cos(y(2))
 
 
     end function differential_equations_vector
@@ -407,7 +407,8 @@ module koch_m
         open(newunit=io_unit, file='5.9.2_output.txt', status='replace', action='write')
 
         ! LOOP THE FUNCTION
-        write(io_unit, '(A10,6A15)') 't','y(t)','k1','k2','k3','k4','y(t+dt)'
+        write(io_unit, '(A8, A18, A24)') 't', 'x', 'z'
+
 
         do while(t0 < tf)
             ! CALCULATE K VALUES FOR TABLE
@@ -420,12 +421,12 @@ module koch_m
             y1 = runge_kutta_vector(t0, y0, delta_t)
 
             ! WRITE VALUES TO THE TABLE
-            write(io_unit, '(7F15.6)') t0, y1, k1, k2, k3, k4, y1
-            write(io_unit, *) ""
+            write(io_unit,'(1F10.3, 2F24.14)') t0, y0
 
             ! UPDATE VALUES FOR t0 AND y0
             t0 = t0 + delta_t
             y0 = y1
+
         end do
             
     end subroutine test_main_vector
