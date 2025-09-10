@@ -339,7 +339,7 @@ module koch_m
         integer :: io_unit
 
         ! OPEN AN OUTPUT FILE
-        open(newunit=io_unit, file='3.13.6_output.txt', status='replace', action='write')
+        open(newunit=io_unit, file='5.9.1_output.txt', status='replace', action='write')
 
         ! LOOP THE FUNCTION
         write(io_unit, '(A10,6A15)') 't','y(t)','k1','k2','k3','k4','y(t+dt)'
@@ -361,8 +361,73 @@ module koch_m
             t0 = t0 + delta_t
             y0 = y1
         end do
-            
-    end subroutine test_main
 
+    end subroutine test_main
+! -------------------------------------------------------------------------
+! PROBLEM 5.9.2 WRITE A 4TH ORDER RUNGE-KUTTA ROUTINE TO ESTIMATE THE SOLUTION OF A DIFFERENTIAL EQUATION
+    function runge_kutta_vector(t0, y0, delta_t) result(y)
+        implicit none
+        real, intent(in) :: t0, delta_t
+        real, intent(in), dimension(:) :: y0
+        real, dimension(size(y0)) :: y, k1, k2, k3, k4
+
+        ! DEFINE THE K TERMS FOR RK4 METHOD
+        k1 = differential_equations_vector(t0, y0)
+        k2 = differential_equations_vector(t0 + delta_t*0.5, y0 + k1 * delta_t*0.5)
+        k3 = differential_equations_vector(t0 + delta_t*0.5, y0 + k2 * delta_t*0.5)
+        k4 = differential_equations_vector(t0 + delta_t, y0 + k3 * delta_t)
+
+        ! DEFINE THE RESULT FROM RK4
+        y = y0 + delta_t/6 * (k1 + 2*k2 + 2*k3 + k4)
+
+    end function runge_kutta_vector
+
+    function differential_equations_vector(t, y) result(dy_dt)
+        implicit none
+        real, intent(in) :: t
+        real, intent(in), dimension(:) :: y
+        real, dimension(size(y)) :: dy_dt
+
+        ! DEFINE THE DIFFERENTIAL EQUATION
+        dy_dt(1) = t + y(2)**2 * sin(y(1))
+        dy_dt(2) = t + y(1)**2 * cos(y(2))
+
+
+    end function differential_equations_vector
+
+    subroutine test_main_vector(t0, tf, y0, delta_t)
+        implicit none
+        real, intent(in) :: delta_t, tf
+        real, intent(inout) :: t0
+        real, intent(inout), dimension(:) :: y0
+        real, dimension(size(y0)) :: y1, k1, k2, k3, k4
+        integer :: io_unit
+
+        ! OPEN AN OUTPUT FILE
+        open(newunit=io_unit, file='5.9.2_output.txt', status='replace', action='write')
+
+        ! LOOP THE FUNCTION
+        write(io_unit, '(A10,6A15)') 't','y(t)','k1','k2','k3','k4','y(t+dt)'
+
+        do while(t0 < tf)
+            ! CALCULATE K VALUES FOR TABLE
+            k1 = differential_equations_vector(t0, y0)
+            k2 = differential_equations_vector(t0 + delta_t*0.5, y0 + k1 * delta_t*0.5)
+            k3 = differential_equations_vector(t0 + delta_t*0.5, y0 + k2 * delta_t*0.5)
+            k4 = differential_equations_vector(t0 + delta_t, y0 + k3 * delta_t)
+
+            ! CALCULATE NEW Y VALUE
+            y1 = runge_kutta_vector(t0, y0, delta_t)
+
+            ! WRITE VALUES TO THE TABLE
+            write(io_unit, '(7F15.6)') t0, y1, k1, k2, k3, k4, y1
+            write(io_unit, *) ""
+
+            ! UPDATE VALUES FOR t0 AND y0
+            t0 = t0 + delta_t
+            y0 = y1
+        end do
+            
+    end subroutine test_main_vector
 
 end module koch_m
