@@ -274,8 +274,6 @@ module koch_m
         ! CALCULATE THE SPEED OF SOUND 3.2.9
         sos_m_per_sec = (gamma * R * temp_k) ** 0.5
     end subroutine std_atm_SI
-
-
 ! -------------------------------------------------------------------------
 
 ! PROBLEM 3.13.4 WRITE A FUNCTION TO COMPUTE STANDARD ATMOSPHERIC PROPERTIES IN IMPERIAL UNITS
@@ -303,6 +301,68 @@ module koch_m
         sos_ft_per_sec = sos_m_per_sec / 0.3048
     
     end subroutine std_atm_English
+! -------------------------------------------------------------------------
+! PROBLEM 5.9.1 WRITE A 4TH ORDER RUNGE-KUTTA ROUTINE TO ESTIMATE THE SOLUTION OF A DIFFERENTIAL EQUATION
+! CONSISTS OF 3 FUNCTIONS: runge-kutta, differential_equations, and test_main
+    function runge_kutta(t0, y0, delta_t) result(y)
+        implicit none
+        real, intent(in) :: t0, y0, delta_t
+        real :: y, k1, k2, k3, k4
+
+        ! DEFINE THE K TERMS FOR RK4 METHOD
+        k1 = differential_equations(t0, y0)
+        k2 = differential_equations(t0 + delta_t*0.5, y0 + k1 * delta_t*0.5)
+        k3 = differential_equations(t0 + delta_t*0.5, y0 + k2 * delta_t*0.5)
+        k4 = differential_equations(t0 + delta_t, y0 + k3 * delta_t)
+
+        ! DEFINE THE RESULT FROM RK4
+        y = y0 + delta_t/6 * (k1 + 2*k2 + 2*k3 + k4)
+
+    end function runge_kutta
+
+    function differential_equations(t, y) result(dy_dt)
+        implicit none
+        real, intent(in) :: t, y 
+        real :: dy_dt, error
+
+        ! DEFINE THE DIFFERENTIAL EQUATION
+        dy_dt = 1 + tan(y)
+        error = t
         
+    end function differential_equations
+
+    subroutine test_main(t0, tf, y0, delta_t)
+        implicit none
+        real, intent(in) :: delta_t, tf
+        real, intent(inout) :: t0, y0
+        real :: y1, k1, k2, k3, k4
+        integer :: io_unit
+
+        ! OPEN AN OUTPUT FILE
+        open(newunit=io_unit, file='3.13.6_output.txt', status='replace', action='write')
+
+        ! LOOP THE FUNCTION
+        write(io_unit, '(A10,6A15)') 't','y(t)','k1','k2','k3','k4','y(t+dt)'
+
+        do while(t0 < tf)
+            ! CALCULATE K VALUES FOR TABLE
+            k1 = differential_equations(t0, y0)
+            k2 = differential_equations(t0 + delta_t*0.5, y0 + k1 * delta_t*0.5)
+            k3 = differential_equations(t0 + delta_t*0.5, y0 + k2 * delta_t*0.5)
+            k4 = differential_equations(t0 + delta_t, y0 + k3 * delta_t)
+
+            ! CALCULATE NEW Y VALUE
+            y1 = runge_kutta(t0, y0, delta_t)
+
+            ! WRITE VALUES TO THE TABLE
+            write(io_unit, '(7F15.6)') t0, y1, k1, k2, k3, k4, y1
+            
+            ! UPDATE VALUES FOR t0 AND y0
+            t0 = t0 + delta_t
+            y0 = y1
+        end do
+            
+    end subroutine test_main
+
 
 end module koch_m

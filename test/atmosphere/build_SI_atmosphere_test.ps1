@@ -1,1 +1,0 @@
-gfortran -fdefault-real-8 -Wall chapter_1/koch.f90 test/atmosphere/atmosphere_test_SI.f90 -o test/atmosphere/atmosphere_test_SI.exe
