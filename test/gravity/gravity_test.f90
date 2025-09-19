@@ -5,12 +5,12 @@ program gravity_test
     integer :: i
 
     do i = 0, 100000, 5000
-        gravity = gravity_at_altitude_SI(real(i))
+        gravity = gravity_SI(real(i))
         write(*,'(I8, 2X, F16.12)') i, gravity
     end do
     
     do i = 0, 200000, 10000
-        gravity = gravity_at_altitude_imperial(real(i))
+        gravity = gravity_English(real(i))
         write(*,'(I8, 2X, F15.11)') i, gravity
     end do
 

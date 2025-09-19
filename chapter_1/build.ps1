@@ -1,1 +1,0 @@
-gfortran -fdefault-real-8 -Wall koch.f90 main.f90
