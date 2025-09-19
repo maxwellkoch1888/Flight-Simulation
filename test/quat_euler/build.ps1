@@ -1,0 +1,1 @@
+gfortran -fdefault-real-8 -Wall modules/koch.f90 test/quat_euler/main.f90 -o test/quat_euler/a.exe

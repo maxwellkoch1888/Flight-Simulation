@@ -193,17 +193,18 @@ module koch_m
 ! PROBLEM 3.13.3 WRITE A FUNCTION TO COMPUTE STANDARD ATMOSPHERIC PROPERTIES IN SI UNITS
     subroutine std_atm_SI(&
         geometric_altitude_m, geopotential_altitude_m, & 
-        temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec)
+        temp_k, pressure_N_per_m2, density_kg_per_m3,  & 
+        dyn_viscosity_pa_sec, sos_m_per_sec)
         implicit none
         real, intent(in) :: geometric_altitude_m
-        real, intent(out) :: geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec
-        real, dimension(8) :: ti = (/288.150, 216.650, 216.650, 228.650, 270.650, 270.650, 252.650, 180.650/), &
-                              ti_prime = (/-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0020, -0.004, 0.0/)
-        real, parameter, dimension(8) :: p_i = (/1.01325000000000E+05, 2.26320318222212E+04, 5.47487352827083E+03, &
-                                                 8.68014769086723E+02, 1.10905588989225E+02, 5.90005242789244E+01, &
-                                                 1.82099249050177E+01, 1.03770045489203E+00/)
-        real, parameter, dimension(9) :: zi = (/0.0, 11000.0, 20000.0, 32000.0, 47000.0, 52000.0, 61000.0, 79000.0, 90000.0/)
-        real, parameter :: Rez = 6356766.0, R = 287.0528, gssl = 9.80665, gamma = 1.4
+        real, intent(out) :: geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec, dyn_viscosity_pa_sec
+        real, dimension(8) :: ti = (/288.150, 216.650, 216.650, 228.650, 270.650, 270.650, 252.650, 180.650/)
+        real, dimension(8) :: ti_prime = (/-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0020, -0.004, 0.0/)
+        real, dimension(8) :: p_i = (/1.01325000000000E+05, 2.26320318222212E+04, 5.47487352827083E+03, &
+                                      8.68014769086723E+02, 1.10905588989225E+02, 5.90005242789244E+01, &
+                                      1.82099249050177E+01, 1.03770045489203E+00/)
+        real, dimension(9) :: zi = (/0.0, 11000.0, 20000.0, 32000.0, 47000.0, 52000.0, 61000.0, 79000.0, 90000.0/)
+        real:: Rez = 6356766.0, R = 287.0528, gssl = 9.80665, gamma = 1.4, Ts = 273.15, mu_s = 1.716E-05, Ks = 110.4
         integer :: i
 
         ! CALCULATE THE GEOPOTENTIAL ALTITUDE IN km
@@ -230,6 +231,9 @@ module koch_m
         ! CALCULATE THE DENSITY 3.2.8
         density_kg_per_m3 = pressure_N_per_m2 / (R * temp_k)
 
+        ! COMPUTE VISCOSITY
+        dyn_viscosity_pa_sec = mu_s * ( (Ts + Ks) / (temp_k + Ks)) * (temp_k / Ts)**1.5
+
         ! CALCULATE THE SPEED OF SOUND 3.2.9
         sos_m_per_sec = (gamma * R * temp_k) ** 0.5
     end subroutine std_atm_SI
@@ -237,157 +241,93 @@ module koch_m
 
 ! PROBLEM 3.13.4 WRITE A FUNCTION TO COMPUTE STANDARD ATMOSPHERIC PROPERTIES IN IMPERIAL UNITS
     subroutine std_atm_English(&
-        geometric_altitude_ft, geopotential_altitude_ft, & 
-        temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, sos_ft_per_sec)
+        geometric_altitude_ft, geopotential_altitude_ft,     & 
+        temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, & 
+        dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
         
         implicit none
         real, intent(in) :: geometric_altitude_ft
-        real, intent(out) :: geopotential_altitude_ft, temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, sos_ft_per_sec
-        real :: geometric_altitude_m, geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec
+        real, intent(out) :: geopotential_altitude_ft, temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, sos_ft_per_sec, dyn_viscosity_slug_per_ft_sec
+        real :: geometric_altitude_m, geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec, dyn_viscosity_pa_sec
 
         ! CONVERT THE ALTITUDE TO FT
         geometric_altitude_m = geometric_altitude_ft * 0.3048
 
         ! USE THE SI VERSION OF ATMOSPHERE PROPERTIES
         call std_atm_SI(geometric_altitude_m, geopotential_altitude_m, & 
-        temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec)
+        temp_k, pressure_N_per_m2, density_kg_per_m3, dyn_viscosity_pa_sec, sos_m_per_sec)
 
         ! CONVERT THE UNITS BACK TO IMPERIAL
         geopotential_altitude_ft = geopotential_altitude_m / 0.3048
         temp_R = (temp_k * 1.8) 
         pressure_lbf_per_ft2 = pressure_N_per_m2 / 47.880258
         density_slugs_per_ft3 = density_kg_per_m3 / 515.379
+        dyn_viscosity_slug_per_ft_sec = dyn_viscosity_pa_sec / 515.379
         sos_ft_per_sec = sos_m_per_sec / 0.3048
     
     end subroutine std_atm_English
 ! -------------------------------------------------------------------------
-! PROBLEM 5.9.1 WRITE A 4TH ORDER RUNGE-KUTTA ROUTINE TO ESTIMATE THE SOLUTION OF A DIFFERENTIAL EQUATION
-! CONSISTS OF 3 FUNCTIONS: runge-kutta, differential_equations, and test_main
-    function runge_kutta(t0, y0, delta_t) result(y)
-        implicit none
-        real, intent(in) :: t0, y0, delta_t
-        real :: y, k1, k2, k3, k4
+! ! PROBLEM 5.9.1 WRITE A 4TH ORDER RUNGE-KUTTA ROUTINE TO ESTIMATE THE SOLUTION OF A DIFFERENTIAL EQUATION
+! ! CONSISTS OF 3 FUNCTIONS: runge-kutta, differential_equations, and test_main
+!     function runge_kutta(t0, y0, delta_t) result(y)
+!         implicit none
+!         real, intent(in) :: t0, y0, delta_t
+!         real :: y, k1, k2, k3, k4
 
-        ! DEFINE THE K TERMS FOR RK4 METHOD
-        k1 = differential_equations(t0, y0)
-        k2 = differential_equations(t0 + delta_t*0.5, y0 + k1 * delta_t*0.5)
-        k3 = differential_equations(t0 + delta_t*0.5, y0 + k2 * delta_t*0.5)
-        k4 = differential_equations(t0 + delta_t, y0 + k3 * delta_t)
+!         ! DEFINE THE K TERMS FOR RK4 METHOD
+!         k1 = differential_equations(t0, y0)
+!         k2 = differential_equations(t0 + delta_t*0.5, y0 + k1 * delta_t*0.5)
+!         k3 = differential_equations(t0 + delta_t*0.5, y0 + k2 * delta_t*0.5)
+!         k4 = differential_equations(t0 + delta_t, y0 + k3 * delta_t)
 
-        ! DEFINE THE RESULT FROM RK4
-        y = y0 + delta_t/6 * (k1 + 2*k2 + 2*k3 + k4)
+!         ! DEFINE THE RESULT FROM RK4
+!         y = y0 + delta_t/6 * (k1 + 2*k2 + 2*k3 + k4)
 
-    end function runge_kutta
+!     end function runge_kutta
 
-    function differential_equations(t, y) result(dy_dt)
-        implicit none
-        real, intent(in) :: t, y 
-        real :: dy_dt, error
+!     function differential_equations(t, y) result(dy_dt)
+!         implicit none
+!         real, intent(in) :: t, y 
+!         real :: dy_dt, error
 
-        ! DEFINE THE DIFFERENTIAL EQUATION
-        dy_dt = 1 + tan(y)
-        error = t
+!         ! DEFINE THE DIFFERENTIAL EQUATION
+!         dy_dt = 1 + tan(y)
+!         error = t
         
-    end function differential_equations
+!     end function differential_equations
 
-    subroutine test_main(t0, tf, y0, delta_t)
-        implicit none
-        real, intent(in) :: delta_t, tf
-        real, intent(inout) :: t0, y0
-        real :: y1, k1, k2, k3, k4
-        integer :: io_unit
+!     subroutine test_main(t0, tf, y0, delta_t)
+!         implicit none
+!         real, intent(in) :: delta_t, tf
+!         real, intent(inout) :: t0, y0
+!         real :: y1, k1, k2, k3, k4
+!         integer :: io_unit
 
-        ! OPEN AN OUTPUT FILE
-        open(newunit=io_unit, file='5.9.1_output.txt', status='replace', action='write')
+!         ! OPEN AN OUTPUT FILE
+!         open(newunit=io_unit, file='5.9.1_output.txt', status='replace', action='write')
 
-        ! LOOP THE FUNCTION
-        write(io_unit, '(A10,6A15)') 't','y(t)','k1','k2','k3','k4','y(t+dt)'
+!         ! LOOP THE FUNCTION
+!         write(io_unit, '(A10,6A15)') 't','y(t)','k1','k2','k3','k4','y(t+dt)'
 
-        do while(t0 < tf)
-            ! CALCULATE K VALUES FOR TABLE
-            k1 = differential_equations(t0, y0)
-            k2 = differential_equations(t0 + delta_t*0.5, y0 + k1 * delta_t*0.5)
-            k3 = differential_equations(t0 + delta_t*0.5, y0 + k2 * delta_t*0.5)
-            k4 = differential_equations(t0 + delta_t, y0 + k3 * delta_t)
+!         do while(t0 < tf)
+!             ! CALCULATE K VALUES FOR TABLE
+!             k1 = differential_equations(t0, y0)
+!             k2 = differential_equations(t0 + delta_t*0.5, y0 + k1 * delta_t*0.5)
+!             k3 = differential_equations(t0 + delta_t*0.5, y0 + k2 * delta_t*0.5)
+!             k4 = differential_equations(t0 + delta_t, y0 + k3 * delta_t)
 
-            ! CALCULATE NEW Y VALUE
-            y1 = runge_kutta(t0, y0, delta_t)
+!             ! CALCULATE NEW Y VALUE
+!             y1 = runge_kutta(t0, y0, delta_t)
 
-            ! WRITE VALUES TO THE TABLE
-            write(io_unit, '(7F15.6)') t0, y0, k1, k2, k3, k4, y1
+!             ! WRITE VALUES TO THE TABLE
+!             write(io_unit, '(7F15.6)') t0, y0, k1, k2, k3, k4, y1
             
-            ! UPDATE VALUES FOR t0 AND y0
-            t0 = t0 + delta_t
-            y0 = y1
-        end do
+!             ! UPDATE VALUES FOR t0 AND y0
+!             t0 = t0 + delta_t
+!             y0 = y1
+!         end do
 
-    end subroutine test_main
+!     end subroutine test_main
 ! -------------------------------------------------------------------------
-! PROBLEM 5.9.2 WRITE A 4TH ORDER RUNGE-KUTTA ROUTINE TO ESTIMATE THE SOLUTION OF A DIFFERENTIAL EQUATION
-    function runge_kutta_vector(t0, y0, delta_t) result(y)
-        implicit none
-        real, intent(in) :: t0, delta_t
-        real, intent(in), dimension(:) :: y0
-        real, dimension(size(y0)) :: y, k1, k2, k3, k4
-
-        ! DEFINE THE K TERMS FOR RK4 METHOD
-        k1 = differential_equations_vector(t0, y0)
-        k2 = differential_equations_vector(t0 + delta_t*0.5, y0 + k1 * delta_t*0.5)
-        k3 = differential_equations_vector(t0 + delta_t*0.5, y0 + k2 * delta_t*0.5)
-        k4 = differential_equations_vector(t0 + delta_t, y0 + k3 * delta_t)
-
-        ! DEFINE THE RESULT FROM RK4
-        y = y0 + delta_t/6 * (k1 + 2*k2 + 2*k3 + k4)
-
-    end function runge_kutta_vector
-
-    function differential_equations_vector(t, y) result(dy_dt)
-        implicit none
-        real, intent(in) :: t
-        real, intent(in), dimension(:) :: y
-        real, dimension(size(y)) :: dy_dt
-
-        ! DEFINE THE DIFFERENTIAL EQUATION
-        dy_dt(1) = t + y(2)**2 * sin(y(1))
-        dy_dt(2) = t + y(1) * cos(y(2))
-
-
-    end function differential_equations_vector
-
-    subroutine test_main_vector(t0, tf, y0, delta_t)
-        implicit none
-        real, intent(in) :: delta_t, tf
-        real, intent(inout) :: t0
-        real, intent(inout), dimension(:) :: y0
-        real, dimension(size(y0)) :: y1, k1, k2, k3, k4
-        integer :: io_unit
-
-        ! OPEN AN OUTPUT FILE
-        open(newunit=io_unit, file='5.9.2_output.txt', status='replace', action='write')
-
-        ! LOOP THE FUNCTION
-        write(io_unit, '(A8, A18, A24)') 't', 'x', 'z'
-
-
-        do while(t0 < tf)
-            ! CALCULATE K VALUES FOR TABLE
-            k1 = differential_equations_vector(t0, y0)
-            k2 = differential_equations_vector(t0 + delta_t*0.5, y0 + k1 * delta_t*0.5)
-            k3 = differential_equations_vector(t0 + delta_t*0.5, y0 + k2 * delta_t*0.5)
-            k4 = differential_equations_vector(t0 + delta_t, y0 + k3 * delta_t)
-
-            ! CALCULATE NEW Y VALUE
-            y1 = runge_kutta_vector(t0, y0, delta_t)
-
-            ! WRITE VALUES TO THE TABLE
-            write(io_unit,'(1F10.3, 2F24.14)') t0, y0
-
-            ! UPDATE VALUES FOR t0 AND y0
-            t0 = t0 + delta_t
-            y0 = y1
-
-        end do
-            
-    end subroutine test_main_vector
 
 end module koch_m

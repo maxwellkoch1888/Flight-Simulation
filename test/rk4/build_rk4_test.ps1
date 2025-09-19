@@ -1,1 +1,1 @@
-gfortran -fdefault-real-8 -Wall chapter_1/koch.f90 test/rk4/rk4_test.f90 -o test/rk4/rk4_test.exe 
+gfortran -fdefault-real-8 -Wall modules/koch.f90 test/rk4/rk4_test.f90 -o test/rk4/rk4_test.exe 
