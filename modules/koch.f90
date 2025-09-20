@@ -262,7 +262,7 @@ module koch_m
         temp_R = (temp_k * 1.8) 
         pressure_lbf_per_ft2 = pressure_N_per_m2 / 47.880258
         density_slugs_per_ft3 = density_kg_per_m3 / 515.379
-        dyn_viscosity_slug_per_ft_sec = dyn_viscosity_pa_sec / 515.379
+        dyn_viscosity_slug_per_ft_sec = dyn_viscosity_pa_sec / 47.880258
         sos_ft_per_sec = sos_m_per_sec / 0.3048
     
     end subroutine std_atm_English
