@@ -1,1 +1,1 @@
-gfortran -fdefault-real-8 -Wall modules/sim_m.f90 runs/run_sphere.f90 -o runs/run_sphere.exe 
+gfortran -fdefault-real-8 -Wall modules/koch.f90 modules/sim_m.f90 runs/run_sphere.f90 -o runs/run_sphere.exe 
