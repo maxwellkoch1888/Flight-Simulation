@@ -1,0 +1,1 @@
+gfortran -fdefault-real-8 -Wall modules/koch.f90 modules/scott_sterling_m.f90 runs/run_sterling.f90 -o runs/run_sterling.exe 
