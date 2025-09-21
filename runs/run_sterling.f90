@@ -1,5 +1,5 @@
 program main 
-    use sphere_m
+    use scott_sterling_m
     implicit none
     call run()
 end program main

@@ -1,4 +1,4 @@
-module sim_m
+module scott_sterling_m
     use koch_m
     implicit none
 
@@ -8,9 +8,9 @@ module sim_m
     real, dimension(6) :: FM
     
     ! DEFINE PING PONG BALL PROPERTIES
-    real, parameter :: diameter = 0.13084 !ft
-    real, parameter :: thickness = 0.00131 !ft
-    real, parameter :: weight = 0.006 !lbf
+    real, parameter :: diameter = 9.0 / 12.0 !ft
+    real, parameter :: thickness = 0.004 / 0.3048 !ft
+    ! real, parameter :: weight = 0.006 !lbf
     real, parameter :: r2 = diameter / 2
     real, parameter :: r1 = r2 - thickness
 
@@ -190,8 +190,8 @@ module sim_m
                0.0, 0.0, 1.0 /), (/3,3/))
 
         ! CALCULATE MASS AND INERTIA
-        mass = weight / 32.17404855643
-        inertia = mass * 2*(r2**5 - r1**5) / (5*(r2**3 - r1**3)) * I 
+        mass = 430.0 / 453.59237 !grams to lbm
+        inertia = mass * 2*(r2**5 - r1**5) / (5.0*(r2**3 - r1**3)) * I 
         inertia_inv = matrix_inv(inertia)
     end subroutine mass_inertia
 
@@ -230,23 +230,30 @@ module sim_m
   !=========================
     subroutine run()
       implicit none
-      real :: t, dt, tf, initial_state(13), new_state(13), eul(3)
+      real :: t, dt, tf, initial_state(13), new_state(13), eul(3), pitch_angle, total_velocity
       integer :: io_unit
 
       ! OPEN A FILE TO WRITE TO 
-      open(newunit=io_unit, file='sphere_output.txt', status='replace', action='write')
-      write(io_unit,*) 'Sphere Test'
+      open(newunit=io_unit, file='sterling_output.txt', status='replace', action='write')
+      write(io_unit,*) 'Scott Sterling'
 
       ! INITIALIZE TIME
       t = 0.0
       dt = 0.01
       tf = 10.0
+      
+      ! BUILD VALUES FOR THE TRANSLATIONAL AND ROTATIONAL VELOCITIES
+      ! pitch_angle = atan2(-5.0 , (11.0 /0.3048)) 
+      pitch_angle = -10.2767 * pi / 180     
+      write(*,*) pitch_angle
+      total_velocity = 129.0 / (0.3048 * 10.0**(-3)) / 3600.0 !ft/sec
 
       ! BUILD INITIAL CONDITIONS
       initial_state = 0.0
-      initial_state(1) = 50.0 !ft/sec
-      initial_state(9) = -200 !altitude in ft
-      eul = 0.0 ! zero deg orientation
+      initial_state(1) = total_velocity * cos(pitch_angle) 
+      initial_state(3) = total_velocity * sin(pitch_angle)
+      initial_state(9) = -35.0 !altitude in ft
+      eul = 0 ! zero deg orientation
       initial_state(10:13) = euler_to_quat(eul)
 
 
@@ -256,10 +263,10 @@ module sim_m
       ! write(*,*) inertia      
 
       ! BUILD THE LOOP AND WRITE THE OUTPUT
-      write(io_unit,*) "      t(sec)         u(ft/sec)        v(ft/sec)        w(ft/sec)       p(rad/sec)       q(rad/sec)       r(rad/sec)           x(ft)            y(ft)            z(ft)             e0              ex               ey               ez"
-      write(io_unit,'(14ES17.9)') t,initial_state(:)
+      write(io_unit,*) "           t(sec)              u(ft/sec)               v(ft/sec)               w(ft/sec)              p(rad/sec)            q(rad/sec)            r(rad/sec)               x(ft)                   y(ft)                   z(ft)                 e0                     ex                    ey                    ez"
+      write(io_unit,'(14ES23.12)') t,initial_state(:)
     
-      do while(t<tf)
+      do while(initial_state(9) <= -35.0)
         ! CALCULATE THE NEW STATE
         new_state = rk4(t, initial_state, dt)
 
@@ -269,9 +276,9 @@ module sim_m
         ! UPDATE THE STATE AND TIME
         initial_state = new_state
         t = t + dt
-      write(io_unit,'(14ES17.9)') t,initial_state(:)
+      write(io_unit,'(14ES23.12)') t,initial_state(:)
       end do 
       close(io_unit)
 
     end subroutine run
-end module sim_m
+end module scott_sterling_m
