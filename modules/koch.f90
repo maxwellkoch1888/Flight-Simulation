@@ -191,20 +191,27 @@ module koch_m
 ! -------------------------------------------------------------------------
 
 ! PROBLEM 3.13.3 WRITE A FUNCTION TO COMPUTE STANDARD ATMOSPHERIC PROPERTIES IN SI UNITS
-    subroutine std_atm_SI(&
-        geometric_altitude_m, geopotential_altitude_m, & 
-        temp_k, pressure_N_per_m2, density_kg_per_m3,  & 
+    subroutine std_atm_SI( &
+        geometric_altitude_m, geopotential_altitude_m, &
+        temp_k, pressure_N_per_m2, density_kg_per_m3, &
         dyn_viscosity_pa_sec, sos_m_per_sec)
+
         implicit none
-        real, intent(in) :: geometric_altitude_m
-        real, intent(out) :: geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec, dyn_viscosity_pa_sec
-        real, dimension(8) :: ti = (/288.150, 216.650, 216.650, 228.650, 270.650, 270.650, 252.650, 180.650/)
-        real, dimension(8) :: ti_prime = (/-0.0065, 0.0, 0.001, 0.0028, 0.0, -0.0020, -0.004, 0.0/)
-        real, dimension(8) :: p_i = (/1.01325000000000E+05, 2.26320318222212E+04, 5.47487352827083E+03, &
-                                      8.68014769086723E+02, 1.10905588989225E+02, 5.90005242789244E+01, &
-                                      1.82099249050177E+01, 1.03770045489203E+00/)
-        real, dimension(9) :: zi = (/0.0, 11000.0, 20000.0, 32000.0, 47000.0, 52000.0, 61000.0, 79000.0, 90000.0/)
-        real:: Rez = 6356766.0, R = 287.0528, gssl = 9.80665, gamma = 1.4, Ts = 273.15, mu_s = 1.716E-05, Ks = 110.4
+        real, intent(in)  :: geometric_altitude_m
+        real, intent(out) :: geopotential_altitude_m, temp_k, pressure_N_per_m2, &
+                            density_kg_per_m3, dyn_viscosity_pa_sec, sos_m_per_sec
+
+        real, dimension(8) :: ti = (/288.150, 216.650, 216.650, 228.650, &
+                                    270.650, 270.650, 252.650, 180.650/)
+        real, dimension(8) :: ti_prime = (/-0.0065, 0.0, 0.001, 0.0028, &
+                                        0.0, -0.0020, -0.004, 0.0/)
+        real, dimension(8) :: p_i = (/1.01325000000000E+05, 2.26320318222212E+04, &
+                                    5.47487352827083E+03, 8.68014769086723E+02, &
+                                    1.10905588989225E+02, 5.90005242789244E+01, &
+                                    1.82099249050177E+01, 1.03770045489203E+00/)
+        real, dimension(9) :: zi = (/0.0, 11000.0, 20000.0, 32000.0, &
+                                    47000.0, 52000.0, 61000.0, 79000.0, 90000.0/)
+        real:: Rez = 6356766.0, R = 287.0528, gssl = 9.80665, gamma = 1.4, Ts = 273.15, mu_s = 1.716E-05, Ks = 110.4        
         integer :: i
 
         ! CALCULATE THE GEOPOTENTIAL ALTITUDE IN km
@@ -247,8 +254,10 @@ module koch_m
         
         implicit none
         real, intent(in) :: geometric_altitude_ft
-        real, intent(out) :: geopotential_altitude_ft, temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, sos_ft_per_sec, dyn_viscosity_slug_per_ft_sec
-        real :: geometric_altitude_m, geopotential_altitude_m, temp_k, pressure_N_per_m2, density_kg_per_m3, sos_m_per_sec, dyn_viscosity_pa_sec
+        real, intent(out) :: geopotential_altitude_ft, temp_R, pressure_lbf_per_ft2, &
+                            density_slugs_per_ft3, sos_ft_per_sec, dyn_viscosity_slug_per_ft_sec
+        real :: geometric_altitude_m, geopotential_altitude_m, temp_k, pressure_N_per_m2, &
+                density_kg_per_m3, sos_m_per_sec, dyn_viscosity_pa_sec
 
         ! CONVERT THE ALTITUDE TO FT
         geometric_altitude_m = geometric_altitude_ft * 0.3048

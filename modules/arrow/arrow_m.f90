@@ -44,11 +44,14 @@ module arrow_m
       real :: u, v, w, p, q, r, x, y, z, e0, ex, ey, ez
       real :: acceleration(3), angular_accelerations(3), velocity(3), quat_change(4)
       real :: quaternion(4), velocity_quat(4), quat_inv(4)
-      real :: orientation_effect(3), angular_v_effect(3), gyroscopic_change(3), inertia_effects(3), wind_velocity(3), gyroscopic_effects(3,3)
+      real :: orientation_effect(3), angular_v_effect(3), gyroscopic_change(3), &
+              inertia_effects(3), wind_velocity(3), gyroscopic_effects(3,3)
       real :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz
       real :: quat_matrix(4,3)
-      real :: hxb, hyb, hzb, hxb_dot, hyb_dot, hzb_dot,Vxw, Vyw, Vzw,gravity_ft_per_sec2
+      real :: hxb, hyb, hzb, hxb_dot, hyb_dot, hzb_dot, Vxw, Vyw, Vzw, &
+              gravity_ft_per_sec2
       real :: avoid_warning
+
 
         call pseudo_aero(state)
         gravity_ft_per_sec2 = gravity_English(-state(9))
@@ -120,7 +123,8 @@ module arrow_m
         acceleration = 1 / mass * FM(1:3) + gravity_ft_per_sec2 * orientation_effect + angular_v_effect
 
         ! ROLL, PITCH, YAW ACCELERATIONS
-        angular_accelerations = matmul(inertia_inv , FM(4:6) + matmul(gyroscopic_effects, (/p, q, r/)) + inertia_effects - gyroscopic_change)
+        angular_accelerations = matmul(inertia_inv , FM(4:6) + &
+                                matmul(gyroscopic_effects, (/p, q, r/)) + inertia_effects - gyroscopic_change)
 
         ! VELOCITY IN THE INERITAL FRAME
         velocity = quat_base_to_dependent((/u, v, w/), quaternion) + wind_velocity
@@ -147,8 +151,9 @@ module arrow_m
       real :: V, Uc(3)
       real, parameter :: CL_alpha = 4.929, CD0 = 5.096, CD2 = 48.138
       real, parameter :: Cm_alpha = -2.605, Cm_qbar = -9.06, Cl_pitch_pbar = -5.378
-      real :: Cl_pitch0, alpha, beta, pbar, qbar, rbar, angular_rates(3)
-      real :: CL, CD, CS, Cl_pitch, Cm, Cn
+      real :: Cl_pitch0, alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
+      real :: CL, CD, CS, L, D, S_force, Cl_pitch, Cm, Cn
+      real :: ca, cb, sa, sb
         
       ! BUILD THE ATMOSPHERE 
       geometric_altitude_ft = -state(9)
@@ -158,12 +163,14 @@ module arrow_m
         dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
 
       ! CALCULATE VELOCITY UNIT VECTOR
-      V = (state(1)**2 + state(2)**2 + state(3)**2)**0.5
+      V =  (state(1)**2 + state(2)**2 + state(3)**2)**0.5
       Uc = (/state(1:3)/) / V
 
       ! CALCULATE ALPHA AND BETA 3.4.4 and 3.4.5
-      alpha = atan2(state(3) , state(1))
-      beta = asin(state(2) / V)
+      alpha =  atan2(state(3) , state(1))
+      beta =   asin(state(2) / V)
+      beta_f = atan2(state(2) , state(1))
+
 
       ! CALCULATE PBAR, QBAR, AND RBAR from eq 3.4.23
       angular_rates = 1 / (2*V) * (/state(4) * length, state(5) * length, state(6) * length/)
@@ -175,28 +182,32 @@ module arrow_m
       Re = density_slugs_per_ft3 * V * 2 * length / dyn_viscosity_slug_per_ft_sec
 
       ! CALCULATE THE LIFT, DRAG, AND SIDE COEFFICIENTS
-      CL = CL_alpha * alpha
-      CS = CL_alpha * beta
-      CD = CD0 + CD2 * CL**2 + CD2 * CS**2
+      CL =      CL_alpha * alpha
+      CS =     -CL_alpha * beta_f
+      CD =      CD0 + CD2 * CL**2 + CD2 * CS**2
+      L =       CL * (density_slugs_per_ft3 * V **2 * S)
+      S_force = CS * (density_slugs_per_ft3 * V **2 * S)
+      D =       CD * (density_slugs_per_ft3 * V **2 * S)
 
-      FM(3) = -1.0 * CL * 0.5 * density_slugs_per_ft3 * V **2 * S
-      FM(2) =  CS * 0.5 * density_slugs_per_ft3 * V **2 * S
-      FM(1) = -1.0 * CD * 0.5 * density_slugs_per_ft3 * V **2 * S
+      ca = cos(alpha)
+      cb = cos(beta)
+      sa = sin(alpha)
+      sb = sin(beta)
+
+      FM(3) = (D*ca*cb + S*ca*sb - L*sa) * (-1.0)
+      FM(2) = (S*cb - D*sb)
+      FM(1) = (D*sa*cb + S*sa*sb + L*ca) * (-1.0)
 
       ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
-      if(straight .eqv. .true.) then
-        Cl_pitch0 = 0.0
-      else 
-        Cl_pitch0 = 3.223
-      end if
+      Cl_pitch0 = 0.0
 
       Cl_pitch = Cl_pitch0 + Cl_pitch_pbar * pbar  ! roll moment
-      Cm = Cm_alpha * alpha + Cm_qbar * qbar ! pitch moment
-      Cn = -Cm_alpha * beta + Cm_qbar * rbar ! yaw moment
+      Cm =       Cm_alpha * alpha + Cm_qbar * qbar ! pitch moment
+      Cn =      -Cm_alpha * beta_f + Cm_qbar * rbar ! yaw moment
 
       FM(4) = Cl_pitch * 0.5 * density_slugs_per_ft3 * V **2 * S * length
-      FM(5) = Cm * 0.5 * density_slugs_per_ft3 * V **2 * S * length
-      FM(6) = Cn * 0.5 * density_slugs_per_ft3 * V **2 * S * length
+      FM(5) = Cm       * 0.5 * density_slugs_per_ft3 * V **2 * S * length
+      FM(6) = Cn       * 0.5 * density_slugs_per_ft3 * V **2 * S * length
 
     end subroutine pseudo_aero
 
@@ -299,7 +310,10 @@ module arrow_m
       call mass_inertia(inertia)     
 
       ! BUILD THE LOOP AND WRITE THE OUTPUT
-      write(io_unit,*) "           t(sec)              u(ft/sec)               v(ft/sec)               w(ft/sec)              p(rad/sec)            q(rad/sec)            r(rad/sec)               x(ft)                   y(ft)                   z(ft)                 e0                     ex                    ey                    ez"
+      write(io_unit,*) &
+     "           t(sec)              u(ft/sec)               v(ft/sec)               w(ft/sec)              ", &
+     "p(rad/sec)            q(rad/sec)            r(rad/sec)               x(ft)                   y(ft)                   ", &
+     "z(ft)                 e0                     ex                    ey                    ez"
       write(io_unit,'(14ES23.12)') t,initial_state(:)
     
       do while(initial_state(9) <= 0)
