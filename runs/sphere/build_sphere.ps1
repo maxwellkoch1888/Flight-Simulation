@@ -1,0 +1,1 @@
+gfortran -fdefault-real-8 -Wall modules/koch.f90 modules/sphere/sphere_m.f90 runs/sphere/run_sphere.f90 -o runs/sphere/run_sphere.exe 

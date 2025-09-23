@@ -1,5 +1,6 @@
 module arrow_m
     use koch_m
+    ! use jsonx
     implicit none
 
     ! BUILD GLOBAL VARIABLES FOR THE MODULE
@@ -10,13 +11,13 @@ module arrow_m
     ! DEFINE ARROW PROPERTIES
     real, parameter :: weight = 0.0697 !lbf
     real, parameter :: length = 2.3 !ft
-    real, parameter :: area = 0.000218 !ft^2
+    real, parameter :: S = 0.000218 !ft^2
     logical :: straight = .true.
 
     contains
   !=========================
   ! RK4 Integrator
-  !=========================
+
     function rk4(t0, initial_state, delta_t) result(state)
         implicit none
         real, intent(in) :: t0, delta_t, initial_state(13)
@@ -35,7 +36,7 @@ module arrow_m
 
   !=========================
   ! Equations of Motion: (/u,v,w, p,q,r, x,y,z, e0,ex,ey,ez/)
-  !=========================
+
     function differential_equations(t, state) result(dstate_dt)
       implicit none
       real, intent(in) :: t, state(13)
@@ -136,17 +137,18 @@ module arrow_m
 
   !=========================
   ! Aerodynamic Forces and Moments for straight fletchings
-  !=========================
+
     subroutine pseudo_aero(state)
       implicit none
       real, intent(in) :: state(13)
       real :: Re, geometric_altitude_ft, geopotential_altitude_ft,     & 
         temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, & 
         dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
-      real :: V, CD, Uc(3)
+      real :: V, Uc(3)
       real, parameter :: CL_alpha = 4.929, CD0 = 5.096, CD2 = 48.138
       real, parameter :: Cm_alpha = -2.605, Cm_qbar = -9.06, Cl_pitch_pbar = -5.378
-      real :: Cl_pitch0 
+      real :: Cl_pitch0, alpha, beta, pbar, qbar, rbar, angular_rates(3)
+      real :: CL, CD, CS, Cl_pitch, Cm, Cn
         
       ! BUILD THE ATMOSPHERE 
       geometric_altitude_ft = -state(9)
@@ -159,13 +161,27 @@ module arrow_m
       V = (state(1)**2 + state(2)**2 + state(3)**2)**0.5
       Uc = (/state(1:3)/) / V
 
+      ! CALCULATE ALPHA AND BETA 3.4.4 and 3.4.5
+      alpha = atan2(state(3) , state(1))
+      beta = asin(state(2) / V)
+
+      ! CALCULATE PBAR, QBAR, AND RBAR from eq 3.4.23
+      angular_rates = 1 / (2*V) * (/state(4) * length, state(5) * length, state(6) * length/)
+      pbar = angular_rates(1)
+      qbar = angular_rates(2)
+      rbar = angular_rates(3)
+
       ! CALCULATE THE REYNOLDS NUMBER
       Re = density_slugs_per_ft3 * V * 2 * length / dyn_viscosity_slug_per_ft_sec
 
       ! CALCULATE THE LIFT, DRAG, AND SIDE COEFFICIENTS
-      FM(3) = CL_alpha * alpha 
-      FM(2) = CL_alpha * beta
-      FM(1) = CD0 + CD2 * FM(3)**2 + CD2 * FM(2) **2
+      CL = CL_alpha * alpha
+      CS = CL_alpha * beta
+      CD = CD0 + CD2 * CL**2 + CD2 * CS**2
+
+      FM(3) = -1.0 * CL * 0.5 * density_slugs_per_ft3 * V **2 * S
+      FM(2) =  CS * 0.5 * density_slugs_per_ft3 * V **2 * S
+      FM(1) = -1.0 * CD * 0.5 * density_slugs_per_ft3 * V **2 * S
 
       ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
       if(straight .eqv. .true.) then
@@ -174,15 +190,19 @@ module arrow_m
         Cl_pitch0 = 3.223
       end if
 
-      FM(4) = Cl_pitch0 + Cl_pitch_pbar * pbar 
-      FM(5) = Cm_alpha * alpha + Cm_qbar * qbar 
-      FM(6) = -Cm_alpha * beta + Cm_qbar * rbar
+      Cl_pitch = Cl_pitch0 + Cl_pitch_pbar * pbar  ! roll moment
+      Cm = Cm_alpha * alpha + Cm_qbar * qbar ! pitch moment
+      Cn = -Cm_alpha * beta + Cm_qbar * rbar ! yaw moment
+
+      FM(4) = Cl_pitch * 0.5 * density_slugs_per_ft3 * V **2 * S * length
+      FM(5) = Cm * 0.5 * density_slugs_per_ft3 * V **2 * S * length
+      FM(6) = Cn * 0.5 * density_slugs_per_ft3 * V **2 * S * length
 
     end subroutine pseudo_aero
 
   !=========================
   ! Mass and Inertia
-  !=========================
+
     subroutine mass_inertia(inertia)
         implicit none
         real, intent(inout) :: inertia(3,3)
@@ -203,7 +223,7 @@ module arrow_m
 
   !=========================
   ! Matrix Inverse
-  !=========================
+
     function matrix_inv(A) result(A_inv)
       implicit none
       real, dimension(3,3), intent(in) :: A
@@ -233,39 +253,56 @@ module arrow_m
 
   !=========================
   ! Run Subroutine
-  !=========================
+
     subroutine run()
       implicit none
       real :: t, dt, tf, initial_state(13), new_state(13), eul(3)
       integer :: io_unit
+      ! character(len=*) :: filename
+      ! type(json_type) :: j_main
+      real :: V, h, elevation_angle_deg
 
       ! OPEN A FILE TO WRITE TO 
-      open(newunit=io_unit, file='sphere_output.txt', status='replace', action='write')
-      write(io_unit,*) 'Sphere Test'
+      open(newunit=io_unit, file='arrow_output.txt', status='replace', action='write')
+      write(io_unit,*) 'Arrow Test'
+
+      ! ! UNPACK VALUES FROM THE JSON FILE
+      ! call get_command_argument(1, filename)
+
+      ! call jsonx_load(filename, j_main)
+
+      ! call jsonx_get(j_main, 'simulation.time_step[s]', dt)
+      ! call jsonx_get(j_main, 'initial.airspeed[ft/s]', V)
+      ! call jsonx_get(j_main, 'initial.altitude[ft]', h)
+      ! h = h * -1
+      ! call jsonx_get(j_main, 'initial.elevation_angle[deg]', elevation_angle_deg)
+
+      dt = 0.01
+      V = 210.0
+      h = -5.0
+      elevation_angle_deg = 5.0
 
       ! INITIALIZE TIME
       t = 0.0
-      dt = 0.01
       tf = 10.0
 
       ! BUILD INITIAL CONDITIONS
       initial_state = 0.0
-      initial_state(1) = 50.0 !ft/sec
-      initial_state(9) = -200 !altitude in ft
+      initial_state(1) = V !ft/sec
+      initial_state(9) = h !altitude in ft
       eul = 0.0 ! zero deg orientation
+      eul(2) = elevation_angle_deg * pi / 180.0
       initial_state(10:13) = euler_to_quat(eul)
 
 
       ! CALCULATE MASS AND INERTIA
-      call mass_inertia(inertia)
-      ! write(*,*) mass
-      ! write(*,*) inertia      
+      call mass_inertia(inertia)     
 
       ! BUILD THE LOOP AND WRITE THE OUTPUT
       write(io_unit,*) "           t(sec)              u(ft/sec)               v(ft/sec)               w(ft/sec)              p(rad/sec)            q(rad/sec)            r(rad/sec)               x(ft)                   y(ft)                   z(ft)                 e0                     ex                    ey                    ez"
       write(io_unit,'(14ES23.12)') t,initial_state(:)
     
-      do while(t<tf)
+      do while(initial_state(9) <= 0)
         ! CALCULATE THE NEW STATE
         new_state = rk4(t, initial_state, dt)
 
