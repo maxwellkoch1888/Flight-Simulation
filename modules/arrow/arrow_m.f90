@@ -26,17 +26,17 @@ module arrow_m
         real, dimension(13) :: state, k1, k2, k3, k4
 
         ! DEFINE THE K TERMS FOR RK4 METHOD
-        ! write(io_unit,*) "diff_eq function called: "
-        ! write(io_unit,*) "              RK4 call number =  1"
+        write(io_unit,*) "diff_eq function called: "
+        write(io_unit,*) "              RK4 call number =  1"
         k1 = differential_equations(t0, initial_state)
-        ! write(io_unit,*) "diff_eq function called: "
-        ! write(io_unit,*) "              RK4 call number =  2"
+        write(io_unit,*) "diff_eq function called: "
+        write(io_unit,*) "              RK4 call number =  2"
         k2 = differential_equations(t0 + delta_t*0.5, initial_state + k1 * delta_t*0.5)
-        ! write(io_unit,*) "diff_eq function called: "
-        ! write(io_unit,*) "              RK4 call number =  3"
+        write(io_unit,*) "diff_eq function called: "
+        write(io_unit,*) "              RK4 call number =  3"
         k3 = differential_equations(t0 + delta_t*0.5, initial_state + k2 * delta_t*0.5)
-        ! write(io_unit,*) "diff_eq function called: "
-        ! write(io_unit,*) "              RK4 call number =  4"
+        write(io_unit,*) "diff_eq function called: "
+        write(io_unit,*) "              RK4 call number =  4"
         k4 = differential_equations(t0 + delta_t, initial_state + k3 * delta_t)
 
         ! DEFINE THE RESULT FROM RK4
@@ -87,9 +87,9 @@ module arrow_m
       gravity_ft_per_sec2 = gravity_English(-state(9))
 
       avoid_warning = t
-      ! write(io_unit,'(A,13(1X,ES20.12))') "                    time [s] = ", t
-      ! write(io_unit,'(A,13(1X,ES20.12))') '    State vector coming in    =', state
-      ! write(io_unit,'(A,6 (1X,ES20.12))') "   Pseudo aerodynamics (F,M) = ", FM
+      write(io_unit,'(A,13(1X,ES20.12))') "                     time [s] =", t
+      write(io_unit,'(A,13(1X,ES20.12))') '    State vector coming in    =', state
+      write(io_unit,'(A,6 (1X,ES20.12))') "    Pseudo aerodynamics (F,M) =", FM
 
       ! SET GYROSCOPIC EFFECTS AND WIND VELOCITY TO ZERO
       hxb = 0.0
@@ -128,7 +128,7 @@ module arrow_m
 
       ! BUILD THE DIFFERENTIAL EQUATIONS
       ! ACCELERATION IN BODY FRAME
-      acceleration = 1 / mass * FM(1:3) + gravity_ft_per_sec2 * orientation_effect + angular_v_effect
+      acceleration = 1.0 / mass * FM(1:3) + gravity_ft_per_sec2 * orientation_effect + angular_v_effect
 
       ! ROLL, PITCH, YAW ACCELERATIONS
       angular_accelerations = matmul(inertia_inv , FM(4:6) + &
@@ -138,8 +138,9 @@ module arrow_m
       v1 = quat_mult(state(10:13), (/0.0, state(1:3)/))
       v2 = quat_mult(v1, quat_inv)
       velocity = v2(2:4) + wind_velocity
-      ! write(io_unit,*) "v1", v1
-      ! write(io_unit,*) "velocity", velocity
+      write(io_unit,*) "v1", v1
+      write(io_unit,*) "v2", v2
+      write(io_unit,*) "velocity", velocity
 
 
       ! AIRCRAFT ORIENTATION RATE OF CHANGE
@@ -152,8 +153,8 @@ module arrow_m
       dstate_dt(4:6)  = angular_accelerations
       dstate_dt(7:9)  = velocity
       dstate_dt(10:13) = quat_change
-      ! write(io_unit,'(A,13(1X,ES20.12))') "   Diff. Eq. results         = ", dstate_dt
-      ! write(io_unit,*) ''
+      write(io_unit,'(A,13(1X,ES20.12))') "    Diff. Eq. results         =", dstate_dt
+      write(io_unit,*) ''
 
     end function differential_equations
 
@@ -331,7 +332,7 @@ module arrow_m
       else 
         dt = 0.005
       end if
-      
+
       V = 210.0
       h = -5.0
       elevation_angle_deg = 5.0
@@ -361,7 +362,7 @@ module arrow_m
       write(io_unit,'(14ES23.12)') t,initial_state(:)
     
       do while(initial_state(9) <= 0)
-      ! write(io_unit,*) ''
+      write(io_unit,*) ''
 
         ! CALCULATE THE NEW STATE
         new_state = rk4(t, initial_state, dt)
@@ -372,9 +373,9 @@ module arrow_m
         ! UPDATE THE STATE AND TIME
         initial_state = new_state
         t = t + dt
-      ! write(io_unit,*) ''
-      write(io_unit,'(14ES23.12)') t,initial_state(:)
-      ! write(io_unit,*) ''
+      write(io_unit,*) ''
+      write(io_unit,'(14ES20.12)') t,initial_state(:)
+      write(io_unit,*) ''
       end do 
       close(io_unit)
 
