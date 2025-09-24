@@ -1,6 +1,7 @@
 module arrow_m
     use koch_m
-    ! use jsonx
+    use json_m
+    use jsonx_m
     implicit none
 
     ! BUILD GLOBAL VARIABLES FOR THE MODULE
@@ -26,17 +27,17 @@ module arrow_m
         real, dimension(13) :: state, k1, k2, k3, k4
 
         ! DEFINE THE K TERMS FOR RK4 METHOD
-        write(io_unit,*) "diff_eq function called: "
-        write(io_unit,*) "              RK4 call number =  1"
+        ! write(io_unit,*) "diff_eq function called: "
+        ! write(io_unit,*) "              RK4 call number =  1"
         k1 = differential_equations(t0, initial_state)
-        write(io_unit,*) "diff_eq function called: "
-        write(io_unit,*) "              RK4 call number =  2"
+        ! write(io_unit,*) "diff_eq function called: "
+        ! write(io_unit,*) "              RK4 call number =  2"
         k2 = differential_equations(t0 + delta_t*0.5, initial_state + k1 * delta_t*0.5)
-        write(io_unit,*) "diff_eq function called: "
-        write(io_unit,*) "              RK4 call number =  3"
+        ! write(io_unit,*) "diff_eq function called: "
+        ! write(io_unit,*) "              RK4 call number =  3"
         k3 = differential_equations(t0 + delta_t*0.5, initial_state + k2 * delta_t*0.5)
-        write(io_unit,*) "diff_eq function called: "
-        write(io_unit,*) "              RK4 call number =  4"
+        ! write(io_unit,*) "diff_eq function called: "
+        ! write(io_unit,*) "              RK4 call number =  4"
         k4 = differential_equations(t0 + delta_t, initial_state + k3 * delta_t)
 
         ! DEFINE THE RESULT FROM RK4
@@ -87,9 +88,9 @@ module arrow_m
       gravity_ft_per_sec2 = gravity_English(-state(9))
 
       avoid_warning = t
-      write(io_unit,'(A,13(1X,ES20.12))') "                     time [s] =", t
-      write(io_unit,'(A,13(1X,ES20.12))') '    State vector coming in    =', state
-      write(io_unit,'(A,6 (1X,ES20.12))') "    Pseudo aerodynamics (F,M) =", FM
+      ! write(io_unit,'(A,13(1X,ES20.12))') "                     time [s] =", t
+      ! write(io_unit,'(A,13(1X,ES20.12))') '    State vector coming in    =', state
+      ! write(io_unit,'(A,6 (1X,ES20.12))') "    Pseudo aerodynamics (F,M) =", FM
 
       ! SET GYROSCOPIC EFFECTS AND WIND VELOCITY TO ZERO
       hxb = 0.0
@@ -104,7 +105,7 @@ module arrow_m
 
       ! BUILD MATRICES/ VECTORS USED IN DIFFERENTIAL EQUATION
       orientation_effect =  (/2 * (ex*ez - ey*e0), &
-                              2 * (ey*ez - ex*e0), & 
+                              2 * (ey*ez + ex*e0), & 
                               ez**2 + e0**2 - ex**2 - ey**2/)
 
       angular_v_effect =    (/r*v - q*w, p*w - r*u, q*u - p*v/)
@@ -138,9 +139,9 @@ module arrow_m
       v1 = quat_mult(state(10:13), (/0.0, state(1:3)/))
       v2 = quat_mult(v1, quat_inv)
       velocity = v2(2:4) + wind_velocity
-      write(io_unit,*) "v1", v1
-      write(io_unit,*) "v2", v2
-      write(io_unit,*) "velocity", velocity
+      ! write(io_unit,*) "v1", v1
+      ! write(io_unit,*) "v2", v2
+      ! write(io_unit,*) "velocity", velocity
 
 
       ! AIRCRAFT ORIENTATION RATE OF CHANGE
@@ -153,8 +154,8 @@ module arrow_m
       dstate_dt(4:6)  = angular_accelerations
       dstate_dt(7:9)  = velocity
       dstate_dt(10:13) = quat_change
-      write(io_unit,'(A,13(1X,ES20.12))') "    Diff. Eq. results         =", dstate_dt
-      write(io_unit,*) ''
+      ! write(io_unit,'(A,13(1X,ES20.12))') "    Diff. Eq. results         =", dstate_dt
+      ! write(io_unit,*) ''
 
     end function differential_equations
 
@@ -301,15 +302,13 @@ module arrow_m
   !=========================
   ! Run Subroutine
 
-    subroutine run(fletchings_straight)
+    subroutine run()
       implicit none
       logical :: fletchings_straight
       real :: t, dt, tf, initial_state(13), new_state(13), eul(3)
-      ! character(len=*) :: filename
-      ! type(json_type) :: j_main
-
       real :: V, h, elevation_angle_deg
-      straight = fletchings_straight
+      character(len=40) :: filename
+      type(json_value), pointer :: j_main
 
       ! OPEN A FILE TO WRITE TO 
       if (straight) then
@@ -317,29 +316,22 @@ module arrow_m
       else
         open(newunit=io_unit, file='arrow_output_notstraight.txt', status='replace', action='write')
       end if
-      ! ! UNPACK VALUES FROM THE JSON FILE
-      ! call get_command_argument(1, filename)
 
-      ! call jsonx_load(filename, j_main)
+      ! UNPACK VALUES FROM THE JSON FILE
+      call get_command_argument(1, filename)
 
-      ! call jsonx_get(j_main, 'simulation.time_step[s]', dt)
-      ! call jsonx_get(j_main, 'initial.airspeed[ft/s]', V)
-      ! call jsonx_get(j_main, 'initial.altitude[ft]', h)
-      ! h = h * -1
-      ! call jsonx_get(j_main, 'initial.elevation_angle[deg]', elevation_angle_deg)
-      if (straight) then 
-        dt = 0.01
-      else 
-        dt = 0.005
-      end if
+      call jsonx_load(filename, j_main)
 
-      V = 210.0
-      h = -5.0
-      elevation_angle_deg = 5.0
+      call jsonx_get(j_main, 'simulation.time_step[s]', dt)
+      call jsonx_get(j_main, 'initial.airspeed[ft/s]', V)
+      call jsonx_get(j_main, 'initial.altitude[ft]', h)
+      call jsonx_get(j_main, 'simulation.straight', fletchings_straight)
+      straight = fletchings_straight
+      h = -h
+      call jsonx_get(j_main, 'initial.elevation_angle[deg]', elevation_angle_deg)
 
       ! INITIALIZE TIME
       t = 0.0
-      tf = 10.0
 
       ! BUILD INITIAL CONDITIONS
       initial_state = 0.0
@@ -362,7 +354,7 @@ module arrow_m
       write(io_unit,'(14ES23.12)') t,initial_state(:)
     
       do while(initial_state(9) <= 0)
-      write(io_unit,*) ''
+      ! write(io_unit,*) ''
 
         ! CALCULATE THE NEW STATE
         new_state = rk4(t, initial_state, dt)
@@ -373,9 +365,9 @@ module arrow_m
         ! UPDATE THE STATE AND TIME
         initial_state = new_state
         t = t + dt
-      write(io_unit,*) ''
+      ! write(io_unit,*) ''
       write(io_unit,'(14ES20.12)') t,initial_state(:)
-      write(io_unit,*) ''
+      ! write(io_unit,*) ''
       end do 
       close(io_unit)
 
