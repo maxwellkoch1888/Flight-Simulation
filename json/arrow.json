@@ -1,6 +1,7 @@
 {
     "simulation" : {
-        "time_step[s]" : 0.01
+        "time_step[s]" : 0.01,
+        "straight" : true
     },
     "initial" : {
         "airspeed[ft/s]" : 210.0,
