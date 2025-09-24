@@ -310,25 +310,25 @@ module arrow_m
       character(len=40) :: filename
       type(json_value), pointer :: j_main
 
-      ! OPEN A FILE TO WRITE TO 
-      if (straight) then
-        open(newunit=io_unit, file='arrow_output_straight.txt', status='replace', action='write')
-      else
-        open(newunit=io_unit, file='arrow_output_notstraight.txt', status='replace', action='write')
-      end if
-
       ! UNPACK VALUES FROM THE JSON FILE
       call get_command_argument(1, filename)
 
       call jsonx_load(filename, j_main)
 
       call jsonx_get(j_main, 'simulation.time_step[s]', dt)
+      call jsonx_get(j_main, 'simulation.straight', fletchings_straight)
       call jsonx_get(j_main, 'initial.airspeed[ft/s]', V)
       call jsonx_get(j_main, 'initial.altitude[ft]', h)
-      call jsonx_get(j_main, 'simulation.straight', fletchings_straight)
+      call jsonx_get(j_main, 'initial.elevation_angle[deg]', elevation_angle_deg)
       straight = fletchings_straight
       h = -h
-      call jsonx_get(j_main, 'initial.elevation_angle[deg]', elevation_angle_deg)
+
+      ! OPEN A FILE TO WRITE TO 
+      if (straight) then
+        open(newunit=io_unit, file='arrow_output_straight.txt', status='replace', action='write')
+      else
+        open(newunit=io_unit, file='arrow_output_angled.txt', status='replace', action='write')
+      end if
 
       ! INITIALIZE TIME
       t = 0.0
@@ -341,7 +341,6 @@ module arrow_m
       eul(2) = elevation_angle_deg * pi / 180.0
       initial_state(10:13) = euler_to_quat(eul)
 
-
       ! CALCULATE MASS AND INERTIA
       call mass_inertia(inertia)     
 
@@ -351,7 +350,7 @@ module arrow_m
       "      r[rad/s]            xf[ft]              yf[ft]              "&
       "zf[ft]              e0                  ex                  ey     "&
       "             ez                  "
-      write(io_unit,'(14ES23.12)') t,initial_state(:)
+      write(io_unit,'(14ES20.12)') t,initial_state(:)
     
       do while(initial_state(9) <= 0)
       ! write(io_unit,*) ''
