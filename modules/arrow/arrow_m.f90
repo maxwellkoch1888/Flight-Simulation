@@ -345,11 +345,11 @@ module arrow_m
       call mass_inertia(inertia)     
 
       ! BUILD THE LOOP AND WRITE THE OUTPUT
-      write(io_unit,*) " time[s]             u[ft/s]             v[ft/s]"&
-      "             w[ft/s]             p[rad/s]            q[rad/s]      "&
-      "      r[rad/s]            xf[ft]              yf[ft]              "&
-      "zf[ft]              e0                  ex                  ey     "&
-      "             ez                  "
+      write(io_unit,*) " time[s]             u[ft/s]             v[ft/s]&
+                   w[ft/s]             p[rad/s]            q[rad/s]      &
+            r[rad/s]            xf[ft]              yf[ft]              &
+      zf[ft]              e0                  ex                  ey     &
+                   ez                  "
       write(io_unit,'(14ES20.12)') t,initial_state(:)
     
       do while(initial_state(9) <= 0)
