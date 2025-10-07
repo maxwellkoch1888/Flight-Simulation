@@ -15,33 +15,41 @@ module f16_m
     real, parameter :: weight = 0.0697 !lbf
     real, parameter :: length = 2.3 !ft
     real, parameter :: planform_area = 0.000218 !ft^2
-    logical :: straight = .true.
+    logical :: print_steps = .true.
 
     contains
   !=========================
   ! RK4 Integrator
 
     function rk4(t0, initial_state, delta_t) result(state)
-        implicit none
-        real, intent(in) :: t0, delta_t, initial_state(13)
-        real, dimension(13) :: state, k1, k2, k3, k4
+      implicit none
+      real, intent(in) :: t0, delta_t, initial_state(13)
+      real, dimension(13) :: state, k1, k2, k3, k4
 
-        ! DEFINE THE K TERMS FOR RK4 METHOD
-        ! write(io_unit,*) "diff_eq function called: "
-        ! write(io_unit,*) "              RK4 call number =  1"
-        k1 = differential_equations(t0, initial_state)
-        ! write(io_unit,*) "diff_eq function called: "
-        ! write(io_unit,*) "              RK4 call number =  2"
-        k2 = differential_equations(t0 + delta_t*0.5, initial_state + k1 * delta_t*0.5)
-        ! write(io_unit,*) "diff_eq function called: "
-        ! write(io_unit,*) "              RK4 call number =  3"
-        k3 = differential_equations(t0 + delta_t*0.5, initial_state + k2 * delta_t*0.5)
-        ! write(io_unit,*) "diff_eq function called: "
-        ! write(io_unit,*) "              RK4 call number =  4"
-        k4 = differential_equations(t0 + delta_t, initial_state + k3 * delta_t)
+      ! DEFINE THE K TERMS FOR RK4 METHOD
 
-        ! DEFINE THE RESULT FROM RK4
-        state = initial_state + (delta_t/6) * (k1 + 2*k2 + 2*k3 + k4)
+      k1 = differential_equations(t0, initial_state)
+
+      k2 = differential_equations(t0 + delta_t*0.5, initial_state + k1 * delta_t*0.5)
+
+      k3 = differential_equations(t0 + delta_t*0.5, initial_state + k2 * delta_t*0.5)
+
+      k4 = differential_equations(t0 + delta_t, initial_state + k3 * delta_t)
+
+      ! DEFINE THE RESULT FROM RK4
+      state = initial_state + (delta_t/6) * (k1 + 2*k2 + 2*k3 + k4)
+
+      ! PRINT STEPS IF SPECIFIED
+      if(print_steps) then 
+        write(io_unit,*) "diff_eq function called: "
+        write(io_unit,*) "              RK4 call number =  1"
+        write(io_unit,*) "diff_eq function called: "
+        write(io_unit,*) "              RK4 call number =  2"
+        write(io_unit,*) "diff_eq function called: "
+        write(io_unit,*) "              RK4 call number =  3"
+        write(io_unit,*) "diff_eq function called: "
+        write(io_unit,*) "              RK4 call number =  4"
+      end if
 
     end function rk4
 
@@ -82,15 +90,11 @@ module f16_m
       Ixx = inertia(1,1); Iyy = inertia(2,2); Izz = inertia(3,3)
       Ixy = inertia(1,2); Ixz = inertia(1,3); Iyz = inertia(2,3)
     
-
       ! CALCULATE FORCES AND MOMENTS
       call pseudo_aero(state)
       gravity_ft_per_sec2 = gravity_English(-state(9))
 
       avoid_warning = t
-      ! write(io_unit,'(A,13(1X,ES20.12))') "                     time [s] =", t
-      ! write(io_unit,'(A,13(1X,ES20.12))') '    State vector coming in    =', state
-      ! write(io_unit,'(A,6 (1X,ES20.12))') "    Pseudo aerodynamics (F,M) =", FM
 
       ! SET GYROSCOPIC EFFECTS AND WIND VELOCITY TO ZERO
       hxb = 0.0
@@ -139,28 +143,34 @@ module f16_m
       v1 = quat_mult(state(10:13), (/0.0, state(1:3)/))
       v2 = quat_mult(v1, quat_inv)
       velocity = v2(2:4) + wind_velocity
-      ! write(io_unit,*) "v1", v1
-      ! write(io_unit,*) "v2", v2
-      ! write(io_unit,*) "velocity", velocity
-
 
       ! AIRCRAFT ORIENTATION RATE OF CHANGE
       quat_change = 0.5 * matmul(quat_matrix, (/p, q, r/))
 
-      ! write(io_unit,*) "quat change", quat_change
 
       ! RETURN THE STATE DERIVATIVE
       dstate_dt(1:3)  = acceleration
       dstate_dt(4:6)  = angular_accelerations
       dstate_dt(7:9)  = velocity
       dstate_dt(10:13) = quat_change
-      ! write(io_unit,'(A,13(1X,ES20.12))') "    Diff. Eq. results         =", dstate_dt
-      ! write(io_unit,*) ''
 
-    end function differential_equations
+      ! PRINT STEPS IF SPECIFIED
+      if(print_steps) then
+        write(io_unit,'(A,13(1X,ES20.12))') "                     time [s] =", t
+        write(io_unit,'(A,13(1X,ES20.12))') '    State vector coming in    =', state
+        write(io_unit,'(A,6 (1X,ES20.12))') "    Pseudo aerodynamics (F,M) =", FM
+        write(io_unit,*) "v1", v1
+        write(io_unit,*) "v2", v2
+        write(io_unit,*) "velocity", velocity
+        write(io_unit,*) "quat change", quat_change
+        write(io_unit,'(A,13(1X,ES20.12))') "    Diff. Eq. results         =", dstate_dt
+        write(io_unit,*) ''
+      end if
+
+      end function differential_equations
 
   !=========================
-  ! Aerodynamic Forces and Moments for straight fletchings
+  ! Aerodynamic Forces and Moments for f16
 
     subroutine pseudo_aero(state)
       implicit none
@@ -191,6 +201,10 @@ module f16_m
       beta =   asin(state(2) / V)
       beta_f = atan2(state(2) , state(1))
 
+      ! CALCULATE ALPHA_HAT USING EQN 3.4.20
+      alpha_hat = dalpha_dtime * longitudinal_length / (2 * V)
+      beta_ hat = dbeta_dtime * lateral_length / (2 * V)
+
       ! CALCULATE PBAR, QBAR, AND RBAR from eq 3.4.23
       angular_rates = 1 / (2*V) * (/state(4) * length, state(5) * length, state(6) * length/)
       pbar = angular_rates(1)
@@ -201,72 +215,74 @@ module f16_m
       Re = density_slugs_per_ft3 * V * 2 * length / dyn_viscosity_slug_per_ft_sec
 
       ! CALCULATE THE LIFT, DRAG, AND SIDE COEFFICIENTS
-      ! write(io_unit,*) "alpha = ", alpha
-      ! write(io_unit,*) "beta = ", beta
-      ! write(io_unit,*) "beta_f = ", beta_f
-      CL =  CL_alpha * alpha
-      CS = -CL_alpha * beta_f
-      CD =  CD0 + CD2 * CL**2 + CD2 * CS**2
+
+      CL1 =  CL0 + CL_alpha * alpha
+      CL  = CL1 + CL_qbar * qbar + CL_alphahat * alpha_hat + CL_elevator * delta_e
+      CS  = CS_beta * beta + (CS_pbar + CS_alpha_pbar * alpha) * pbar + CS_rbar * rbar &
+           + CS_aileron * delta_a + CS_rudder * delta_r
+      CD  =  CD_L0 + CD_L1 * CL1 + CD_L1_L1 * CL1 **2 + CD_CS_CS * CS **2 &
+            + (CD_qbar + CD_alpha_qbar * alpha) * qbar + (CD_elevator + CD_alpha_elevator * alpha) &
+            * delta_e + CD_elevator_elevator * delta_e ** 2
+
       L =   CL * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
       S =   CS * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
       D =   CD * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
-      ! write(io_unit,*) "CL", CL
-      ! write(io_unit,*) "CD", CD
-      ! write(io_unit,*) "CS", CS
-      ! write(io_unit,*) "L", L
-      ! write(io_unit,*) "D", D
-      ! write(io_unit,*) "S", S
-
 
       ca = cos(alpha)
       cb = cos(beta)
       sa = sin(alpha)
       sb = sin(beta)
-      ! write(io_unit,*) "ca", ca
-      ! write(io_unit,*) "cb", cb
-      ! write(io_unit,*) "sa", sa
-      ! write(io_unit,*) "sb", sb
-
 
       FM(1) = (D*ca*cb + S*ca*sb - L*sa) * (-1.0)
       FM(2) = (S*cb - D*sb)
       FM(3) = (D*sa*cb + S*sa*sb + L*ca) * (-1.0)
 
       ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
-      if (straight) then
-        Cl_pitch0 = 0.0
-      else 
-        Cl_pitch0 = 3.223
-      end if
-
-      Cl_pitch = Cl_pitch0 + Cl_pitch_pbar * pbar  ! roll moment
-      Cm =       Cm_alpha * alpha + Cm_qbar * qbar ! pitch moment
-      Cn =      -Cm_alpha * beta_f + Cm_qbar * rbar ! yaw moment
+      Cl_pitch = Cl_beta * beta + Cl_pbar * pbar + (Cl_rbar + Cl_alpha_rbar * alpha) * rbar &
+                 + Cl_aileron * delta_a + Cl_rudder * delta_r  ! roll moment
+      Cm =       Cm_0 + Cm_alpha * alpha + Cm_qbar * qbar + Cm_alphahat * alpha_hat + Cm_elevator * delta_e ! pitch moment
+      Cn =       Cn_beta * beta + (Cn_pbar + Cn_alpha_pbar * alpha) * pbar + Cn_rbar * rbar &
+                 + (Cn_aileron + Cn_alpha_aileron * alpha) * delta_a + Cn_rudder * delta_r ! yaw moment
 
       FM(4) = Cl_pitch * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * length)
       FM(5) = Cm       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * length)
       FM(6) = Cn       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * length)
+
+      ! PRINT STEPS IF SPECIFIED
+      if(print_steps) then
+        write(io_unit,*) "alpha = ", alpha
+        write(io_unit,*) "beta = ", beta
+        write(io_unit,*) "beta_f = ", beta_f
+        write(io_unit,*) "CL", CL
+        write(io_unit,*) "CD", CD
+        write(io_unit,*) "CS", CS
+        write(io_unit,*) "L", L
+        write(io_unit,*) "D", D
+        write(io_unit,*) "S", S
+        write(io_unit,*) "ca", ca
+        write(io_unit,*) "cb", cb
+        write(io_unit,*) "sa", sa
+        write(io_unit,*) "sb", sb
+      end if 
+
     end subroutine pseudo_aero
 
   !=========================
   ! Mass and Inertia
 
     subroutine mass_inertia(inertia)
-        implicit none
-        real, intent(inout) :: inertia(3,3)
-        real :: I(3,3)
+      implicit none
+      real, intent(inout) :: inertia(3,3)
+      real :: I(3,3)
 
-        ! DEFINE IDENTITY MATRIX 
-        I = reshape((/ 0.0, 0.0, 0.0, &
-               0.0, 0.0, 0.0, &
-               0.0, 0.0, 0.0 /), (/3,3/))
+      ! DEFINE IDENTITY MATRIX 
+      I = reshape((/ Ixx, Ixy, Ixz, &
+             Ixy, Iyy, Iyz, &
+             Ixz, Iyz, Izz /), (/3,3/))
 
-        ! CALCULATE MASS AND INERTIA
-        mass = weight / 32.17404855643
-        inertia(1,1) = 0.0000194
-        inertia(2,2) = 0.00097
-        inertia(3,3) = 0.00097
-        inertia_inv = matrix_inv(inertia)
+      ! CALCULATE MASS AND INERTIA
+      mass = weight / 32.17404855643
+      inertia_inv = matrix_inv(inertia)
     end subroutine mass_inertia
 
   !=========================
@@ -304,7 +320,6 @@ module f16_m
 
     subroutine run()
       implicit none
-      logical :: fletchings_straight
       real :: t, dt, tf, initial_state(13), new_state(13), eul(3)
       real :: V, h, elevation_angle_deg
       character(len=40) :: filename
@@ -315,20 +330,93 @@ module f16_m
 
       call jsonx_load(filename, j_main)
 
-      call jsonx_get(j_main, 'simulation.time_step[s]', dt)
-      call jsonx_get(j_main, 'simulation.straight', fletchings_straight)
-      call jsonx_get(j_main, 'initial.airspeed[ft/s]', V)
-      call jsonx_get(j_main, 'initial.altitude[ft]', h)
-      call jsonx_get(j_main, 'initial.elevation_angle[deg]', elevation_angle_deg)
-      straight = fletchings_straight
-      h = -h
+      call jsonx_get(j_main, 'simulation.time_step[s]',  dt)
+      call jsonx_get(j_main, 'simulation.total_time[s]', tf)
+      
+      call jsonx_get(j_main, 'vehicle.CG_shift[ft]', CG_shift)
+
+      call jsonx_get(j_main, 'vehicle.mass.weight[lbf]',     weight)
+      call jsonx_get(j_main, 'vehicle.mass.Ixx[slug-ft^2]',  Ixx)
+      call jsonx_get(j_main, 'vehicle.mass.Iyy[slug-ft^2]',  Iyy)
+      call jsonx_get(j_main, 'vehicle.mass.Izz[slug-ft^2]',  Izz)
+      call jsonx_get(j_main, 'vehicle.mass.Ixy[slug-ft^2]',  Ixy)
+      call jsonx_get(j_main, 'vehicle.mass.Ixz[slug-ft^2]',  Ixz)
+      call jsonx_get(j_main, 'vehicle.mass.Iyz[slug-ft^2]',  Iyz)
+      call jsonx_get(j_main, 'vehicle.mass.hx[slug-ft^2/s]', hx)
+      call jsonx_get(j_main, 'vehicle.mass.hy[slug-ft^2/s]', hy)
+      call jsonx_get(j_main, 'vehicle.mass.hz[slug-ft^2/s]', hz)
+
+      call jsonx_get(j_main, 'vehicle.thrust.T0[lbf]', T0)
+      call jsonx_get(j_main, 'vehicle.thrust.Ta',      Ta)
+
+      call jsonx_get(j_main, 'vehicle.aerodynamics.reference.area[ft^2]',              area)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.reference.longitudinal_length[ft]', longitudinal_length)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.reference.lateral_length[ft]',      lateral_length)
+
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.0',        CL0)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.alpha',    CL_alpha)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.alphahat', CL_alphahat)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.qbar',     CL_qbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.elevator', CL_elevator)
+
+
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.beta',       CS_beta)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.pbar',       CS_pbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.alpha_pbar', CS_alpha_pbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.rbar',       CS_rbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.aileron',    CS_aileron)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.rudder',     CS_rudder)
+
+
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.L0',                CD_L0)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.CL1',               CD_L1)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.CL1_CL1',           CD_CL1_CL1)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.CS_CS',             CD_CS_CS)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.qbar',              CD_qbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.alpha_qbar',        CD_alpha_qbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.elevator',          CD_elevator)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.alpha_elevator',    CD_alpha_elevator)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.elevator_elevator', CD_elevator_elevator)
+
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.beta',       Cl_beta)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.pbar',       Cl_pbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.rbar',       Cl_rbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.alpha_rbar', Cl_alpha_rbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.aileron',    Cl_aileron)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.rudder',     Cl_rudder)
+
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cm.0',        Cm_0)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cm.alpha',    Cm_alpha)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cm.qbar',     Cm_qbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cm.alphahat', Cm_alphahat)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cm.elevator', Cm_elevator)
+    
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.beta',          Cn_beta)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.pbar',          Cn_pbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.alpha_pbar',    Cn_alpha_pbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.rbar',          Cn_rbar)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.aileron',       Cn_aileron)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.alpha_aileron', Cn_alpha_aileron)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.rudder',        Cn_rudder)
+      ! (/1,2,3, 4,5,6, 7,8,9, 10,11,12,13/)
+      ! (/u,v,w, p,q,r, x,y,z, e0,ex,ey,ez/)
+      call jsonx_get(j_main, 'initial.airspeed[ft/s]',       airspeed)
+      call jsonx_get(j_main, 'initial.altitude[ft]',         initial_state(9))
+      call jsonx_get(j_main, 'initial.elevation_angle[deg]', eul(2))
+      call jsonx_get(j_main, 'initial.bank_angle[deg]',      eul(1))
+      call jsonx_get(j_main, 'initial.heading_angle[deg]',   eul(3))
+      call jsonx_get(j_main, 'initial.alpha[deg]',           alpha_deg)
+      call jsonx_get(j_main, 'initial.beta[deg]',            beta_deg)
+      call jsonx_get(j_main, 'initial.p[deg/s]',             initial_state(4))
+      call jsonx_get(j_main, 'initial.q[deg/s]',             initial_state(5))
+      call jsonx_get(j_main, 'initial.r[deg/s]',             initial_state(6))
+      call jsonx_get(j_main, 'initial.aileron[deg]',         aileron_deg)
+      call jsonx_get(j_main, 'initial.elevator[deg]',        elevator_deg)
+      call jsonx_get(j_main, 'initial.rudder[deg]',          rudder_deg)
+      call jsonx_get(j_main, 'initial.throttle',             throttle_deg)
 
       ! OPEN A FILE TO WRITE TO 
-      if (straight) then
-        open(newunit=io_unit, file='arrow_output_straight.txt', status='replace', action='write')
-      else
-        open(newunit=io_unit, file='arrow_output_angled.txt', status='replace', action='write')
-      end if
+      open(newunit=io_unit, file='arrow_output_straight.txt', status='replace', action='write')
 
       ! INITIALIZE TIME
       t = 0.0
@@ -336,15 +424,13 @@ module f16_m
       ! BUILD INITIAL CONDITIONS
       initial_state = 0.0
       initial_state(1) = V !ft/sec
-      initial_state(9) = h !altitude in ft
-      eul = 0.0 ! zero deg orientation
-      eul(2) = elevation_angle_deg * pi / 180.0
+      eul = eul * pi / 180.0
       initial_state(10:13) = euler_to_quat(eul)
 
       ! CALCULATE MASS AND INERTIA
       call mass_inertia(inertia)     
 
-      ! BUILD THE LOOP AND WRITE THE OUTPUT
+      ! BUIL.0 ! zero deg orientationD THE LOOP AND WRITE THE OUTPUT
       write(io_unit,*) " time[s]             u[ft/s]             v[ft/s]&
                    w[ft/s]             p[rad/s]            q[rad/s]      &
             r[rad/s]            xf[ft]              yf[ft]              &
@@ -352,8 +438,8 @@ module f16_m
                    ez                  "
       write(io_unit,'(14ES20.12)') t,initial_state(:)
     
-      do while(initial_state(9) <= 0)
-      ! write(io_unit,*) ''
+      do while(t < tf)
+        if (print_steps) write(io_unit,*) ''
 
         ! CALCULATE THE NEW STATE
         new_state = rk4(t, initial_state, dt)
@@ -364,10 +450,15 @@ module f16_m
         ! UPDATE THE STATE AND TIME
         initial_state = new_state
         t = t + dt
-      ! write(io_unit,*) ''
-      write(io_unit,'(14ES20.12)') t,initial_state(:)
-      ! write(io_unit,*) ''
+
+        if (print_steps) write(io_unit,*) ''
+
+        write(io_unit,'(14ES20.12)') t,initial_state(:)
+  
+        if (print_steps) write(io_unit,*) ''
+
       end do 
+
       close(io_unit)
 
     end subroutine run
