@@ -152,7 +152,7 @@ module f16_m
       acceleration = 1.0 / mass * FM(1:3) + gravity_ft_per_sec2 * orientation_effect + angular_v_effect
 
       ! ROLL, PITCH, YAW ACCELERATIONS
-      angular_accelerations = matmul(inertia_inv , FM(4:6) + &
+      angular_accelerations = matmul(inertia_inv , FM(4:6) - &
                               matmul(gyroscopic_effects, (/p, q, r/)) + inertia_effects - gyroscopic_change)
 
       ! VELOCITY IN THE INERITAL FRAME
@@ -173,7 +173,8 @@ module f16_m
       ! PRINT STEPS IF SPECIFIED
       if(rk4_verbose) then
         write(io_unit,'(A,13(1X,ES20.12))') "                     time [s] =", t
-        write(io_unit,'(A,13(1X,ES20.12))') '    State vector coming in    =', state
+        write(io_unit,'(A,*(1X,ES20.12))') '    State vector coming in    =', state, controls
+
         write(io_unit,'(A,6 (1X,ES20.12))') "    Pseudo aerodynamics (F,M) =", FM
         ! write(io_unit,*) "v1", v1
         ! write(io_unit,*) "v2", v2
@@ -256,6 +257,7 @@ module f16_m
       sa = sin(alpha)
       sb = sin(beta)
 
+      ! TABLE 3.4.4
       FM(1) = (D*ca*cb + S*ca*sb - L*sa) * (-1.0)
       FM(2) = (S*cb - D*sb)
       FM(3) = (D*sa*cb + S*sa*sb + L*ca) * (-1.0)
@@ -520,8 +522,8 @@ module f16_m
       t = 0.0 
 
       ! BUILD THE LOOP AND WRITE THE OUTPUT
-      write(io_unit,*) " time[s]             u[ft/s]             v[ft/s]&
-                   w[ft/s]             p[rad/s]            q[rad/s]      &
+      write(io_unit,*) " time[s]             u[ft/s]             v[ft/s] &
+                  w[ft/s]             p[rad/s]            q[rad/s]      &
             r[rad/s]            xf[ft]              yf[ft]              &
       zf[ft]              e0                  ex                  ey     &
                    ez                  "
