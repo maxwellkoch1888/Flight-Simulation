@@ -1,8 +1,8 @@
 {
     "simulation" : {
         "time_step[s]" : 0.01, 
-        "total_time[s]" : 5.0,
-        "rk4_verbose" : true
+        "total_time[s]" : 60.0,
+        "rk4_verbose" : false
     },
 
     "vehicle" : {
