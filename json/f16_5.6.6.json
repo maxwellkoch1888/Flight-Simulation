@@ -6,7 +6,7 @@
     },
 
     "vehicle" : {
-        "CG_shift[ft]" : [1.0, 0.0, 0.0], 
+        "aero_ref_location[ft]" : [0.0, 0.0, 0.0], 
 
         "mass" : {
             "weight[lbf]" : 20500.0,
