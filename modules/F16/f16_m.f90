@@ -17,7 +17,7 @@ module f16_m
     real :: controls(4)
     real :: rho0
     real :: T0, Ta
-    real, allocatable :: CG_shift(:)
+    real, allocatable :: aero_ref_location(:)
     integer :: io_unit
 
     ! DEFINE AERODYNAMIC PROPERTIES
@@ -239,10 +239,6 @@ module f16_m
       throttle = controls(4)
 
       ! CALCULATE THE LIFT, DRAG, AND SIDE COEFFICIENTS
-        write(io_unit,*) "CL0", CL0
-        write(io_unit,*) "CL_alpha", CL_alpha
-        write(io_unit,*) "alpha", alpha
-
       CL1 =  CL0 + CL_alpha * alpha
       CL  = CL1 + CL_qbar * qbar + CL_alphahat * alpha_hat + CL_elevator * delta_e
       CS  = CS_beta * beta + (CS_pbar + CS_alpha_pbar * alpha) * pbar + CS_rbar * rbar &
@@ -279,6 +275,9 @@ module f16_m
       FM(5) = Cm       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * longitudinal_length)
       FM(6) = Cn       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
 
+      ! SHIFT CG LOCATION
+      FM(4:6) = FM(4:6) + cross_product(aero_ref_location, FM(1:3))
+      
       ! ! PRINT STEPS IF SPECIFIED
       ! if(rk4_verbose) then
       !   write(io_unit,*) "V_mag = ", V
@@ -315,7 +314,7 @@ module f16_m
       real :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz
 
       ! READ CG SHIFT IF APPLICABLE
-      call jsonx_get(j_main, 'vehicle.CG_shift[ft]', CG_shift, 0.0, 3)
+      call jsonx_get(j_main, 'vehicle.aero_ref_location[ft]', aero_ref_location, 0.0, 3)
 
       ! READ MASS PROPERTIES
       call jsonx_get(j_main, 'vehicle.mass.weight[lbf]',     weight)
@@ -367,6 +366,28 @@ module f16_m
       ! CALCULATE THE INVERSE MATRIX
       A_inv = 1/det * A_adj
     end function matrix_inv
+
+  !=========================
+  ! CROSS PRODUCT
+    function cross_product(vector_a, vector_b) result(vector_c)
+      real, intent(in) :: vector_a(3), vector_b(3)
+      real :: vector_c(3)
+      real :: a1, a2, a3, b1, b2, b3
+
+      ! BREAK DOWN VECTOR 1 AND 2
+      a1 = vector_a(1)
+      a2 = vector_a(2)
+      a3 = vector_a(3)
+
+      b1 = vector_b(1)
+      b2 = vector_b(2)
+      b3 = vector_b(3)
+
+      ! CALCULATE ORTHOGONAL VECTOR
+      vector_c(1) = a2*b3 - a3*b2
+      vector_c(2) = a3*b1 - a1*b3
+      vector_c(3) = a1*b2 - a2*b1
+    end function cross_product
 
   !=========================
   ! Init Subroutine
@@ -491,7 +512,7 @@ module f16_m
     subroutine run()
       implicit none
       real :: t, dt, tf, new_state(13)
-
+      
       call jsonx_get(j_main, 'simulation.time_step[s]',  dt)
       call jsonx_get(j_main, 'simulation.total_time[s]', tf)
 
