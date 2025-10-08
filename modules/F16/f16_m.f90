@@ -53,6 +53,8 @@ module f16_m
       if(rk4_verbose) then 
         write(io_unit,*) "diff_eq function called: "
         write(io_unit,*) "              RK4 call number =  3"
+        write(io_unit,*) " initial state", initial_state
+        write(io_unit,*) " k2", k2   
       end if
       k3 = differential_equations(t0 + delta_t*0.5, initial_state + k2 * delta_t*0.5)
       if(rk4_verbose) then 
@@ -82,7 +84,7 @@ module f16_m
       real :: quat_matrix(4,3) 
       real :: hxb, hyb, hzb, hxb_dot, hyb_dot, hzb_dot
       real :: Vxw, Vyw, Vzw, gravity_ft_per_sec2 
-      real :: v1(4), v2(4)
+      real :: v1(4), v2(4), angular_inertia(3,3)
       real :: avoid_warning
 
       avoid_warning = t
@@ -130,9 +132,13 @@ module f16_m
 
       angular_v_effect =    (/r*v - q*w, p*w - r*u, q*u - p*v/)
 
-      gyroscopic_effects = reshape((/ 0.0, -hzb,  hyb, &
-                                      hzb,  0.0, -hxb, &
-                                     -hyb,  hxb,  0.0 /), (/3,3/))
+      gyroscopic_effects = reshape((/ 0.0,  hzb,  -hyb, &
+                                     -hzb,  0.0,   hxb, &
+                                      hyb, -hxb,    0.0 /), (/3,3/))
+
+      angular_inertia = reshape((/  Ixx, -Ixy, -Ixz, &
+                                   -Ixy,  Iyy, -Iyz, &
+                                   -Ixz, -Iyz,  Izz /), (/3,3/))
 
       gyroscopic_change =   (/hxb_dot, hyb_dot, hzb_dot/)
       
@@ -152,7 +158,7 @@ module f16_m
       acceleration = 1.0 / mass * FM(1:3) + gravity_ft_per_sec2 * orientation_effect + angular_v_effect
 
       ! ROLL, PITCH, YAW ACCELERATIONS
-      angular_accelerations = matmul(inertia_inv , FM(4:6) - &
+      angular_accelerations = matmul(matrix_inv(angular_inertia) , FM(4:6) + &
                               matmul(gyroscopic_effects, (/p, q, r/)) + inertia_effects - gyroscopic_change)
 
       ! VELOCITY IN THE INERITAL FRAME
