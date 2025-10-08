@@ -2,11 +2,11 @@
     "simulation" : {
         "time_step[s]" : 0.01, 
         "total_time[s]" : 5.0,
-        "rk4_verbose" : true
+        "rk4_verbose" : false
     },
 
     "vehicle" : {
-        "aero_ref_location[ft]" : [0.0, 0.0, 0.0], 
+        "aero_ref_location[ft]" : [-1.0, 0.0, 0.0], 
 
         "mass" : {
             "weight[lbf]" : 20500.0,
@@ -88,17 +88,17 @@
     "initial" : {
         "airspeed[ft/s]" : 330.0,
         "altitude[ft]" : 1000.0,
-        "elevation_angle[deg]" : 7.858650044026,
+        "elevation_angle[deg]" : 8.443411055393,
         "bank_angle[deg]" : 0.0,
         "heading_angle[deg]" : 0.0,
-        "alpha[deg]" : 7.858650044026,
+        "alpha[deg]" : 8.443411055393,
         "beta[deg]" : 0.0,
         "p[deg/s]" : 0.0,
         "q[deg/s]" : 0.0, 
         "r[deg/s]" : 0.0,
         "aileron[deg]" : 0.0, 
-        "elevator[deg]" : -4.940749182476,
+        "elevator[deg]" : -9.0,
         "rudder[deg]" : 0.0,
-        "throttle" : 0.06794815882517
+        "throttle" : 0.07405968483138
     }
 }
