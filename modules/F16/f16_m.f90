@@ -34,9 +34,9 @@ module f16_m
     contains
   !=========================
   ! RK4 Integrator
-    function rk4(t0, initial_state, delta_t) result(state)
+    function rk4(t0, y1, delta_t) result(state)
       implicit none
-      real, intent(in) :: t0, delta_t, initial_state(13)
+      real, intent(in) :: t0, delta_t, y1(13)
       real, dimension(13) :: state, k1, k2, k3, k4
 
       ! DEFINE THE K TERMS FOR RK4 METHOD
@@ -44,28 +44,28 @@ module f16_m
         write(io_unit,*) "diff_eq function called: "
         write(io_unit,*) "              RK4 call number =  1"
       end if
-      k1 = differential_equations(t0, initial_state)
+      k1 = differential_equations(t0, y1)
       if(rk4_verbose) then 
         write(io_unit,*) "diff_eq function called: "
         write(io_unit,*) "              RK4 call number =  2"
       end if
-      k2 = differential_equations(t0 + delta_t*0.5, initial_state + k1 * delta_t*0.5)
+      k2 = differential_equations(t0 + delta_t*0.5, y1 + k1 * delta_t*0.5)
       if(rk4_verbose) then 
         write(io_unit,*) "diff_eq function called: "
         write(io_unit,*) "              RK4 call number =  3"
-        write(io_unit,*) " initial state", initial_state
+        write(io_unit,*) " initial state", y1
         write(io_unit,*) " k2", k2   
       end if
-      k3 = differential_equations(t0 + delta_t*0.5, initial_state + k2 * delta_t*0.5)
+      k3 = differential_equations(t0 + delta_t*0.5, y1 + k2 * delta_t*0.5)
       if(rk4_verbose) then 
         write(io_unit,*) "diff_eq function called: "
         write(io_unit,*) "              RK4 call number =  4"
       end if
-      k4 = differential_equations(t0 + delta_t, initial_state + k3 * delta_t)
+      k4 = differential_equations(t0 + delta_t, y1 + k3 * delta_t)
 
 
       ! DEFINE THE RESULT FROM RK4
-      state = initial_state + (delta_t/6) * (k1 + 2*k2 + 2*k3 + k4)
+      state = y1 + (delta_t/6) * (k1 + 2*k2 + 2*k3 + k4)
 
     end function rk4
 
@@ -519,35 +519,74 @@ module f16_m
   ! Run Subroutine
     subroutine run()
       implicit none
-      real :: t, dt, tf, new_state(13)
-      
-      call jsonx_get(j_main, 'simulation.time_step[s]',  dt)
+      real :: t, dt, tf, y_new(13)
+
+      real :: cpu_start_time, cpu_end_time, actual_time, integrated_time, time_error
+      real :: time_1, time_2, y_init(13)
+      logical :: real_time = .false.
+
+      call jsonx_get(j_main, 'simulation.time_step[s]',  dt, 0.0)
       call jsonx_get(j_main, 'simulation.total_time[s]', tf)
 
-      ! INITIALIZE TIME
+      ! INITIALIZE TIME AND STATE
       t = 0.0 
+      integrated_time = 0.0
+      y_init = initial_state
+
+      ! SWITCH TO REAL TIME SIMULATION IF SPECIFIED
+      if(abs(dt) < tol) then
+        real_time = .true.
+        call cpu_time(time_1)
+        y_init = rk4(t,initial_state,dt)
+        call quat_norm(y_init)
+        call cpu_time(time_2)
+        dt = time_2 - time_1
+        y_init = initial_state
+      end if
 
       ! BUILD THE LOOP AND WRITE THE OUTPUT
       write(io_unit,*) " time[s]             u[ft/s]             v[ft/s] &
-                  w[ft/s]             p[rad/s]            q[rad/s]      &
+                       w[ft/s]             p[rad/s]            q[rad/s]      &
             r[rad/s]            xf[ft]              yf[ft]              &
       zf[ft]              e0                  ex                  ey     &
                    ez                  "
-      write(io_unit,'(14ES20.12)') t,initial_state(:)
-    
+      write(io_unit,'(14ES20.12)') t,y_init(:)
+
+      ! SAVE THE TIMESTAMP WHEN THE SIMULATION BEGINS
+      call cpu_time(cpu_start_time)
+
+      ! START THE SIMULATION
       do while(t < tf)
         ! CALCULATE THE NEW STATE
-        new_state = rk4(t, initial_state, dt)
+        y_new = rk4(t, y_init, dt)
 
         ! NORMALIZE THE QUATERNION
-        call quat_norm(new_state(10:13))
+        call quat_norm(y_new(10:13))
+
+        if(real_time) then
+          call cpu_time(time_2)
+          dt = time_2 - time_1
+          time_1 = time_2
+        end if 
 
         ! UPDATE THE STATE AND TIME
-        initial_state = new_state
+        y_init = y_new
         t = t + dt
-
-        write(io_unit,'(14ES20.12)') t,initial_state(:)
+        integrated_time = integrated_time + dt
+        write(*,*) t, dt
+      
+        write(io_unit,'(14ES20.12)') t,y_init(:)
       end do 
+
+      ! SAVE THE TIMESTAMP FOR WHEN THE SIMULATION STOPPED
+      call cpu_time(cpu_end_time)
+      actual_time = cpu_end_time - cpu_start_time
+      time_error = actual_time - integrated_time
+
+      ! WRITE OUT THE TIME DIFFERENCES
+      write(*,*) "Actual Time Elapsed", actual_time
+      write(*,*) "Integrated Time", integrated_time
+      write(*,*) "Time Error", time_error
 
       close(io_unit)
 
