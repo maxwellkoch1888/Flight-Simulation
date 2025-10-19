@@ -346,6 +346,29 @@ module f16_m
       mass = weight / 32.17404855643
       inertia_inv = matrix_inv(inertia)
     end subroutine mass_inertia
+  !=========================
+  ! Trim Algorithm
+    function trim_algorithm
+      real :: V, h, elevation_angle, azimuth_angle
+      character :: trim_type
+      
+      ! SET INITIAL GUESSSES TO ZERO
+      alpha = beta = p = q = r = delta_a = delta_e = delta_r = throttle = 0
+
+      if (trime_type == 'shss') then 
+        bank_angle = bank_angle0
+        sideslip_angle = sideslip_angle0
+      else
+        sideslip_angle = sideslip_angle0
+      end if
+
+      do while (error > tol)
+        ! (u,v,w) = from 3.4.12
+        if (trim_type == 'sct') then
+          ! (p,q,r) = from 6.2.3
+        else if (trim_type == 'vbr') then
+          ! (p,q,r) = from 6.4.4
+        else if (trim_type == 'shss') then
 
   !=========================
   ! Matrix Inverse
