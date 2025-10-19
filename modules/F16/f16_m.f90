@@ -2,6 +2,7 @@ module f16_m
     use koch_m
     use json_m
     use jsonx_m
+    use micro_time_m
     implicit none
   
     ! JSON POINTER
@@ -536,10 +537,10 @@ module f16_m
       ! SWITCH TO REAL TIME SIMULATION IF SPECIFIED
       if(abs(dt) < tol) then
         real_time = .true.
-        call cpu_time(time_1)
+        time_1 = get_time()
         y_init = rk4(t,initial_state,dt)
         call quat_norm(y_init)
-        call cpu_time(time_2)
+        time_2 = get_time()
         dt = time_2 - time_1
         y_init = initial_state
       end if
@@ -553,7 +554,7 @@ module f16_m
       write(io_unit,'(14ES20.12)') t,y_init(:)
 
       ! SAVE THE TIMESTAMP WHEN THE SIMULATION BEGINS
-      call cpu_time(cpu_start_time)
+      cpu_start_time = get_time()
 
       ! START THE SIMULATION
       do while(t < tf)
@@ -564,7 +565,7 @@ module f16_m
         call quat_norm(y_new(10:13))
 
         if(real_time) then
-          call cpu_time(time_2)
+          time_2 = get_time()
           dt = time_2 - time_1
           time_1 = time_2
         end if 
@@ -579,7 +580,7 @@ module f16_m
       end do 
 
       ! SAVE THE TIMESTAMP FOR WHEN THE SIMULATION STOPPED
-      call cpu_time(cpu_end_time)
+      cpu_end_time = get_time()
       actual_time = cpu_end_time - cpu_start_time
       time_error = actual_time - integrated_time
 
