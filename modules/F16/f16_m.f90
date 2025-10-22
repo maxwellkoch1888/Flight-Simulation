@@ -278,6 +278,14 @@ module f16_m
       FM(3) = (D*sa*cb + S*sa*sb + L*ca) * (-1.0)
 
       ! ADD THE ENGINE THRUST
+      if (throttle < 0.0) then
+        throttle = 0.0
+      else if (throttle > 1.0) then
+        throttle = 1.0
+      else 
+        throttle = throttle 
+      end if 
+
       T = throttle * T0 * (density_slugs_per_ft3/rho0) ** Ta
       FM(1) = FM(1) + T
 
@@ -383,23 +391,28 @@ module f16_m
       delta_r  = G(5)
       throttle = G(6)
 
+      ! BUILD EULER ANGLES
+      euler(1) = bank_angle0 * pi/ 180.0
+      euler(2) = elevation_angle * pi / 180.0
+      euler(3) = azimuth_angle * pi / 180.0
+
       if (trim_verbose) then
-        write(*,*) 'Trimming Aircraft for ', trim_type
-        write(*,'(A,ES20.12)') '  --> Azimuth angle set to psi [deg] =', azimuth_angle
-        write(*,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle
-        write(*,'(A,ES20.12)') '  --> Bank angle set to phi [deg] =', bank_angle0
-        write(*,'(A)') ''
-        write(*,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle
-        write(*,'(A,ES20.12)') 'Initial gamma [deg] =', -9.0
-        write(*,'(A,ES20.12)') 'Initial phi [deg]   =', bank_angle0
-        write(*,'(A,ES20.12)') 'Initial beta [deg]  =', beta
-        write(*,'(A)') ''
-        write(*,'(A)') 'Newton Solver Settings:'
-        write(*,'(A,ES20.12)') 'Finite Difference Step Size =', finite_difference_step_size
-        write(*,'(A,ES20.12)') '          Relaxation Factor =', relaxation_factor
-        write(*,'(A,ES20.12)') '                  Tolerance =', tolerance
-        write(*,'(A)') ''
-        write(*,'(A)') ''
+        write(io_unit,*) 'Trimming Aircraft for ', trim_type
+        write(io_unit,'(A,ES20.12)') '  --> Azimuth angle set to psi [deg] =', azimuth_angle
+        write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle
+        write(io_unit,'(A,ES20.12)') '  --> Bank angle set to phi [deg] =', bank_angle0
+        write(io_unit,'(A)') ''
+        write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle
+        write(io_unit,'(A,ES20.12)') 'Initial gamma [deg] =', -9.0
+        write(io_unit,'(A,ES20.12)') 'Initial phi [deg]   =', bank_angle0
+        write(io_unit,'(A,ES20.12)') 'Initial beta [deg]  =', beta
+        write(io_unit,'(A)') ''
+        write(io_unit,'(A)') 'Newton Solver Settings:'
+        write(io_unit,'(A,ES20.12)') 'Finite Difference Step Size =', finite_difference_step_size
+        write(io_unit,'(A,ES20.12)') '          Relaxation Factor =', relaxation_factor
+        write(io_unit,'(A,ES20.12)') '                  Tolerance =', tolerance
+        write(io_unit,'(A)') ''
+        write(io_unit,'(A)') ''
       end if
 
 
@@ -444,20 +457,20 @@ module f16_m
         !   r = angular_rates(3)
         
         if (trim_verbose) then 
-          write(*,'(A)') 'Updating rotation rates for sct'
-          write(*,'(A,ES20.12)') 'p [deg/s] =', p 
-          write(*,'(A,ES20.12)') 'q [deg/s] =', q 
-          write(*,'(A,ES20.12)') 'r [deg/s] =', r 
-          write(*, '(A)') ''
+          write(io_unit,'(A)') 'Updating rotation rates for sct'
+          write(io_unit,'(A,ES20.12)') 'p [deg/s] =', p 
+          write(io_unit,'(A,ES20.12)') 'q [deg/s] =', q 
+          write(io_unit,'(A,ES20.12)') 'r [deg/s] =', r 
+          write(io_unit, '(A)') ''
         end if 
         
         res = calc_r(V_mag, height, euler, angular_rates, G, beta)
-
+        
         if (trim_verbose) then 
-          write(*,'(A)') 'G defined as G = [alpha, beta, aileron, elevator, rudder, throttle]'
-          write(*, '(A,6(1X,ES20.12))') '      G =', (G(k), k=1,6)
-          write(*, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
-          write(*, '(A)') ''
+          write(io_unit,'(A)') 'G defined as G = [alpha, beta, aileron, elevator, rudder, throttle]'
+          write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(k), k=1,6)
+          write(io_unit, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
+          write(io_unit, '(A)') ''
         end if
         G2 = newtons_method(V_mag, height, euler, angular_rates, G, beta)
         error = 0.0
@@ -474,7 +487,8 @@ module f16_m
       allocate(res(6), delta_G(6))
 
       ! CALCULATE JACOBIAN AND RESIDUAL
-      jac = jacobian(V_mag, height, euler, angular_rates, G, beta)
+      jac = jacobian(V_mag, height, euler, angular_rates, G)
+      res = calc_r(V_mag, height, euler, angular_rates, G)
 
       ! CALCUALTE DELTA G AND ADD RELAXATION FACTOR
       call lu_solve(6, jac, res, delta_G)
@@ -483,8 +497,8 @@ module f16_m
       if (trim_verbose) then
         write(io_unit, '(A,ES20.12)') 'Delta G =', delta_G(:)
         write(io_unit, '(A)') 'New G:'
-        write(*,'(A,ES20.12)') '      G =', G(:)
-        write(*,'(A,ES20.12)') '      R =', res(:)
+        write(io_unit,'(A,ES20.12)') '      G =', G(:)
+        write(io_unit,'(A,ES20.12)') '      R =', res(:)
       end if 
     end function newtons_method
 
@@ -492,7 +506,7 @@ module f16_m
   ! Approximate Jacobian for G
     function jacobian(V_mag, height, euler, angular_rates, G, beta) result(G_jacobian)
       implicit none
-      real :: V_mag, height, euler(3), angular_rates(3)
+      real :: V_mag, height, euler(3), angular_rates(3), quaternion_ex(4)
       real :: G(6)
       real, intent(in), optional :: beta
       real :: R_pos(6), R_neg(6), step_size
@@ -500,43 +514,55 @@ module f16_m
       integer :: i, j
 
       if (trim_verbose) then
-        write(*,'(A)') 'Building Jacobian Matrix:'
-        write(*,'(A)') ''
+        write(io_unit,'(A)') 'Building Jacobian Matrix:'
+        write(io_unit,'(A)') ''
       end if 
 
       ! USE CENTRAL DIFFERENCE METHOD TO FIND JACOBIAN
       step_size = finite_difference_step_size
       do j = 1,6        
         G(j) = G(j) + step_size
-        R_pos = calc_r(V_mag, height, euler, angular_rates, G, beta)
+        R_pos = calc_r(V_mag, height, euler, angular_rates, G)
         
         if (trim_verbose) then
-          write(*, '(A,I0,A)') 'Computing gradient relative to G[', j, ']'
-          write(*, '(A)') '   Positive Finite-Difference Step '
-          write(*, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
-          write(*, '(A,6(1X,ES20.12))') '      R =', (R_pos(i), i=1,6)
+          write(io_unit, '(A,I0,A)') 'Computing gradient relative to G[', j-1, ']'
+          write(io_unit, '(A)') '   Positive Finite-Difference Step '
+          write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
+          write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_pos(i), i=1,6)
         end if 
         
         G(j) = G(j) - 2 * step_size
-        R_neg = calc_r(V_mag, height, euler, angular_rates, G, beta)
+        quaternion_ex = euler_to_quat(euler)
+        ! write(io_unit,*) 'vmag', V_mag
+        ! write(io_unit,*) ' height', height
+        ! write(io_unit,*) 'euler', euler
+        ! write(io_unit,*) 'quaternion', quaternion_ex
+        ! write(io_unit,*) 'angular rates', angular_rates
+        ! write(io_unit,*) 'G', G
+        R_neg = calc_r(V_mag, height, euler, angular_rates, G)
         
         if (trim_verbose) then
-          write(*, '(A)') '   Negative Finite-Difference Step'
-          write(*, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
-          write(*, '(A,6(1X,ES20.12))') '      R =', (R_neg(i), i=1,6)
-          write(*,'(A)') ''
+          write(io_unit, '(A)') '   Negative Finite-Difference Step'
+          write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
+          write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_neg(i), i=1,6)
+          write(io_unit,'(A)') ''
         end if
 
         do i = 1,6
-          G_jacobian(i,j) = R_pos(i) - R_neg(i) / (2*step_size)
+          G_jacobian(i, j) = (R_pos(i) - R_neg(i)) / (2*step_size)
+          ! write(io_unit, *) 'j, i', j, i
+          ! write(io_unit, *) 'r pos', R_pos(i)
+          ! write(io_unit, *) 'r neg', R_neg(i)
+          ! write(io_unit, *) 'rpos-rneg', R_pos(i) - R_neg(i)
+          ! write(io_unit, *) 'jacobian', G_jacobian(j,i)
         end do 
         G(j) = G(j) + step_size
       end do 
 
       if (trim_verbose) then
-        write(*, '(A)') 'Jacobian Matrix ='
+        write(io_unit, '(A)') 'Jacobian Matrix ='
         do i = 1, size(G_jacobian,1)
-            write(*,'(*(1X,ES20.12))') (G_jacobian(i,j), j=1,size(G_jacobian,2))
+            write(io_unit,'(*(1X,ES20.12))') (G_jacobian(i,j), j=1,size(G_jacobian,2))
         end do
       end if
     end function jacobian
@@ -552,6 +578,9 @@ module f16_m
       real :: R(6), dummy_R(13), temp_state(13)
 
       temp_state = 0.0
+
+      ! PULL OUT CONTROLS
+      controls(1:4) = G(3:6)
 
       ! PULL OUT ALPHA
       alpha = G(1)
