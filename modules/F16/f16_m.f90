@@ -3,6 +3,7 @@ module f16_m
     use json_m
     use jsonx_m
     use micro_time_m
+    use linalg_mod
     implicit none
   
     ! JSON POINTER
@@ -32,9 +33,11 @@ module f16_m
     logical :: rk4_verbose
 
     ! ADD VARIABLES FOR TRIM ALGORITHM
-    character(len=32) :: sim_type = 'trim'
-    character(len=32) :: trim_type = 'sct'
+    character(:), allocatable :: sim_type
+    character(:), allocatable :: trim_type
     real :: relaxation_factor, tolerance, max_iterations, finite_difference_step_size
+    real :: bank_angle0, sideslip_angle0
+    logical :: trim_verbose
 
 
     contains
@@ -355,33 +358,54 @@ module f16_m
   !=========================
   ! Trim Algorithm
     function trim_algorithm(V_mag, height, elevation_angle, azimuth_angle, tolerance, trim_type) result(G)
+      implicit none 
       real :: V_mag, height, elevation_angle, azimuth_angle, tolerance
       real :: alpha, beta, p, q, r, delta_a, delta_e, delta_r, throttle 
       real :: bank_angle, bank_angle0, sideslip_angle, sideslip_angle0
       real :: c_bank, c_elev, s_bank, s_elev, ca, cb, sa, sb, error, pw
-      real :: u, v, w, velocities(3)
-      real :: G(6)
-      real :: angular_rates(3)
-      character :: trim_type
+      real :: u, v, w, velocities(3), gravity
+      real :: G(6), G2(6), res(6)
+      real :: angular_rates(3), euler(3)
+      integer :: k 
+      character(*), intent(in) :: trim_type
       
+      ! CALCULATE GRAVITY
+      gravity = gravity_English(height)
       ! SET INITIAL GUESSSES TO ZERO
-      alpha    = 0.0
-      beta     = 0.0
+      G        = 0.0
+      alpha    = G(1)
+      beta     = G(2)
       p        = 0.0
       q        = 0.0
       r        = 0.0
-      delta_a  = 0.0
-      delta_e  = 0.0
-      delta_r  = 0.0
-      throttle = 0.0
+      delta_a  = G(3)
+      delta_e  = G(4)
+      delta_r  = G(5)
+      throttle = G(6)
 
-      if (trim_type == 'shss') then 
-        bank_angle = bank_angle0
-        sideslip_angle = sideslip_angle0
-      else
-        sideslip_angle = sideslip_angle0
+      if (trim_verbose) then
+        write(io_unit,*) 'Trimming Aircraft for ', trim_type
+        write(io_unit,'(A,ES20.12)') '  --> Azimuth angle set to psi [deg] =', azimuth_angle
+        write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle
+        write(io_unit,'(A,ES20.12)') '  --> Bank angle set to phi [deg] =', bank_angle0
+        write(io_unit,'(A)') ''
+        write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle
+        write(io_unit,'(A,ES20.12)') 'Initial gamma [deg] =', -9.0
+        write(io_unit,'(A,ES20.12)') 'Initial phi [deg]   =', sideslip_angle0
+        write(io_unit,'(A,ES20.12)') 'Initial beta [deg]  =', beta
+        write(io_unit,'(A)') ''
+        write(io_unit,'(A)') 'Newton Solver Settings:'
+        write(io_unit,'(A,ES20.12)') 'Finite Difference Step Size =', finite_difference_step_size
+        write(io_unit,'(A,ES20.12)') '          Relaxation Factor =', relaxation_factor
+        write(io_unit,'(A,ES20.12)') '                  Tolerance =', tolerance
+        write(io_unit,'(A)') ''
+        write(io_unit,'(A)') ''
       end if
 
+
+      bank_angle = bank_angle0
+
+      error = 1.0
       do while (error > tol)
         ! DEFINE COS AND SIN TERMS TO SAVE TIME
         ca = cos(alpha)
@@ -400,34 +424,49 @@ module f16_m
         v = velocities(2)
         w = velocities(3)
 
-        if (trim_type == 'sct') then
-          ! CALCULATE THE ANGULAR RATES
-          angular_rates = g * s_bank * c_elev / (u*c_elev*c_bank + w*s_elev) &
-                          * [-s_elev, s_bank*c_elev, c_bank*c_elev]
+        ! CALCULATE THE ANGULAR RATES
+        angular_rates = gravity * s_bank * c_elev / (u*c_elev*c_bank + w*s_elev) &
+                        * (/-s_elev, s_bank*c_elev, c_bank*c_elev/)
 
-          p = angular_rates(1)
-          q = angular_rates(2)
-          r = angular_rates(3)
+        p = angular_rates(1)
+        q = angular_rates(2)
+        r = angular_rates(3)
 
-        else if (trim_type == 'vbr') then
-          ! ROLL IN WIND COORDINATES FROM 6.2.6
-          pw = g * s_bank * c_elev / (u*c_elev*c_bank + w*s_elev) * (1.0 / V_mag) * &
-              (-u*s_elev + v*s_bank*c_elev + w*c_bank*c_elev)
+        ! else if (trim_type == 'vbr') then
+        !   ! ROLL IN WIND COORDINATES FROM 6.2.6
+        !   pw = gravity * s_bank * c_elev / (u*c_elev*c_bank + w*s_elev) * (1.0 / V_mag) * &
+        !       (-u*s_elev + v*s_bank*c_elev + w*c_bank*c_elev)
 
-          ! CALCUALTE (p,q,r) FROM 6.4.4
-          angular_rates = pw / V_mag * (/u, v, w/)
+        !   ! CALCUALTE (p,q,r) FROM 6.4.4
+        !   angular_rates = pw / V_mag * (/u, v, w/)
+        !   p = angular_rates(1)
+        !   q = angular_rates(2)
+        !   r = angular_rates(3)
+        
+        if (trim_verbose) then 
+          write(io_unit,'(A)') 'Updating rotation rates for sct'
+          write(io_unit,'(A,ES20.12)') 'p [deg/s] =', p 
+          write(io_unit,'(A,ES20.12)') 'q [deg/s] =', q 
+          write(io_unit,'(A,ES20.12)') 'r [deg/s] =', r 
+          write(io_unit, '(A)') ''
+        end if 
+        
+        res = calc_r(V_mag, height, euler, angular_rates, G, beta)
+
+        if (trim_verbose) then 
+          write(io_unit,'(A)') 'G defined as G = [alpha, beta, aileron, elevator, rudder, throttle]'
+          write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(k), k=1,6)
+          write(io_unit, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
+          write(io_unit, '(A)') ''
         end if
-          
-        if (trim_type == 'shss' .and. sideslip_angle0) then
-          ! solve 6.1.5 and 6.1.6 with sideslip 
-        else
-          ! solve 6.1.5 and 6.1.6 with beta
-        end if
+        G2 = newtons_method(V_mag, height, euler, angular_rates, G, beta)
+        error = 0.0
       end do
     end function trim_algorithm
   !=========================
   ! Newton's Method Solver to find G (alpha, beta, delta_a, delta_e, delta_r, throttle)
-    function newtons_method(G) result(G2)
+    function newtons_method(V_mag, height, euler, angular_rates, G, beta) result(G2)
+      implicit none
       real , allocatable :: res(:), delta_G(:)
       real :: G(6), G2(6)
       real :: angular_rates(3), beta, jac(6,6), euler(3), height, dummy_res(13), V_mag
@@ -439,14 +478,27 @@ module f16_m
       dummy_res = differential_equations(0.0, initial_state)
       res = dummy_res(1:6)
 
+      if (trim_verbose) then
+        write(io_unit,'(A,ES20.12)') 'G =', G(:)
+        write(io_unit,'(A,ES20.12)') 'R =', res(:)
+        write(io_unit,'(A)') ''
+
+      end if 
+
       ! CALCUALTE DELTA G AND ADD RELAXATION FACTOR
       call lu_solve(6, jac, res, delta_G)
       G2 = G + relaxation_factor * delta_G
+
+      if (trim_verbose) then
+        write(io_unit, '(A,ES20.12)') 'Delta G =', delta_G(:)
+        write(io_unit, '(A)') 'New G:'
+      end if 
     end function newtons_method
 
   !=========================
   ! Approximate Jacobian for G
     function jacobian(V_mag, height, euler, angular_rates, G, beta) result(G_jacobian)
+      implicit none
       real :: V_mag, height, euler(3), angular_rates(3)
       real :: G(6)
       real, intent(in), optional :: beta
@@ -454,23 +506,50 @@ module f16_m
       real :: G_jacobian(6,6)
       integer :: i, j
 
+      if (trim_verbose) then
+        write(io_unit,'(A)') 'Building Jacobian Matrix:'
+        write(io_unit,'(A)') ''
+      end if 
+
       ! USE CENTRAL DIFFERENCE METHOD TO FIND JACOBIAN
       step_size = finite_difference_step_size
-      do j = 1,6
+      do j = 1,6        
         G(j) = G(j) + step_size
         R_pos = calc_r(V_mag, height, euler, angular_rates, G, beta)
+        
+        if (trim_verbose) then
+          write(io_unit, '(A,I0,A)') 'Computing gradient relative to G[', j, ']'
+          write(io_unit, '(A)') '   Positive Finite-Difference Step '
+          write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
+          write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_pos(i), i=1,6)
+        end if 
+        
         G(j) = G(j) - 2 * step_size
         R_neg = calc_r(V_mag, height, euler, angular_rates, G, beta)
+        
+        if (trim_verbose) then
+          write(io_unit, '(A)') '   Negative Finite-Difference Step'
+          write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
+          write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_neg(i), i=1,6)
+          write(io_unit,'(A)') ''
+        end if
+
         do i = 1,6
-          J(i,j) = R_pos(i) - R_neg(i) / (2*step_size)
+          G_jacobian(i,j) = R_pos(i) - R_neg(i) / (2*step_size)
         end do 
         G(j) = G(j) + step_size
       end do 
+
+      if (trim_verbose) then
+        write(io_unit, '(A)') 'Jacobian Matrix ='
+        write(io_unit, '(ES20.12)') G_jacobian
+      end if
     end function jacobian
 
   !=========================
   ! Calculate Residual
     function calc_r(V_mag, height, euler, angular_rates, G, beta) result(R)
+      implicit none
       real, intent(in) :: V_mag, height, G(6), angular_rates(3)
       real, intent(inout) :: euler(3)
       real, intent(in), optional :: beta
@@ -506,40 +585,6 @@ module f16_m
     end function calc_r
 
   !=========================
-  ! LU Decomposition from MachLine GitHub
-    subroutine lu_solve(N, A, b, x)
-    ! Solves a general [A]x=b on an nxn matrix
-    ! This replaces A (in place) with its LU decomposition (permuted row-wise)
-
-      implicit none
-
-      integer,intent(in) :: N
-      real,dimension(N,N),intent(inout) :: A
-      real,dimension(N),intent(in) :: b
-      real,dimension(:),allocatable,intent(out) :: x
-
-      integer,allocatable,dimension(:) :: indx
-      integer :: D, info
-
-      allocate(indx(N))
-
-      ! Compute decomposition
-      call lu_decomp(A, N, indx, D, info)
-
-      ! if the matrix is nonsingular, then backsolve to find X
-      if (info == 1) then
-          write(*,*) 'Subroutine lu_decomp() failed. The given matrix is singular (i.e. no unique solution). Quitting...'
-          stop
-      else
-          call lu_back_sub(A, N, indx, b, x)
-      end if
-
-      ! Cleanup
-      deallocate(indx)
-
-  end subroutine lu_solve
-
-  !=========================
   ! Matrix Inverse
     function matrix_inv(A) result(A_inv)
       implicit none
@@ -571,6 +616,7 @@ module f16_m
   !=========================
   ! CROSS PRODUCT
     function cross_product(vector_a, vector_b) result(vector_c)
+      implicit none 
       real, intent(in) :: vector_a(3), vector_b(3)
       real :: vector_c(3)
       real :: a1, a2, a3, b1, b2, b3
@@ -595,7 +641,8 @@ module f16_m
     subroutine init(filename)
       implicit none 
       real :: airspeed, alpha_deg, beta_deg
-      real :: eul(3), alpha, beta
+      real, allocatable :: eul(:)
+      real :: alpha, beta, trim_state(6)
       character(100), intent(in) :: filename
 
       ! OPEN A FILE TO WRITE TO 
@@ -662,7 +709,10 @@ module f16_m
 
       ! TRIM VARIABLES
       call jsonx_get(j_main, 'initial.type',                                    sim_type)
+      call jsonx_get(j_main, 'initial.type.sideslip[deg]',                      sideslip_angle0, -9999.0)
+      call jsonx_get(j_main, 'initial.type.bank_angle[deg]',                    bank_angle0, -9999.0)
       call jsonx_get(j_main, 'initial.trim.type',                               trim_type)
+      call jsonx_get(j_main, 'initial.trim.verbose',                            trim_verbose, .false.)
       call jsonx_get(j_main, 'initial.trim.solver.relaxation_factor',           relaxation_factor)
       call jsonx_get(j_main, 'initial.trim.solver.tolerance',                   tolerance)
       call jsonx_get(j_main, 'initial.trim.solver.max_iterations',              max_iterations)
@@ -671,7 +721,7 @@ module f16_m
       ! BUILD THE INITIAL STATE
       initial_state = 0.0
 
-      call jsonx_get(j_main, 'initial.Euler_angles[deg]',                       eul)
+      call jsonx_get(j_main, 'initial.Euler_angles[deg]',                       eul, 0.0, 3)
       call jsonx_get(j_main, 'initial.airspeed[ft/s]',                          airspeed)
       call jsonx_get(j_main, 'initial.alpha[deg]',                              alpha_deg)
       call jsonx_get(j_main, 'initial.beta[deg]',                               beta_deg)
@@ -712,6 +762,9 @@ module f16_m
 
       ! CALCULATE MASS AND INERTIA
       call mass_inertia() 
+
+      ! CALCULATE THE SPECIFIED TRIM CONDITION
+      trim_state = trim_algorithm(airspeed, initial_state(9), eul(2)*180/pi, eul(3)*180/pi, tolerance, trim_type)
 
     end subroutine init
 

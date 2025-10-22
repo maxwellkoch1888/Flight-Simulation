@@ -88,10 +88,11 @@
     "initial" : {
         "airspeed[ft/s]" : 330.0,
         "altitude[ft]" : 1000.0,
-        "Euler_angles[deg]" : [0.0, 0,0, 0.0],
+        "Euler_angles[deg]" : [0.0, 5.0, 0.0],
         "type" : "trim", 
         "state" : {}, 
         "trim" : {
+                "verbose": true,
                 "type" : "sct", 
                 "solver" : {
                     "finite_difference_step_size" : 0.01,
