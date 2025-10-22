@@ -97,18 +97,18 @@
                 "solver" : {
                     "finite_difference_step_size" : 0.01,
                     "relaxation_factor" : 0.9, 
-                    "tolerance" : 1.0e-12,
+                    "tolerance" : 1.0e-13,
                     "max_iterations" : 100
                 }
         },
-        "alpha[deg]" : 11.27981236576,
-        "beta[deg]" : 0.02273129381233,
-        "p[deg/s]" : -0.7664437259538,
-        "q[deg/s]" : 3.834943645888, 
-        "r[deg/s]" : 3.834943645888,
-        "aileron[deg]" : 0.1230788645067, 
-        "elevator[deg]" : -11.39019841419,
-        "rudder[deg]" : -0.8714000204079,
-        "throttle" : 0.1295636483273
+        "alpha[deg]" : 0.0,
+        "beta[deg]" : 0.0,
+        "p[deg/s]" : 0.0,
+        "q[deg/s]" : 0.0, 
+        "r[deg/s]" : 0.0,
+        "aileron[deg]" : 0.0, 
+        "elevator[deg]" : 0.0,
+        "rudder[deg]" : 0.0,
+        "throttle" : 0.0
     }
 }
