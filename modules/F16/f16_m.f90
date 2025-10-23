@@ -372,9 +372,9 @@ module f16_m
       real :: bank_angle, bank_angle0, sideslip_angle, sideslip_angle0
       real :: c_bank, c_elev, s_bank, s_elev, ca, cb, sa, sb, error, pw
       real :: u, v, w, velocities(3), gravity
-      real :: G(6), G2(6), res(6)
-      real :: angular_rates(3), euler(3)
-      integer :: k 
+      real :: G(6), res(6), iteration_residual(6)
+      real :: angular_rates(3), euler(3), print_statement(13)
+      integer :: k, iteration
       character(*), intent(in) :: trim_type
       
       ! CALCULATE GRAVITY
@@ -415,10 +415,14 @@ module f16_m
         write(io_unit,'(A)') ''
       end if
 
-
-      bank_angle = bank_angle0
+      if (trim_type == 'shss') then 
+        write(io_unit, *) 'wrong statement'
+      else 
+        bank_angle = bank_angle0
+      end if 
 
       error = 1.0
+      iteration = 1
       do while (error > tol)
         ! DEFINE COS AND SIN TERMS TO SAVE TIME
         ca = cos(alpha)
@@ -438,9 +442,16 @@ module f16_m
         w = velocities(3)
 
         ! CALCULATE THE ANGULAR RATES
-        angular_rates = gravity * s_bank * c_elev / (u*c_elev*c_bank + w*s_elev) &
-                        * (/-s_elev, s_bank*c_elev, c_bank*c_elev/)
+        if (trim_type == 'sct') then 
+          angular_rates = gravity * s_bank * c_elev / (u*c_elev*c_bank + w*s_elev) &
+                          * (/-s_elev, s_bank*c_elev, c_bank*c_elev/)
+        else if (trim_type == 'vbr') then 
+          write(io_unit,*) 'vbr condition'
 
+        else if (trim_type == 'shss') then
+          angular_rates = 0.0
+
+        end if 
         p = angular_rates(1)
         q = angular_rates(2)
         r = angular_rates(3)
@@ -457,7 +468,7 @@ module f16_m
         !   r = angular_rates(3)
         
         if (trim_verbose) then 
-          write(io_unit,'(A)') 'Updating rotation rates for sct'
+          write(io_unit,*) 'Updating rotation rates for ', trim_type
           write(io_unit,'(A,ES20.12)') 'p [deg/s] =', p 
           write(io_unit,'(A,ES20.12)') 'q [deg/s] =', q 
           write(io_unit,'(A,ES20.12)') 'r [deg/s] =', r 
@@ -472,18 +483,37 @@ module f16_m
           write(io_unit, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
           write(io_unit, '(A)') ''
         end if
-        G2 = newtons_method(V_mag, height, euler, angular_rates, G, beta)
-        error = 0.0
+
+        if (trim_type == 'shss' .and. present(beta)) then 
+          write(io_unit,*) 'wrong trim condition'
+          error = 0.0
+        else 
+          call newtons_method(V_mag, height, euler, angular_rates, G, beta)
+        end if
+
+        iteration_residual = calc_r(V_mag, height, euler, angular_rates, G, beta)
+        error = maxval(iteration_residual)
+
+        if (trim_verbose) then 
+          write(io_unit,'(A)') 'New G:'
+          write(io_unit,'(A,6(1X,ES20.12))') '      G =', (G(k),   k=1,6)
+          write(io_unit,'(A,6(1X,ES20.12))') '      R =', (iteration_residual(k), k=1,6) 
+          write(io_unit, '(A)') 'Iteration   Residual             alpha[deg]           beta[deg]            p[deg/s]             q[deg/s]             r[deg/s]             phi[deg]             theta[deg]           aileron[deg]        elevator[deg]       rudder[deg]         throttle[]'
+          write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1), G(2), p, q, r, bank_angle0, elevation_angle, G(3), G(4), G(5), G(6)
+        end if 
+
+        iteration = iteration + 1
       end do
     end function trim_algorithm
   !=========================
   ! Newton's Method Solver to find G (alpha, beta, delta_a, delta_e, delta_r, throttle)
-    function newtons_method(V_mag, height, euler, angular_rates, G, beta) result(G2)
+    subroutine newtons_method(V_mag, height, euler, angular_rates, G, beta)
       implicit none
       real , allocatable :: res(:), delta_G(:)
-      real :: G(6), G2(6)
+      real, intent(inout) :: G(6)
       real :: angular_rates(3), beta, jac(6,6), euler(3), height, dummy_res(13), V_mag
-      
+      integer :: k 
+
       allocate(res(6), delta_G(6))
 
       ! CALCULATE JACOBIAN AND RESIDUAL
@@ -491,16 +521,14 @@ module f16_m
       res = calc_r(V_mag, height, euler, angular_rates, G)
 
       ! CALCUALTE DELTA G AND ADD RELAXATION FACTOR
-      call lu_solve(6, jac, res, delta_G)
-      G2 = G + relaxation_factor * delta_G
+      call lu_solve(6, jac, -res, delta_G)
+      G = G + relaxation_factor * delta_G
 
       if (trim_verbose) then
-        write(io_unit, '(A,ES20.12)') 'Delta G =', delta_G(:)
-        write(io_unit, '(A)') 'New G:'
-        write(io_unit,'(A,ES20.12)') '      G =', G(:)
-        write(io_unit,'(A,ES20.12)') '      R =', res(:)
+        write(io_unit,'(A,6(1X,ES20.12))') 'Delta G =', (delta_G(k), k=1,6)
       end if 
-    end function newtons_method
+
+    end subroutine newtons_method
 
   !=========================
   ! Approximate Jacobian for G
