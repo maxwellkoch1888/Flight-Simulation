@@ -423,7 +423,7 @@ module f16_m
 
       error = 1.0
       iteration = 1
-      do while (error > tol)
+      do while (error > tolerance)
         ! DEFINE COS AND SIN TERMS TO SAVE TIME
         ca = cos(alpha)
         cb = cos(beta) 
@@ -477,29 +477,40 @@ module f16_m
         
         res = calc_r(V_mag, height, euler, angular_rates, G, beta)
         
-        if (trim_verbose) then 
-          write(io_unit,'(A)') 'G defined as G = [alpha, beta, aileron, elevator, rudder, throttle]'
-          write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(k), k=1,6)
-          write(io_unit, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
-          write(io_unit, '(A)') ''
-        end if
 
-        if (trim_type == 'shss' .and. present(beta)) then 
-          write(io_unit,*) 'wrong trim condition'
-          error = 0.0
-        else 
+        if (trim_type == 'shss' .and. sideslip_angle0 /= -999.0) then 
+          if (trim_verbose) then 
+            write(io_unit,'(A)') 'G defined as G = [alpha, bank_angle, aileron, elevator, rudder, throttle]'
+            write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(k), k=1,6)
+            write(io_unit, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
+            write(io_unit, '(A)') ''
+          end if
+
           call newtons_method(V_mag, height, euler, angular_rates, G, beta)
-        end if
+        else 
+          if (trim_verbose) then 
+            write(io_unit,'(A)') 'G defined as G = [alpha, beta, aileron, elevator, rudder, throttle]'
+            write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(k), k=1,6)
+            write(io_unit, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
+            write(io_unit, '(A)') ''
+          end if
+
+          call newtons_method(V_mag, height, euler, angular_rates, G, beta)
+        end if 
 
         iteration_residual = calc_r(V_mag, height, euler, angular_rates, G, beta)
-        error = maxval(iteration_residual)
+        error = maxval(abs(iteration_residual))
 
         if (trim_verbose) then 
           write(io_unit,'(A)') 'New G:'
           write(io_unit,'(A,6(1X,ES20.12))') '      G =', (G(k),   k=1,6)
           write(io_unit,'(A,6(1X,ES20.12))') '      R =', (iteration_residual(k), k=1,6) 
-          write(io_unit, '(A)') 'Iteration   Residual             alpha[deg]           beta[deg]            p[deg/s]             q[deg/s]             r[deg/s]             phi[deg]             theta[deg]           aileron[deg]        elevator[deg]       rudder[deg]         throttle[]'
-          write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1), G(2), p, q, r, bank_angle0, elevation_angle, G(3), G(4), G(5), G(6)
+          write(io_unit, '(A)') &
+            'Iteration   Residual     alpha[deg]   beta[deg]   p[deg/s]   q[deg/s]   r[deg/s]   ' // &
+            'phi[deg]   theta[deg]   aileron[deg]   elevator[deg]   ' // &
+            'rudder[deg]   throttle[]'
+          write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1)*180/pi, G(2)*180/pi, &
+              p, q, r, bank_angle0, elevation_angle, G(3)*180/pi, G(4)*180/pi, G(5)*180/pi, G(6)
         end if 
 
         iteration = iteration + 1
@@ -616,9 +627,9 @@ module f16_m
       sa = sin(alpha)
 
       ! PULL OUT BETA
-      if (present(beta)) then 
-        cb = cos(beta)
-        sb = sin(beta)
+      if (beta0 /= -999.0) then 
+        cb = cos(beta0)
+        sb = sin(beta0)
       else 
         cb = cos(G(2))
         sb = sin(G(2))
@@ -761,7 +772,7 @@ module f16_m
 
       ! TRIM VARIABLES
       call jsonx_get(j_main, 'initial.type',                                    sim_type)
-      call jsonx_get(j_main, 'initial.trim.sideslip[deg]',                      sideslip_angle0, 0.0)
+      call jsonx_get(j_main, 'initial.trim.sideslip[deg]',                      sideslip_angle0, -999.0)
       call jsonx_get(j_main, 'initial.trim.bank_angle[deg]',                    bank_angle0, 0.0)
       call jsonx_get(j_main, 'initial.trim.type',                               trim_type)
       call jsonx_get(j_main, 'initial.trim.verbose',                            trim_verbose, .false.)
