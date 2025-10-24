@@ -365,11 +365,11 @@ module f16_m
 
   !=========================
   ! Trim Algorithm
-    function trim_algorithm(V_mag, height, elevation_angle, azimuth_angle, tolerance, trim_type) result(G)
+    function trim_algorithm(V_mag, height, euler, tolerance, trim_type) result(G)
       implicit none 
-      real :: V_mag, height, elevation_angle, azimuth_angle, tolerance
+      real :: V_mag, height, tolerance
       real :: alpha, beta, p, q, r, delta_a, delta_e, delta_r, throttle 
-      real :: bank_angle, bank_angle0, sideslip_angle, sideslip_angle0
+      real :: bank_angle, elevation_angle, azimuth_angle
       real :: c_bank, c_elev, s_bank, s_elev, ca, cb, sa, sb, error, pw
       real :: u, v, w, velocities(3), gravity
       real :: G(6), res(6), iteration_residual(6)
@@ -379,32 +379,32 @@ module f16_m
       
       ! CALCULATE GRAVITY
       gravity = gravity_English(height)
+
       ! SET INITIAL GUESSSES TO ZERO
       G        = 0.0
-      alpha    = G(1)
-      beta     = G(2)
       p        = 0.0
       q        = 0.0
       r        = 0.0
+      alpha    = G(1)
+      beta     = G(2)
       delta_a  = G(3)
       delta_e  = G(4)
       delta_r  = G(5)
       throttle = G(6)
 
-      ! BUILD EULER ANGLES
-      euler(1) = bank_angle0 * pi/ 180.0
-      euler(2) = elevation_angle * pi / 180.0
-      euler(3) = azimuth_angle * pi / 180.0
-
       if (trim_verbose) then
         write(io_unit,*) 'Trimming Aircraft for ', trim_type
-        write(io_unit,'(A,ES20.12)') '  --> Azimuth angle set to psi [deg] =', azimuth_angle
-        write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle
-        write(io_unit,'(A,ES20.12)') '  --> Bank angle set to phi [deg] =', bank_angle0
+        write(io_unit,'(A,ES20.12)') '  --> Azimuth angle set to psi [deg] =', euler(3) * 180 / pi
+        write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', euler(2) * 180 / pi
+        if (sideslip_angle0 /= -999.0) then 
+          write(io_unit,'(A,ES20.12)') '  --> Sideslip angle set to beta [deg] =', sideslip_angle0 * 180 / pi 
+        else 
+          write(io_unit,'(A,ES20.12)') '  --> Bank angle set to phi [deg] =', euler(1) * 180 / pi
+        end if
         write(io_unit,'(A)') ''
-        write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle
+        write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', euler(2) * 180 / pi
         write(io_unit,'(A,ES20.12)') 'Initial gamma [deg] =', -9.0
-        write(io_unit,'(A,ES20.12)') 'Initial phi [deg]   =', bank_angle0
+        write(io_unit,'(A,ES20.12)') 'Initial phi [deg]   =', euler(1) * 180 / pi
         write(io_unit,'(A,ES20.12)') 'Initial beta [deg]  =', beta
         write(io_unit,'(A)') ''
         write(io_unit,'(A)') 'Newton Solver Settings:'
@@ -415,10 +415,13 @@ module f16_m
         write(io_unit,'(A)') ''
       end if
 
-      if (trim_type == 'shss') then 
-        write(io_unit, *) 'wrong statement'
+      ! PULL OUT ELEVATION, BANK, AND AZIMUTH ANGLES
+      elevation_angle = euler(2)
+      azimuth_angle = euler(3)
+      if (trim_type == 'shss' .and. sideslip_angle0 /= -999.0) then 
+        beta = sideslip_angle0
       else 
-        bank_angle = bank_angle0
+        bank_angle = euler(1)
       end if 
 
       error = 1.0
@@ -443,7 +446,7 @@ module f16_m
 
         ! CALCULATE THE ANGULAR RATES
         if (trim_type == 'sct') then 
-          angular_rates = gravity * s_bank * c_elev / (u*c_elev*c_bank + w*s_elev) &
+          angular_rates = (gravity * s_bank * c_elev) / (u*c_elev*c_bank + w*s_elev) &
                           * (/-s_elev, s_bank*c_elev, c_bank*c_elev/)
         else if (trim_type == 'vbr') then 
           write(io_unit,*) 'vbr condition'
@@ -469,13 +472,13 @@ module f16_m
         
         if (trim_verbose) then 
           write(io_unit,*) 'Updating rotation rates for ', trim_type
-          write(io_unit,'(A,ES20.12)') 'p [deg/s] =', p 
-          write(io_unit,'(A,ES20.12)') 'q [deg/s] =', q 
-          write(io_unit,'(A,ES20.12)') 'r [deg/s] =', r 
+          write(io_unit,'(A,ES20.12)') 'p [deg/s] =', p * 180 / pi 
+          write(io_unit,'(A,ES20.12)') 'q [deg/s] =', q * 180 / pi 
+          write(io_unit,'(A,ES20.12)') 'r [deg/s] =', r * 180 / pi
           write(io_unit, '(A)') ''
         end if 
         
-        res = calc_r(V_mag, height, euler, angular_rates, G, beta)
+        res = calc_r(V_mag, height, euler, angular_rates, G)
         
 
         if (trim_type == 'shss' .and. sideslip_angle0 /= -999.0) then 
@@ -486,7 +489,7 @@ module f16_m
             write(io_unit, '(A)') ''
           end if
 
-          call newtons_method(V_mag, height, euler, angular_rates, G, beta)
+          call newtons_method(V_mag, height, euler, angular_rates, G)
         else 
           if (trim_verbose) then 
             write(io_unit,'(A)') 'G defined as G = [alpha, beta, aileron, elevator, rudder, throttle]'
@@ -495,10 +498,10 @@ module f16_m
             write(io_unit, '(A)') ''
           end if
 
-          call newtons_method(V_mag, height, euler, angular_rates, G, beta)
+          call newtons_method(V_mag, height, euler, angular_rates, G)
         end if 
 
-        iteration_residual = calc_r(V_mag, height, euler, angular_rates, G, beta)
+        iteration_residual = calc_r(V_mag, height, euler, angular_rates, G)
         error = maxval(abs(iteration_residual))
 
         if (trim_verbose) then 
@@ -506,11 +509,16 @@ module f16_m
           write(io_unit,'(A,6(1X,ES20.12))') '      G =', (G(k),   k=1,6)
           write(io_unit,'(A,6(1X,ES20.12))') '      R =', (iteration_residual(k), k=1,6) 
           write(io_unit, '(A)') &
-            'Iteration   Residual     alpha[deg]   beta[deg]   p[deg/s]   q[deg/s]   r[deg/s]   ' // &
-            'phi[deg]   theta[deg]   aileron[deg]   elevator[deg]   ' // &
-            'rudder[deg]   throttle[]'
-          write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1)*180/pi, G(2)*180/pi, &
-              p, q, r, bank_angle0, elevation_angle, G(3)*180/pi, G(4)*180/pi, G(5)*180/pi, G(6)
+            'Iteration   Residual           alpha[deg]           beta[deg]            p[deg/s]             q[deg/s]             r[deg/s]   ' // &
+            '          phi[deg]             theta[deg]           aileron[deg]         elevator[deg]   ' // &
+            '     rudder[deg]          throttle[]'
+          if (sideslip_angle0 /= -999.0) then 
+            write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1)*180/pi, sideslip_angle0 * 180 / pi, &
+              p, q, r, euler(1) * 180 / pi, euler(2) * 180 / pi, G(3)*180/pi, G(4)*180/pi, G(5)*180/pi, G(6)
+          else 
+            write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1)*180/pi, G(2)*180/pi, &
+              p, q, r, euler(1) * 180 / pi, euler(2) * 180 / pi, G(3)*180/pi, G(4)*180/pi, G(5)*180/pi, G(6)
+          end if 
         end if 
 
         iteration = iteration + 1
@@ -518,11 +526,11 @@ module f16_m
     end function trim_algorithm
   !=========================
   ! Newton's Method Solver to find G (alpha, beta, delta_a, delta_e, delta_r, throttle)
-    subroutine newtons_method(V_mag, height, euler, angular_rates, G, beta)
+    subroutine newtons_method(V_mag, height, euler, angular_rates, G)
       implicit none
       real , allocatable :: res(:), delta_G(:)
       real, intent(inout) :: G(6)
-      real :: angular_rates(3), beta, jac(6,6), euler(3), height, dummy_res(13), V_mag
+      real :: angular_rates(3), jac(6,6), euler(3), height, dummy_res(13), V_mag
       integer :: k 
 
       allocate(res(6), delta_G(6))
@@ -535,6 +543,13 @@ module f16_m
       call lu_solve(6, jac, -res, delta_G)
       G = G + relaxation_factor * delta_G
 
+      ! MAKE SURE THROTTLE IS IN SAFE RANGE
+      if (G(6) < 0.0) then
+        G(6) = 0.0
+      else if (G(6) > 1.0) then
+        G(6) = 1.0
+      end if
+
       if (trim_verbose) then
         write(io_unit,'(A,6(1X,ES20.12))') 'Delta G =', (delta_G(k), k=1,6)
       end if 
@@ -543,11 +558,10 @@ module f16_m
 
   !=========================
   ! Approximate Jacobian for G
-    function jacobian(V_mag, height, euler, angular_rates, G, beta) result(G_jacobian)
+    function jacobian(V_mag, height, euler, angular_rates, G) result(G_jacobian)
       implicit none
       real :: V_mag, height, euler(3), angular_rates(3), quaternion_ex(4)
       real :: G(6)
-      real, intent(in), optional :: beta
       real :: R_pos(6), R_neg(6), step_size
       real :: G_jacobian(6,6)
       integer :: i, j
@@ -608,11 +622,10 @@ module f16_m
 
   !=========================
   ! Calculate Residual
-    function calc_r(V_mag, height, euler, angular_rates, G, beta) result(R)
+    function calc_r(V_mag, height, euler, angular_rates, G) result(R)
       implicit none
       real, intent(in) :: V_mag, height, G(6), angular_rates(3)
       real, intent(inout) :: euler(3)
-      real, intent(in), optional :: beta
       real :: alpha, ca, cb, sa, sb
       real :: R(6), dummy_R(13), temp_state(13)
 
@@ -627,19 +640,20 @@ module f16_m
       sa = sin(alpha)
 
       ! PULL OUT BETA
-      if (beta0 /= -999.0) then 
-        cb = cos(beta0)
-        sb = sin(beta0)
+      if (sideslip_angle0 /= -999.0) then 
+        cb = cos(sideslip_angle0)
+        sb = sin(sideslip_angle0)
+        euler(1) = G(2)
       else 
         cb = cos(G(2))
         sb = sin(G(2))
       end if
 
       ! CALCUALTE INITIAL STATES
-      temp_state(1:3) = V_mag * (/ca*cb, sb, sa*cb/) 
-      temp_state(4:6) = angular_rates
-      temp_state(9) = height
-      temp_state(7:8) = 0
+      temp_state(1:3)   = V_mag * (/ca*cb, sb, sa*cb/) 
+      temp_state(4:6)   = angular_rates
+      temp_state(9)     = height
+      temp_state(7:8)   = 0
       temp_state(10:13) = euler_to_quat(euler)
 
       ! CALCULATE RESIDUAL
@@ -773,7 +787,6 @@ module f16_m
       ! TRIM VARIABLES
       call jsonx_get(j_main, 'initial.type',                                    sim_type)
       call jsonx_get(j_main, 'initial.trim.sideslip[deg]',                      sideslip_angle0, -999.0)
-      call jsonx_get(j_main, 'initial.trim.bank_angle[deg]',                    bank_angle0, 0.0)
       call jsonx_get(j_main, 'initial.trim.type',                               trim_type)
       call jsonx_get(j_main, 'initial.trim.verbose',                            trim_verbose, .false.)
       call jsonx_get(j_main, 'initial.trim.solver.relaxation_factor',           relaxation_factor)
@@ -803,6 +816,9 @@ module f16_m
       beta = beta_deg * pi / 180.0
       initial_state(4:6) = initial_state(4:6) * pi / 180.0
       eul = eul * pi / 180.0
+      if (sideslip_angle0 /= -999.0) then 
+        sideslip_angle0 = sideslip_angle0 * pi / 180
+      end if 
 
       ! CALCULATE INITIAL SPEED IN U, V, W DIRECTIONS
       initial_state(1) = airspeed * cos(alpha) * cos(beta)
@@ -827,7 +843,7 @@ module f16_m
       call mass_inertia() 
 
       ! CALCULATE THE SPECIFIED TRIM CONDITION
-      trim_state = trim_algorithm(airspeed, initial_state(9), eul(2)*180/pi, eul(3)*180/pi, tolerance, trim_type)
+      trim_state = trim_algorithm(airspeed, initial_state(9), eul, tolerance, trim_type)
 
     end subroutine init
 
