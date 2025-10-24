@@ -86,14 +86,15 @@
     },
 
     "initial" : {
-        "airspeed[ft/s]" : 330.0,
-        "altitude[ft]" : 1000.0,
-        "Euler_angles[deg]" : [60.0, 7.694005314345, 0.0],
+        "airspeed[ft/s]" : 520.0,
+        "altitude[ft]" : 2000.0,
+        "Euler_angles[deg]" : [0.0, 85.89784263429, 0.0],
         "type" : "trim", 
         "state" : {}, 
         "trim" : {
                 "verbose": true,
-                "type" : "sct", 
+                "type" : "shss", 
+                "sideslip[deg]": 1.0,
                 "solver" : {
                     "finite_difference_step_size" : 0.01,
                     "relaxation_factor" : 0.9, 
