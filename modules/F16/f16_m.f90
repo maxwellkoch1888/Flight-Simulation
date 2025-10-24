@@ -378,7 +378,7 @@ module f16_m
       character(*), intent(in) :: trim_type
       
       ! CALCULATE GRAVITY
-      gravity = gravity_English(height)
+      gravity = gravity_English(-height)
 
       ! SET INITIAL GUESSSES TO ZERO
       G        = 0.0
@@ -428,6 +428,10 @@ module f16_m
       iteration = 1
       do while (error > tolerance)
         ! DEFINE COS AND SIN TERMS TO SAVE TIME
+        alpha = G(1)
+        if (sideslip_angle0 == -999.0) then
+          beta = G(2)
+        end if 
         ca = cos(alpha)
         cb = cos(beta) 
         sa = sin(alpha) 
@@ -445,7 +449,7 @@ module f16_m
         w = velocities(3)
 
         ! CALCULATE THE ANGULAR RATES
-        if (trim_type == 'sct') then 
+        if (trim_type == 'sct') then
           angular_rates = (gravity * s_bank * c_elev) / (u*c_elev*c_bank + w*s_elev) &
                           * (/-s_elev, s_bank*c_elev, c_bank*c_elev/)
         else if (trim_type == 'vbr') then 
@@ -472,9 +476,9 @@ module f16_m
         
         if (trim_verbose) then 
           write(io_unit,*) 'Updating rotation rates for ', trim_type
-          write(io_unit,'(A,ES20.12)') 'p [deg/s] =', p * 180 / pi 
-          write(io_unit,'(A,ES20.12)') 'q [deg/s] =', q * 180 / pi 
-          write(io_unit,'(A,ES20.12)') 'r [deg/s] =', r * 180 / pi
+          write(io_unit,'(A,ES20.12)') 'p [deg/s] = ', p * 180 / pi 
+          write(io_unit,'(A,ES20.12)') 'q [deg/s] = ', q * 180 / pi 
+          write(io_unit,'(A,ES20.12)') 'r [deg/s] = ', r * 180 / pi
           write(io_unit, '(A)') ''
         end if 
         
@@ -509,15 +513,18 @@ module f16_m
           write(io_unit,'(A,6(1X,ES20.12))') '      G =', (G(k),   k=1,6)
           write(io_unit,'(A,6(1X,ES20.12))') '      R =', (iteration_residual(k), k=1,6) 
           write(io_unit, '(A)') &
-            'Iteration   Residual           alpha[deg]           beta[deg]            p[deg/s]             q[deg/s]             r[deg/s]   ' // &
+            'Iteration   Residual           alpha[deg]           beta[deg]            '// & 
+            'p[deg/s]             q[deg/s]             r[deg/s]   ' // &
             '          phi[deg]             theta[deg]           aileron[deg]         elevator[deg]   ' // &
             '     rudder[deg]          throttle[]'
           if (sideslip_angle0 /= -999.0) then 
             write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1)*180/pi, sideslip_angle0 * 180 / pi, &
-              p, q, r, euler(1) * 180 / pi, euler(2) * 180 / pi, G(3)*180/pi, G(4)*180/pi, G(5)*180/pi, G(6)
+              p * 180 / pi, q * 180 / pi, r * 180 / pi, euler(1) * 180 / pi, euler(2) * 180 / pi, G(3)*180/pi, &
+              G(4)*180/pi, G(5)*180/pi, G(6)
           else 
             write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1)*180/pi, G(2)*180/pi, &
-              p, q, r, euler(1) * 180 / pi, euler(2) * 180 / pi, G(3)*180/pi, G(4)*180/pi, G(5)*180/pi, G(6)
+              p * 180 / pi, q * 180 / pi, r * 180 / pi, euler(1) * 180 / pi, euler(2) * 180 / pi, G(3)*180/pi, &
+              G(4)*180/pi, G(5)*180/pi, G(6)
           end if 
         end if 
 
@@ -655,7 +662,8 @@ module f16_m
       temp_state(9)     = height
       temp_state(7:8)   = 0
       temp_state(10:13) = euler_to_quat(euler)
-
+      write(io_unit,*) 'temp_state'
+      write(io_unit,*) temp_state
       ! CALCULATE RESIDUAL
       dummy_R = differential_equations(0.0, temp_state)
       R = dummy_R(1:6)
@@ -805,8 +813,6 @@ module f16_m
       call jsonx_get(j_main, 'initial.q[deg/s]',                                initial_state(5))
       call jsonx_get(j_main, 'initial.r[deg/s]',                                initial_state(6))
       call jsonx_get(j_main, 'initial.altitude[ft]',                            initial_state(9))
-
-
 
       ! CONVERT ALTITUDE TO CORRECT DIRECTION
       initial_state(9) = initial_state(9) * (-1.0)
