@@ -912,8 +912,8 @@ module f16_m
         t = t + dt
         integrated_time = integrated_time + dt
         write(*,*) t, dt
-      
-        write(io_unit,'(14ES20.12)') t,y_init(:)
+        
+        ! write(io_unit,'(14ES20.12)') t,y_init(:)
       end do 
 
       ! SAVE THE TIMESTAMP FOR WHEN THE SIMULATION STOPPED
