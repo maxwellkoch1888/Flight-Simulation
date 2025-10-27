@@ -395,17 +395,17 @@ module f16_m
       if (trim_verbose) then
         write(io_unit,*) 'Trimming Aircraft for ', trim_type
         write(io_unit,'(A,ES20.12)') '  --> Azimuth angle set to psi [deg] =', euler(3) * 180 / pi
-        write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', euler(2) * 180 / pi
+        write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle0 * 180 / pi
         if (sideslip_angle0 /= -999.0) then 
           write(io_unit,'(A,ES20.12)') '  --> Sideslip angle set to beta [deg] =', sideslip_angle0 * 180 / pi 
         else 
           write(io_unit,'(A,ES20.12)') '  --> Bank angle set to phi [deg] =', euler(1) * 180 / pi
         end if
         write(io_unit,'(A)') ''
-        write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', euler(2) * 180 / pi
-        write(io_unit,'(A,ES20.12)') 'Initial gamma [deg] =', -9.0
+        write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle0 * 180 / pi 
+        write(io_unit,'(A,ES20.12)') 'Initial gamma [deg] =', climb_angle0 * 180 / pi 
         write(io_unit,'(A,ES20.12)') 'Initial phi [deg]   =', euler(1) * 180 / pi
-        write(io_unit,'(A,ES20.12)') 'Initial beta [deg]  =', beta
+        write(io_unit,'(A,ES20.12)') 'Initial beta [deg]  =', beta * 180 / pi 
         write(io_unit,'(A)') ''
         write(io_unit,'(A)') 'Newton Solver Settings:'
         write(io_unit,'(A,ES20.12)') 'Finite Difference Step Size =', finite_difference_step_size
@@ -415,13 +415,55 @@ module f16_m
         write(io_unit,'(A)') ''
       end if
 
-      ! PULL OUT ELEVATION, BANK, AND AZIMUTH ANGLES
-      elevation_angle = euler(2)
+      ! PULL OUT AZIMUTH, BANK, AND ELEVATION ANGLES
       azimuth_angle = euler(3)
+      
       if (trim_type == 'shss' .and. sideslip_angle0 /= -999.0) then 
         beta = sideslip_angle0
       else 
         bank_angle = euler(1)
+      end if 
+
+      elevation_angle = elevation_angle0
+      if (elevation_angle0 /= -999.0) then 
+        elevation_angle = elevation_angle0
+      else ! CALCULATE ELEVATION ANGLE FROM CLIMB ANGLE
+        climb_angle = climb_angle0
+
+        cgamma = cos(gamma)
+        sgamma = sin(gamma)
+
+        ca = cos(alpha)
+        cb = cos(beta) 
+        sa = sin(alpha) 
+        sb = sin(beta)
+
+        velocities = V_mag * (/ca*cb, sb, sa*cb/) 
+
+        u = velocities(1)
+        v = velocities(2)
+        w = velocities(3)        
+
+        theta1 = asin((u*V_mag*sgamma + (v*s_bank + w*c_bank) * & 
+                  sqrt(u**2 + (v*s_bank + w*c_bank)**2 - V_mag**2*sgamma**2)) &
+                  / (u**2 + (v*s_bank + w*c_bank)**2))
+
+        theta2 = asin((u*V_mag*sgamma - (v*s_bank + w*c_bank) * & 
+                  sqrt(u**2 + (v*s_bank + w*c_bank)**2 - V_mag**2*sgamma**2)) &
+                  / (u**2 + (v*s_bank + w*c_bank)**2))      
+
+        write(io_unit,*) 'theta 1', theta1 * 180 * pi
+        write(io_unit,*) 'theta 2', theta2 * 180 * pi 
+        
+        solution1 = u*sin(theta1) - (v*s_bank + w*c_bank)*cos(theta1)
+        solution = V_mag * sgamma 
+
+        if (abs(solution1-solution < tol)) then 
+          theta = theta1 
+        else 
+          theta = theta2 
+        end if 
+        write(io_unit,*) 'Actual elevation angle:', theta
       end if 
 
       error = 1.0
@@ -484,7 +526,6 @@ module f16_m
         
         res = calc_r(V_mag, height, euler, angular_rates, G)
         
-
         if (trim_type == 'shss' .and. sideslip_angle0 /= -999.0) then 
           if (trim_verbose) then 
             write(io_unit,'(A)') 'G defined as G = [alpha, bank_angle, aileron, elevator, rudder, throttle]'
@@ -795,6 +836,8 @@ module f16_m
       ! TRIM VARIABLES
       call jsonx_get(j_main, 'initial.type',                                    sim_type)
       call jsonx_get(j_main, 'initial.trim.sideslip[deg]',                      sideslip_angle0, -999.0)
+      call jsonx_get(j_main, 'initial.trim.elevation_angle[deg]',               elevation_angle0, -999.0)
+      call jsonx_get(j_main, 'initial.trim.climb_angle[deg]',                   climb_angle0, -999.0)
       call jsonx_get(j_main, 'initial.trim.type',                               trim_type)
       call jsonx_get(j_main, 'initial.trim.verbose',                            trim_verbose, .false.)
       call jsonx_get(j_main, 'initial.trim.solver.relaxation_factor',           relaxation_factor)
@@ -822,6 +865,12 @@ module f16_m
       beta = beta_deg * pi / 180.0
       initial_state(4:6) = initial_state(4:6) * pi / 180.0
       eul = eul * pi / 180.0
+      if (elevation_angle0 /= -999.0) then 
+        elevation_angle0 = elevation_angle0 * pi / 180
+      end if 
+      if (climb_angle0 /= -999.0) then 
+        climb_angle0 = climb_angle0 * pi / 180
+      end if       
       if (sideslip_angle0 /= -999.0) then 
         sideslip_angle0 = sideslip_angle0 * pi / 180
       end if 
