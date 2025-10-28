@@ -86,16 +86,16 @@
     },
 
     "initial" : {
-        "airspeed[ft/s]" : 520.0,
-        "altitude[ft]" : 2000.0,
-        "Euler_angles[deg]" : [0.0, 85.89784263429, 0.0],
+        "airspeed[ft/s]" : 220.0,
+        "altitude[ft]" : 500.0,
+        "Euler_angles[deg]" : [0.0, 0.0, 0.0],
         "type" : "trim", 
         "state" : {}, 
         "trim" : {
                 "verbose": true,
-                "type" : "shss", 
-                "sideslip[deg]": 1.0,
-                "elevation_angle[deg]" : 0.0,
+                "type" : "sct", 
+                "sideslip[deg]notused": 1.0,
+                "elevation_angle[deg]notused" : 0.0,
                 "climb_angle[deg]" : 0.0, 
                 "solver" : {
                     "finite_difference_step_size" : 0.01,
