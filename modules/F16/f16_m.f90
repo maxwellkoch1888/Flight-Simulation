@@ -36,7 +36,7 @@ module f16_m
     character(:), allocatable :: sim_type
     character(:), allocatable :: trim_type
     real :: relaxation_factor, tolerance, max_iterations, finite_difference_step_size
-    real :: bank_angle0, sideslip_angle0
+    real :: bank_angle0, sideslip_angle0, climb_angle0, elevation_angle0
     logical :: trim_verbose
 
 
@@ -374,6 +374,7 @@ module f16_m
       real :: u, v, w, velocities(3), gravity
       real :: G(6), res(6), iteration_residual(6)
       real :: angular_rates(3), euler(3), print_statement(13)
+      real :: cgamma, sgamma, climb_angle, gamma, solution, theta1, theta2, solution1
       integer :: k, iteration
       character(*), intent(in) :: trim_type
       
@@ -395,14 +396,22 @@ module f16_m
       if (trim_verbose) then
         write(io_unit,*) 'Trimming Aircraft for ', trim_type
         write(io_unit,'(A,ES20.12)') '  --> Azimuth angle set to psi [deg] =', euler(3) * 180 / pi
-        write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle0 * 180 / pi
+        if (elevation_angle0 /= -999.0) then 
+          write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle0 * 180 / pi
+        else 
+          write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle0
+        end if 
         if (sideslip_angle0 /= -999.0) then 
           write(io_unit,'(A,ES20.12)') '  --> Sideslip angle set to beta [deg] =', sideslip_angle0 * 180 / pi 
         else 
           write(io_unit,'(A,ES20.12)') '  --> Bank angle set to phi [deg] =', euler(1) * 180 / pi
         end if
         write(io_unit,'(A)') ''
-        write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle0 * 180 / pi 
+        if (elevation_angle0 /= -999.0) then 
+          write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle0 * 180 / pi 
+        else 
+          write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle0
+        end if 
         write(io_unit,'(A,ES20.12)') 'Initial gamma [deg] =', climb_angle0 * 180 / pi 
         write(io_unit,'(A,ES20.12)') 'Initial phi [deg]   =', euler(1) * 180 / pi
         write(io_unit,'(A,ES20.12)') 'Initial beta [deg]  =', beta * 180 / pi 
@@ -425,47 +434,7 @@ module f16_m
       end if 
 
       elevation_angle = elevation_angle0
-      if (elevation_angle0 /= -999.0) then 
-        elevation_angle = elevation_angle0
-      else ! CALCULATE ELEVATION ANGLE FROM CLIMB ANGLE
-        climb_angle = climb_angle0
-
-        cgamma = cos(gamma)
-        sgamma = sin(gamma)
-
-        ca = cos(alpha)
-        cb = cos(beta) 
-        sa = sin(alpha) 
-        sb = sin(beta)
-
-        velocities = V_mag * (/ca*cb, sb, sa*cb/) 
-
-        u = velocities(1)
-        v = velocities(2)
-        w = velocities(3)        
-
-        theta1 = asin((u*V_mag*sgamma + (v*s_bank + w*c_bank) * & 
-                  sqrt(u**2 + (v*s_bank + w*c_bank)**2 - V_mag**2*sgamma**2)) &
-                  / (u**2 + (v*s_bank + w*c_bank)**2))
-
-        theta2 = asin((u*V_mag*sgamma - (v*s_bank + w*c_bank) * & 
-                  sqrt(u**2 + (v*s_bank + w*c_bank)**2 - V_mag**2*sgamma**2)) &
-                  / (u**2 + (v*s_bank + w*c_bank)**2))      
-
-        write(io_unit,*) 'theta 1', theta1 * 180 * pi
-        write(io_unit,*) 'theta 2', theta2 * 180 * pi 
-        
-        solution1 = u*sin(theta1) - (v*s_bank + w*c_bank)*cos(theta1)
-        solution = V_mag * sgamma 
-
-        if (abs(solution1-solution < tol)) then 
-          theta = theta1 
-        else 
-          theta = theta2 
-        end if 
-        write(io_unit,*) 'Actual elevation angle:', theta
-      end if 
-
+      
       error = 1.0
       iteration = 1
       do while (error > tolerance)
@@ -489,6 +458,45 @@ module f16_m
         u = velocities(1)
         v = velocities(2)
         w = velocities(3)
+
+        ! CALCULATE ELEVATION ANGLE IF CLIMB ANGLE SPECIFIED
+        if (elevation_angle == -999.0) then 
+          if (trim_verbose) then 
+            write(io_unit,*) 'Solving for elevation angle given a climb angle:'
+          end if 
+          write(io_unit,*) 'alpha_rad, beta_rad:', alpha, beta
+          write(io_unit,*) 'velocities:', u, v, w
+          climb_angle = climb_angle0
+          write(io_unit,*) 'climb angle:', climb_angle
+          cgamma = cos(gamma)
+          sgamma = sin(gamma)
+          if (climb_angle /= -999.0) then 
+            theta1 = asin((u*V_mag*sgamma + (v*s_bank + w*c_bank) * & 
+              sqrt(u**2 + (v*s_bank + w*c_bank)**2 - V_mag**2*sgamma**2)) &
+              / (u**2 + (v*s_bank + w*c_bank)**2))
+
+            theta2 = asin((u*V_mag*sgamma - (v*s_bank + w*c_bank) * & 
+                      sqrt(u**2 + (v*s_bank + w*c_bank)**2 - V_mag**2*sgamma**2)) &
+                      / (u**2 + (v*s_bank + w*c_bank)**2))      
+            
+            solution1 = u*sin(theta1) - (v*s_bank + w*c_bank)*cos(theta1)
+            solution = V_mag * sgamma 
+
+            if (abs(solution1-solution) < tol) then 
+              elevation_angle = theta1 
+            else 
+              elevation_angle = theta2 
+            end if 
+            euler(2) = 0.0
+
+            if (trim_verbose) then
+              write(io_unit,*) '        theta 1 [deg] =', theta1 * 180 / pi 
+              write(io_unit,*) '        theta 2 [deg] =', theta2 * 180 / pi 
+              write(io_unit,*) '  Correct theta [deg] =', elevation_angle * 180 / pi 
+              write(io_unit,*) '  Correct theta [rad] =', elevation_angle 
+            end if 
+          end if 
+        end if 
 
         ! CALCULATE THE ANGULAR RATES
         if (trim_type == 'sct') then
@@ -547,7 +555,8 @@ module f16_m
         end if 
 
         iteration_residual = calc_r(V_mag, height, euler, angular_rates, G)
-        error = maxval(abs(iteration_residual))
+        ! error = maxval(abs(iteration_residual))
+        error = 0.0
 
         if (trim_verbose) then 
           write(io_unit,'(A)') 'New G:'
@@ -703,8 +712,8 @@ module f16_m
       temp_state(9)     = height
       temp_state(7:8)   = 0
       temp_state(10:13) = euler_to_quat(euler)
-      write(io_unit,*) 'temp_state'
-      write(io_unit,*) temp_state
+      write(io_unit,*) 'temp_state:', temp_state
+
       ! CALCULATE RESIDUAL
       dummy_R = differential_equations(0.0, temp_state)
       R = dummy_R(1:6)
