@@ -438,6 +438,13 @@ module f16_m
       error = 1.0
       iteration = 1
       do while (error > tolerance)
+        ! MAKE SURE THROTTLE IS IN SAFE RANGE
+        if (G(6) < 0.0) then
+          G(6) = 0.0
+        else if (G(6) > 1.0) then
+          G(6) = 1.0
+        end if        
+
         ! DEFINE COS AND SIN TERMS TO SAVE TIME
         alpha = G(1)
         if (sideslip_angle0 == -999.0) then
@@ -460,14 +467,16 @@ module f16_m
         w = velocities(3)
 
         ! CALCULATE ELEVATION ANGLE IF CLIMB ANGLE SPECIFIED
-        if (elevation_angle == -999.0) then 
+        ! write(io_unit,*) "elevation_angle0:", elevation_angle0
+        if (elevation_angle0 == -999.0) then 
           if (trim_verbose) then 
+            write(io_unit,*) ' '            
             write(io_unit,*) 'Solving for elevation angle given a climb angle:'
           end if 
-          write(io_unit,*) 'alpha_rad, beta_rad:', alpha, beta
-          write(io_unit,*) 'velocities:', u, v, w
+          ! write(io_unit,*) 'alpha_rad, beta_rad:', alpha, beta
+          ! write(io_unit,*) 'velocities:', u, v, w
           climb_angle = climb_angle0
-          write(io_unit,*) 'climb angle:', climb_angle
+          ! write(io_unit,*) 'climb angle:', climb_angle
           cgamma = cos(gamma)
           sgamma = sin(gamma)
           if (climb_angle /= -999.0) then 
@@ -494,6 +503,7 @@ module f16_m
               write(io_unit,*) '        theta 2 [deg] =', theta2 * 180 / pi 
               write(io_unit,*) '  Correct theta [deg] =', elevation_angle * 180 / pi 
               write(io_unit,*) '  Correct theta [rad] =', elevation_angle 
+              write(io_unit,*) ' '              
             end if 
           end if 
         end if 
@@ -555,13 +565,14 @@ module f16_m
         end if 
 
         iteration_residual = calc_r(V_mag, height, euler, angular_rates, G)
-        ! error = maxval(abs(iteration_residual))
-        error = 0.0
+        error = maxval(abs(iteration_residual))
+        ! error = 0.0
 
         if (trim_verbose) then 
           write(io_unit,'(A)') 'New G:'
           write(io_unit,'(A,6(1X,ES20.12))') '      G =', (G(k),   k=1,6)
           write(io_unit,'(A,6(1X,ES20.12))') '      R =', (iteration_residual(k), k=1,6) 
+          write(io_unit,*) ''
           write(io_unit, '(A)') &
             'Iteration   Residual           alpha[deg]           beta[deg]            '// & 
             'p[deg/s]             q[deg/s]             r[deg/s]   ' // &
@@ -608,6 +619,7 @@ module f16_m
       end if
 
       if (trim_verbose) then
+        write(io_unit,*)
         write(io_unit,'(A,6(1X,ES20.12))') 'Delta G =', (delta_G(k), k=1,6)
       end if 
 
@@ -712,7 +724,7 @@ module f16_m
       temp_state(9)     = height
       temp_state(7:8)   = 0
       temp_state(10:13) = euler_to_quat(euler)
-      write(io_unit,*) 'temp_state:', temp_state
+      ! write(io_unit,*) 'temp_state:', temp_state
 
       ! CALCULATE RESIDUAL
       dummy_R = differential_equations(0.0, temp_state)
