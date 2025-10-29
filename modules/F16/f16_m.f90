@@ -303,31 +303,31 @@ module f16_m
       ! SHIFT CG LOCATION
       FM(4:6) = FM(4:6) + cross_product(aero_ref_location, FM(1:3))
       
-      ! ! PRINT STEPS IF SPECIFIED
-      ! if(rk4_verbose) then
-      !   write(io_unit,*) "V_mag = ", V
-      !   write(io_unit,*) "pbar = ", pbar
-      !   write(io_unit,*) "qbar = ", qbar
-      !   write(io_unit,*) "rbar = ", rbar
-      !   write(io_unit,*) "cos(alpha) = ", cos(alpha)
-      !   write(io_unit,*) "sin(alpha) = ", sin(alpha)
-      !   write(io_unit,*) "cos(beta) = ", cos(beta)
-      !   write(io_unit,*) "sin(beta) = ", sin(beta)
-      !   write(io_unit,*) "alpha = ", alpha
-      !   write(io_unit,*) "beta = ", beta
-      !   write(io_unit,*) "beta_flank = ", beta_f
-      !   write(io_unit,*) "CL1", CL1
-      !   write(io_unit,*) "CL", CL
-      !   write(io_unit,*) "CS", CS
-      !   write(io_unit,*) "CD", CD
-      !   write(io_unit,*) "C_l", Cl_pitch
-      !   write(io_unit,*) "Cm", Cm
-      !   write(io_unit,*) "Cn", Cn
-      !   write(io_unit,*) "delta_a", delta_a * 180.0 / pi
-      !   write(io_unit,*) "delta_e", delta_e * 180.0 / pi
-      !   write(io_unit,*) "delta_r", delta_r * 180.0 / pi
-      !   write(io_unit,*) "T", T
-      ! end if 
+      ! PRINT STEPS IF SPECIFIED
+      if(rk4_verbose) then
+        write(io_unit,*) "V_mag = ", V
+        write(io_unit,*) "pbar = ", pbar
+        write(io_unit,*) "qbar = ", qbar
+        write(io_unit,*) "rbar = ", rbar
+        write(io_unit,*) "cos(alpha) = ", cos(alpha)
+        write(io_unit,*) "sin(alpha) = ", sin(alpha)
+        write(io_unit,*) "cos(beta) = ", cos(beta)
+        write(io_unit,*) "sin(beta) = ", sin(beta)
+        write(io_unit,*) "alpha = ", alpha
+        write(io_unit,*) "beta = ", beta
+        write(io_unit,*) "beta_flank = ", beta_f
+        write(io_unit,*) "CL1", CL1
+        write(io_unit,*) "CL", CL
+        write(io_unit,*) "CS", CS
+        write(io_unit,*) "CD", CD
+        write(io_unit,*) "C_l", Cl_pitch
+        write(io_unit,*) "Cm", Cm
+        write(io_unit,*) "Cn", Cn
+        write(io_unit,*) "delta_a", delta_a * 180.0 / pi
+        write(io_unit,*) "delta_e", delta_e * 180.0 / pi
+        write(io_unit,*) "delta_r", delta_r * 180.0 / pi
+        write(io_unit,*) "T", T
+      end if 
 
     end subroutine pseudo_aero
 
@@ -375,6 +375,7 @@ module f16_m
       real :: G(6), res(6), iteration_residual(6)
       real :: angular_rates(3), euler(3), print_statement(13)
       real :: cgamma, sgamma, climb_angle, gamma, solution, theta1, theta2, solution1
+      real :: test_r(6)
       integer :: k, iteration
       character(*), intent(in) :: trim_type
       
@@ -523,7 +524,7 @@ module f16_m
           write(io_unit,'(A,ES20.12)') 'r [deg/s] = ', r * 180 / pi
           write(io_unit, '(A)') ''
         end if 
-        
+        write(io_unit,*) "Gplease:", G(6)
         res = calc_r(V_mag, height, euler, angular_rates, G)
         
         if (trim_type == 'shss' .and. sideslip_angle0 /= -999.0) then 
@@ -571,6 +572,13 @@ module f16_m
           end if 
         end if 
 
+
+        test_R = calc_R(V_mag, height, euler, angular_rates, G)
+        write(io_unit,*) 'g before', G
+        write(io_unit,*) ''
+        write(io_unit,*) 'test r before:', test_R
+        write(io_unit,*) ''
+
         ! ENSURE THROTTLE IS IN BOUNDS
         if (G(6) > 1.0) then 
           if (trim_verbose) then 
@@ -580,9 +588,16 @@ module f16_m
         else if (G(6) < 0.0) then 
           if (trim_verbose) then 
             write(io_unit,*) 'Overwriting throttle < 0.'
+            write(io_unit,*) ''
           end if 
           G(6) = 0.0
         end if 
+
+        test_R = calc_R(V_mag, height, euler, angular_rates, G)
+        write(io_unit,*) 'g after ', G
+        write(io_unit,*) ''
+        write(io_unit,*) 'test r after :', test_R
+        write(io_unit,*) ''
 
         iteration = iteration + 1
       end do
@@ -600,11 +615,13 @@ module f16_m
 
       ! CALCULATE JACOBIAN AND RESIDUAL
       jac = jacobian(V_mag, height, euler, angular_rates, G)
-      write(io_unit,*) G
       res = calc_r(V_mag, height, euler, angular_rates, G)
+      res = -1* res
+      write(io_unit,*) "g into calc_R", G
+      write(io_unit,*) "residual", res
 
       ! CALCUALTE DELTA G AND ADD RELAXATION FACTOR
-      call lu_solve(6, jac, -res, delta_G)
+      call lu_solve(6, jac, res, delta_G)
       G = G + relaxation_factor * delta_G
 
       if (trim_verbose) then
@@ -688,14 +705,26 @@ module f16_m
       real :: R(6), dummy_R(13), temp_state(13)
 
       temp_state = 0.0
+      write(io_unit,*) "g coming in  :", G
+      write(io_unit,*) ''
+      write(io_unit,*) 'v_mag in     :', V_mag 
+      write(io_unit,*) ''
+      write(io_unit,*) "euler        :", euler
+      write(io_unit,*) ''
+      write(io_unit,*) "angularates  :", angular_rates
+      write(io_unit,*) ''
 
       ! PULL OUT CONTROLS
       controls(1:4) = G(3:6)
+      write(io_unit,*) 'controls     :', controls
+      write(io_unit,*) ''
 
       ! PULL OUT ALPHA
       alpha = G(1)
       ca = cos(alpha)
       sa = sin(alpha)
+      write(io_unit,*) 'alpha        :', alpha
+      write(io_unit,*) ''      
 
       ! PULL OUT BETA
       if (sideslip_angle0 /= -999.0) then 
@@ -706,6 +735,8 @@ module f16_m
         cb = cos(G(2))
         sb = sin(G(2))
       end if
+      write(io_unit,*) 'beta         :', cb, sb 
+      write(io_unit,*) ''
 
       ! CALCUALTE INITIAL STATES
       temp_state(1:3)   = V_mag * (/ca*cb, sb, sa*cb/) 
@@ -713,10 +744,14 @@ module f16_m
       temp_state(9)     = height
       temp_state(7:8)   = 0
       temp_state(10:13) = euler_to_quat(euler)
-      ! write(io_unit,*) 'temp_state:', temp_state
+      write(io_unit,*) 'temp_state   :', temp_state
+      write(io_unit,*) ''
 
       ! CALCULATE RESIDUAL
       dummy_R = differential_equations(0.0, temp_state)
+      write(io_unit,*) 'dummy_r      :', dummy_R
+      write(io_unit,*) ''
+
       R = dummy_R(1:6)
     end function calc_r
 
