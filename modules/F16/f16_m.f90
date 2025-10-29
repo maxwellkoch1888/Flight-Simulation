@@ -437,14 +437,7 @@ module f16_m
       
       error = 1.0
       iteration = 1
-      do while (error > tolerance)
-        ! MAKE SURE THROTTLE IS IN SAFE RANGE
-        if (G(6) < 0.0) then
-          G(6) = 0.0
-        else if (G(6) > 1.0) then
-          G(6) = 1.0
-        end if        
-
+      do while (error > tolerance)    
         ! DEFINE COS AND SIN TERMS TO SAVE TIME
         alpha = G(1)
         if (sideslip_angle0 == -999.0) then
@@ -523,17 +516,6 @@ module f16_m
         q = angular_rates(2)
         r = angular_rates(3)
 
-        ! else if (trim_type == 'vbr') then
-        !   ! ROLL IN WIND COORDINATES FROM 6.2.6
-        !   pw = gravity * s_bank * c_elev / (u*c_elev*c_bank + w*s_elev) * (1.0 / V_mag) * &
-        !       (-u*s_elev + v*s_bank*c_elev + w*c_bank*c_elev)
-
-        !   ! CALCUALTE (p,q,r) FROM 6.4.4
-        !   angular_rates = pw / V_mag * (/u, v, w/)
-        !   p = angular_rates(1)
-        !   q = angular_rates(2)
-        !   r = angular_rates(3)
-        
         if (trim_verbose) then 
           write(io_unit,*) 'Updating rotation rates for ', trim_type
           write(io_unit,'(A,ES20.12)') 'p [deg/s] = ', p * 180 / pi 
@@ -589,6 +571,19 @@ module f16_m
           end if 
         end if 
 
+        ! ENSURE THROTTLE IS IN BOUNDS
+        if (G(6) > 1.0) then 
+          if (trim_verbose) then 
+            write(io_unit,*) 'Overwriting throttle > 1.'
+          G(6) = 1.0
+          end if 
+        else if (G(6) < 0.0) then 
+          if (trim_verbose) then 
+            write(io_unit,*) 'Overwriting throttle < 0.'
+          end if 
+          G(6) = 0.0
+        end if 
+
         iteration = iteration + 1
       end do
     end function trim_algorithm
@@ -605,18 +600,12 @@ module f16_m
 
       ! CALCULATE JACOBIAN AND RESIDUAL
       jac = jacobian(V_mag, height, euler, angular_rates, G)
+      write(io_unit,*) G
       res = calc_r(V_mag, height, euler, angular_rates, G)
 
       ! CALCUALTE DELTA G AND ADD RELAXATION FACTOR
       call lu_solve(6, jac, -res, delta_G)
       G = G + relaxation_factor * delta_G
-
-      ! MAKE SURE THROTTLE IS IN SAFE RANGE
-      if (G(6) < 0.0) then
-        G(6) = 0.0
-      else if (G(6) > 1.0) then
-        G(6) = 1.0
-      end if
 
       if (trim_verbose) then
         write(io_unit,*)
