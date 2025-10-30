@@ -1,8 +1,10 @@
 {
     "simulation" : {
-        "time_step[s]" : 0.0, 
-        "total_time[s]" : 1.0,
-        "rk4_verbose" : false
+        "time_step[s]" : 0.01, 
+        "total_time[s]" : 20.0,
+        "rk4_verbose" : false,
+        "print_states": true 
+
     },
 
     "vehicle" : {
@@ -86,17 +88,17 @@
     },
 
     "initial" : {
-        "airspeed[ft/s]" : 220.0,
-        "altitude[ft]" : 500.0,
-        "Euler_angles[deg]" : [0.0, 0.0, 0.0],
+        "airspeed[ft/s]" : 520.0,
+        "altitude[ft]" : 2000.0,
+        "Euler_angles[deg]" : [80.0, 0.0, 0.0],
         "type" : "trim", 
         "state" : {}, 
         "trim" : {
                 "verbose": true,
-                "type" : "shss", 
-                "sideslip[deg]": 10.0,
+                "type" : "sct", 
+                "sideslip[deg]notused": 10.0,
                 "elevation_angle[deg]notused" : 0.0,
-                "climb_angle[deg]" : 10.0, 
+                "climb_angle[deg]" : 20.0, 
                 "solver" : {
                     "finite_difference_step_size" : 0.01,
                     "relaxation_factor" : 0.9, 
