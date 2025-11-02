@@ -88,32 +88,37 @@
     },
 
     "initial" : {
-        "airspeed[ft/s]" : 520.0,
-        "altitude[ft]" : 2000.0,
-        "Euler_angles[deg]" : [80.0, 0.0, 0.0],
         "type" : "trim", 
-        "state" : {}, 
-        "trim" : {
-                "verbose": true,
-                "type" : "sct", 
-                "sideslip[deg]notused": 10.0,
-                "elevation_angle[deg]notused" : 0.0,
-                "climb_angle[deg]" : 20.0, 
-                "solver" : {
-                    "finite_difference_step_size" : 0.01,
-                    "relaxation_factor" : 0.9, 
-                    "tolerance" : 1.0e-12,
-                    "max_iterations" : 100
-                }
-        },
-        "alpha[deg]" : 0.0,
-        "beta[deg]" : 0.0,
-        "p[deg/s]" : 0.0,
-        "q[deg/s]" : 0.0, 
-        "r[deg/s]" : 0.0,
+        "airspeed[ft/s]" : 350.0,
+        "altitude[ft]" : 3000.0,
+        "Euler_angles[deg]" : [0.0, 0.0, 0.0],
         "aileron[deg]" : 0.0, 
         "elevator[deg]" : 0.0,
         "rudder[deg]" : 0.0,
-        "throttle" : 0.0
+        "throttle" : 0.0,        
+        "state" : {
+                "alpha[deg]" : 0.0,
+                "beta[deg]" : 0.0,
+                "p[deg/s]" : 0.0,
+                "q[deg/s]" : 0.0, 
+                "r[deg/s]" : 0.0
+
+        }, 
+        "trim" : {
+                "verbose": true,
+                "exam_answers": true, 
+                "type" : "shss", 
+                "_bank_angle[deg]":  0.0,
+                "sideslip[deg]": 10.0,
+                "_elevation_angle[deg]" : 0.0,
+                "climb_angle[deg]" :  10.0, 
+                "solver" : {
+                    "finite_difference_step_size" : 0.01,
+                    "relaxation_factor" : 0.9, 
+                    "tolerance" : 1.0e-13,
+                    "max_iterations" : 100
+                }
+        }
+
     }
 }
