@@ -665,17 +665,18 @@ module f16_m
 
       if (exam_answers) then 
         write(io_unit,*) '---------------------- Exam Answers ----------------------'
-        write(io_unit,'(A30,F20.13)') '       elevation_angle[deg]:', euler(2)
-        write(io_unit,'(A30,F20.13)') '       bank_angle[deg]     :', euler(1) 
-        write(io_unit,'(A30,F20.13)') '       alpha[deg]          :', alpha 
-        write(io_unit,'(A30,F20.13)') '       beta[deg]           :', beta 
-        write(io_unit,'(A30,F20.13)') '       p[deg]              :', p 
-        write(io_unit,'(A30,F20.13)') '       q[deg]              :', q
-        write(io_unit,'(A30,F20.13)') '       r[deg]              :', r
-        write(io_unit,'(A30,F20.13)') '       aileron[deg]        :', controls(1)
-        write(io_unit,'(A30,F20.13)') '       elevator[deg]       :', controls(2)
-        write(io_unit,'(A30,F20.13)') '       rudder[deg]         :', controls(3)
-        write(io_unit,'(A30,F20.13)') '       throttle[deg]       :', controls(4)
+        write(io_unit,'(A30,ES25.13E3)') '       elevation_angle[deg]:', euler(2)
+        write(io_unit,'(A30,ES25.13E3)') '       bank_angle[deg]     :', euler(1)
+        write(io_unit,'(A30,ES25.13E3)') '       alpha[deg]          :', alpha
+        write(io_unit,'(A30,ES25.13E3)') '       beta[deg]           :', beta
+        write(io_unit,'(A30,ES25.13E3)') '       p[deg]              :', p
+        write(io_unit,'(A30,ES25.13E3)') '       q[deg]              :', q
+        write(io_unit,'(A30,ES25.13E3)') '       r[deg]              :', r
+        write(io_unit,'(A30,ES25.13E3)') '       aileron[deg]        :', controls(1)
+        write(io_unit,'(A30,ES25.13E3)') '       elevator[deg]       :', controls(2)
+        write(io_unit,'(A30,ES25.13E3)') '       rudder[deg]         :', controls(3)
+        write(io_unit,'(A30,ES25.13E3)') '       throttle[deg]       :', controls(4)
+
       end if 
 
       end function trim_algorithm
