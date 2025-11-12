@@ -26,6 +26,45 @@ theta              = np.radians(theta)
 camera_orientation = np.radians(camera_orientation)
 camera_orientation_quat = eul_to_quat(camera_orientation)
 
+
+class Camera:
+    def __init__(self, orientation:np.ndarray, location:np.ndarray, vp_distance:float, vp_angle:float, vp_aspect_ratio:float):
+        # FIND THE CAMERA LOCATION AND ORIENTATION
+        eul = orientation
+        self.location = location 
+        self.quat = eul_to_quat(eul)
+
+        # FIND THE VIEW PLANE PROPERTIES
+        self.vp_distance = vp_distance
+        self.vp_angle = vp_angle
+        self.vp_aspect_ratio = vp_aspect_ratio
+
+        temp_y_coordinate = self.vp_distance * np.tan(0.5*self.vp_angle)
+        temp_z_coordinate = temp_y_coordinate / self.vp_aspect_ratio
+
+        # INITIALIZE CAMERA'S BODY FIXED COORDINATES
+        self.vp_xv = np.array([self.vp_distance, self.vp_distance, self.vp_distance, self.vp_distance])
+        self.vp_yv = np.array([-temp_y_coordinate, -temp_y_coordinate, -temp_y_coordinate, -temp_y_coordinate])
+        self.vp_zv = np.array([-temp_z_coordinate, -temp_z_coordinate, -temp_z_coordinate, -temp_z_coordinate])
+
+        # INITIALIZE CAMERA'S EARTH FIXED COORDINATES 
+        self.vp_xf = np.array([0.0, 0.0, 0.0, 0.0])
+        self.vp_yf = np.array([0.0, 0.0, 0.0, 0.0])
+        self.vp_zf = np.array([0.0, 0.0, 0.0, 0.0])
+        
+        self.lines2D = np.zeros((2,2))
+
+        self.dx = temp_y_coordinate
+        self.dy = temp_z_coordinate
+
+        def set_state(self, location:np.ndarray, quat:np.ndarray):
+            # SET THE LOCATION AND ORIENTATION 
+            self.location = location 
+            self.quat = quat 
+
+            
+
+
 # CALCULATE wvp AND hvp
 wvp = 2.0 * dvp * np.tan(theta)
 hvp = wvp / RAvp
@@ -137,8 +176,17 @@ print(x_vp)
 print('y_vp: ')
 print(y_vp)
 
+# BUILD THE CAMERA
+camera = Camera(
+            orientation= camera_orientation,
+            location=camera_location, 
+            vp_distance=dvp,
+            vp_angle=theta,
+            vp_aspect_ratio=RAvp
+            )
+
 # PLOT THE FIGURE
-fig = plt.figure(figsize=(RAvp*5.0,5.0))
+fig = plt.figure(figsize=(camera.vp_aspect_ratio*5.0,5.0))
 ax = fig.add_subplot(111)
 plt.subplots_adjust(top=1.0, bottom=0.0, left=0.0, right=1.0)
 plt.axis('off')
