@@ -102,13 +102,13 @@ class Lines:
             self.points[2*i,   :] = [-grid_number*grid_scale, (i-grid_number)*grid_scale, -altitude]
             self.points[2*i+1, :] = [ grid_number*grid_scale, (i-grid_number)*grid_scale, -altitude]
             self.lines[i,0] = 2*i
-            self.lines[i,0] = 2*i+1
+            self.lines[i,1] = 2*i+1
 
         for i in range(nxlines):
             self.points[2*i+2*nxlines  , :] = [(i-grid_number)*grid_scale, -grid_number*grid_scale, -altitude]
             self.points[2*i+2*nxlines+1, :] = [(i-grid_number)*grid_scale,  grid_number*grid_scale, -altitude]
-            self.lines[i+nxlines,0] = 2*i*nxlines 
-            self.lines[i+nxlines,1] = 2*i*nxlines+1
+            self.lines[i+nxlines,0] = 2*i+2*nxlines 
+            self.lines[i+nxlines,1] = 2*i+2*nxlines+1
 
         self.npoints = len(self.points)
         self.nlines = len(self.lines)
@@ -126,7 +126,9 @@ class Lines:
         self.t = np.zeros(self.npoints)
         self.pf = np.zeros((self.npoints,3))
 
-        self.lines2D = np.full((self.nlines*3,2), None, dtype=object)
+        self.lines2D = np.full((self.nlines*3, 2), np.nan, dtype=float)
+
+        self.points3D[:] = self.points
 
     def plot(self, camera):
         pc = camera.location
@@ -157,9 +159,9 @@ class Lines:
             i0 = self.lines[i,0]
             i1 = self.lines[i,1]
 
-            # if(self.t[i0]>0 and self.t[i1]>0):
-            #     self.lines2D[3*i,  :] = self.points2D[i0,:]
-            #     self.lines2D[3*i+1,:] = self.points2D[i1,:]
+            if(self.t[i0]>0 and self.t[i1]>0):
+                self.lines2D[3*i,  :] = self.points2D[i0,:]
+                self.lines2D[3*i+1,:] = self.points2D[i1,:]
             # elif(self.t[i0]<0 and self.t[i1]<0):
 
         self.ax.set_data(self.lines2D[:,0], self.lines2D[:,1])
@@ -253,39 +255,5 @@ while(location[0] < 0):
     location[0] += 0.01
     time_end = time.time()
     fps = 1/(time_end - time_begin)
-    print('graphics rate [hz]:', fps)
+    # print('graphics rate [hz]:', fps)
 
-# # PLOT THE FIGURE
-# fig = plt.figure(figsize=(camera.vp_aspect_ratio*5.0,5.0))
-# ax = fig.add_subplot(111)
-# plt.subplots_adjust(top=1.0, bottom=0.0, left=0.0, right=1.0)
-# plt.axis('off')
-# ax.axes.set_xlim(ycvp[0], ycvp[2])
-# ax.axes.set_ylim(-zcvp[1], -zcvp[0])
-# ax.axes.xaxis.set_ticklabels([])
-# ax.axes.yaxis.set_ticklabels([])
-# ax.set_xticks([])
-# ax.set_yticks([])
-# ax.axes.set_aspect('equal')
-# fig.canvas.draw()
-# # # PLOT POINTS
-# # plt.plot(x_vp, y_vp, 'o', color=color) 
-
-# # PLOT HORIZONTAL LINES
-# number_of_lines = max_distance * 2 / grid_scale
-# nx = int(number_of_lines + 1) # NUMBER OF X POINTS
-# ny = int(number_of_lines + 1) # NUMBER OF Y POINTS
-
-# for line_number in range(ny):
-#     start = line_number * nx
-#     end = start + nx
-#     plt.plot(x_vp[start:end], y_vp[start:end], color=color)
-
-# # PLOT VERTICAL LINES
-# for line_number in range(nx):
-#     start = line_number 
-#     end = start + nx * (ny - 1)
-#     step = nx
-#     plt.plot(x_vp[start::step], y_vp[start::step], color=color)
-
-# plt.show(block=False)
