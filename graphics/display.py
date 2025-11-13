@@ -3,11 +3,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time 
 
+from connection_m import connection
 from quaternion import quat_mult, quat_norm, quat_to_euler, eul_to_quat
 
 # OPEN THE JSON FILE
 with open('json/graphics.json', 'r') as file:
     graphics = json.load(file)
+
+# CREATE CONNECTION
+states_connection = connection(graphics["connections"]["receive_states"])
+
+# # ----------------- EXAMPLE UDP RECEIVER -----------------
+# states = [0]*14 
+
+# frame = 0
+# fps = 0.0
+
+# while(frame< 1000):
+#     time_begin = time.time()
+
+#     states = states_connection.recv()
+#     print(states)
+
+#     time_end = time.time()
+#     fps = 1/(time_end - time_begin)
+#     print("update hz = ", fps)
 
 # UNPACK THE VALUES IN JSON FILE  
 dvp   = graphics['camera']['view_plane']['distance[ft]']
@@ -208,31 +228,31 @@ ground = Lines(
             )
 
 
-# PRINT RESULTS
-print('------------------------------------ Results ------------------------------------')
-print('11.2.1:')
-print(f'w_vp:    {camera.wvp:.11f} ft')
-print(f'h_vp:    {camera.hvp:.11f} ft')
-print('')
-np.set_printoptions(precision=2, suppress=True)
-print(f'x_c_vp:  {camera.vp_xv} ft')
-np.set_printoptions(precision=11, suppress=True)
-print(f'y_c_vp:  {camera.vp_yv} ft')
-np.set_printoptions(precision=12, suppress=True)
-print(f'z_c_vp:  {camera.vp_zv} ft')
-print('')
-print('11.2.1:')
-np.set_printoptions(precision=10, suppress=True)
-print(f'x_f_vp:  {camera.vp_xf}')
-np.set_printoptions(precision=11, suppress=True)
-print(f'y_f_vp:  {camera.vp_yf}')
-print(f'z_f_vp:  {camera.vp_zf}')
-print('')
-print('11.3.1:')
-print(f'P0:      {camera.P0}')
-print(f'n_vp:    {camera.nvp}')
-print(f'P0 - PC: {(camera.P0 - camera_location.flatten())}')
-print('lca: ')
+# # PRINT RESULTS
+# print('------------------------------------ Results ------------------------------------')
+# print('11.2.1:')
+# print(f'w_vp:    {camera.wvp:.11f} ft')
+# print(f'h_vp:    {camera.hvp:.11f} ft')
+# print('')
+# np.set_printoptions(precision=2, suppress=True)
+# print(f'x_c_vp:  {camera.vp_xv} ft')
+# np.set_printoptions(precision=11, suppress=True)
+# print(f'y_c_vp:  {camera.vp_yv} ft')
+# np.set_printoptions(precision=12, suppress=True)
+# print(f'z_c_vp:  {camera.vp_zv} ft')
+# print('')
+# print('11.2.1:')
+# np.set_printoptions(precision=10, suppress=True)
+# print(f'x_f_vp:  {camera.vp_xf}')
+# np.set_printoptions(precision=11, suppress=True)
+# print(f'y_f_vp:  {camera.vp_yf}')
+# print(f'z_f_vp:  {camera.vp_zf}')
+# print('')
+# print('11.3.1:')
+# print(f'P0:      {camera.P0}')
+# print(f'n_vp:    {camera.nvp}')
+# print(f'P0 - PC: {(camera.P0 - camera_location.flatten())}')
+# print('lca: ')
 # print(ground.lca)
 # print('gamma: ')
 # print(ground.gamma)
@@ -242,18 +262,37 @@ print('lca: ')
 # print('y_vp: ')
 # print(ground.y_vp)
 
-# EXAMPLE SIMULATION
 location = camera.location 
 quat = camera.quat 
 
-while(location[0] < 0):
+# # EXAMPLE SIMULATION
+# while(location[0] < 0):
+#     time_begin = time.time()
+#     camera.set_state(location=location, quat=quat)
+#     ground.plot(camera=camera)
+#     fig.canvas.draw()
+#     fig.canvas.flush_events()
+#     location[0] += 0.01
+#     time_end = time.time()
+#     fps = 1/(time_end - time_begin)
+#     # print('graphics rate [hz]:', fps)
+
+frame = 0
+fps = 0.0
+states = [0]*14 
+
+while(frame< 1000):
     time_begin = time.time()
+    states = states_connection.recv()
+    location = states[7:10]
+    location = np.array(states[7:10])
+    location[2] = -location[2]
+    quat = np.array(states[10:14])
+    # print(location)
     camera.set_state(location=location, quat=quat)
     ground.plot(camera=camera)
     fig.canvas.draw()
     fig.canvas.flush_events()
-    location[0] += 0.01
     time_end = time.time()
     fps = 1/(time_end - time_begin)
     # print('graphics rate [hz]:', fps)
-

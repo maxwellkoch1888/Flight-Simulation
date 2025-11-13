@@ -4,10 +4,10 @@ def quat_to_euler(quat: np.array) -> np.array:
     tol = 1e-12
 
     # EXTRACT e0, ex, ey, AND ez FROM quat
-    e0 = quat(0)
-    ex = quat(1)
-    ey = quat(2)
-    ez = quat(3)
+    e0 = quat[0]
+    ex = quat[1]
+    ey = quat[2]
+    ez = quat[3]
 
     # CALCULATE RESULT FOR GIMBLE LOCK
     res = e0*ey - ex*ez
