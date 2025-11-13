@@ -1,13 +1,16 @@
 module f16_m
     use koch_m
-    use json_m
     use jsonx_m
     use micro_time_m
     use linalg_mod
+    use connection_m
     implicit none
   
     ! JSON POINTER
     type(json_value), pointer :: j_main
+
+    ! UDP POINTER
+    type(connection) :: graphics
 
     ! BUILD GLOBAL VARIABLES FOR THE MODULE
     real :: mass
@@ -471,7 +474,10 @@ module f16_m
       ! LOOP FOR FINDING TRIM STATE
       error = 1.0
       iteration = 1
-      do while (error > tolerance)    
+      do while (error > tolerance)
+        if (iteration > max_iterations) then 
+          write(*,*) 'No trim solutions... Reached max iterations...'
+        end if     
         ! DEFINE COS AND SIN TERMS TO SAVE TIME
         alpha = G(1)
         if (any(case_number == [1,2,3,5])) then
@@ -641,7 +647,6 @@ module f16_m
       initial_state(1:3)   = V_mag * (/ca*cb, sb, sa*cb/) 
       initial_state(4:6)   = angular_rates
       initial_state(9)     = height
-      initial_state(7:8)   = 0
       initial_state(10:13) = euler_to_quat(euler)    
       if (trim_verbose) then 
         write(io_unit,*) '---------------------- Trim Solution ----------------------'
@@ -678,7 +683,6 @@ module f16_m
         write(io_unit,'(A30,ES25.13E3)') '       throttle[deg]       :', controls(4)
 
       end if 
-
       end function trim_algorithm
   !=========================
   ! Newton's Method Solver to find G (alpha, beta, delta_a, delta_e, delta_r, throttle)
@@ -844,7 +848,7 @@ module f16_m
     end function cross_product
 
   !=========================
-  ! Convert deg to rad if needed
+  ! CONVERT DEG TO RAD IF NEEDED
   function to_radians_if_valid(angle) result(new_angle)
     implicit none
     real, intent(in) :: angle
@@ -864,6 +868,7 @@ module f16_m
       real, allocatable :: eul(:)
       real :: alpha, beta, trim_state(6)
       character(100), intent(in) :: filename
+      type(json_value), pointer :: j_connections, j_graphics 
 
       ! OPEN A FILE TO WRITE TO 
       open(newunit=io_unit, file='f16_output.txt', status='replace', action='write')
@@ -992,14 +997,20 @@ module f16_m
       if (sim_type == 'trim') then 
         trim_state = trim_algorithm(airspeed, initial_state(9), eul, tolerance, trim_type)
       end if 
+
+      call jsonx_get(j_main, 'initial.x_pos_ft', initial_state(7))
+
+      ! INITIALIZE CONNECTIONS
+      call jsonx_get(j_main, 'connections', j_connections)
+      call jsonx_get(j_connections, 'graphics', j_graphics)
+      call graphics%init(j_graphics)
     end subroutine init
 
   !=========================
   ! Run Subroutine
     subroutine run()
       implicit none
-      real :: t, dt, tf, y_new(13)
-
+      real :: t, dt, tf, y_new(13), s(14) 
       real :: cpu_start_time, cpu_end_time, actual_time, integrated_time, time_error
       real :: time_1, time_2, y_init(13)
       logical :: real_time = .false.
@@ -1024,12 +1035,14 @@ module f16_m
       end if
 
       ! BUILD THE LOOP AND WRITE THE OUTPUT
-      write(io_unit,*) " time[s]             u[ft/s]             v[ft/s] &
-                       w[ft/s]             p[rad/s]            q[rad/s]      &
-            r[rad/s]            xf[ft]              yf[ft]              &
-      zf[ft]              e0                  ex                  ey     &
-                   ez                  "
-      write(io_unit,'(14ES20.12)') t,y_init(:)
+      if (print_states) then 
+        write(io_unit,*) " time[s]             u[ft/s]             &
+        v[ft/s]             w[ft/s]             p[rad/s]            &
+        q[rad/s]            r[rad/s]            xf[ft]              &
+        yf[ft]              zf[ft]              e0                  &
+        ex                  ey                  ez"
+        write(io_unit,'(14ES20.12)') t,y_init(:)
+      end if 
 
       ! SAVE THE TIMESTAMP WHEN THE SIMULATION BEGINS
       cpu_start_time = get_time()
@@ -1042,21 +1055,27 @@ module f16_m
         ! NORMALIZE THE QUATERNION
         call quat_norm(y_new(10:13))
 
+        if (print_states) then 
+          write(io_unit,'(14ES20.12)') t,y_init(:)
+        end if 
+
+        ! SEND GRAPHICS OVER CONNECTION 
+        s(1) = t 
+        s(2:14) = y_new(1:13)
+        call graphics%send(s)
+
+        ! UPDATE THE STATE AND TIME        
         if(real_time) then
           time_2 = get_time()
           dt = time_2 - time_1
           time_1 = time_2
         end if 
 
-        ! UPDATE THE STATE AND TIME
         y_init = y_new
         t = t + dt
         integrated_time = integrated_time + dt
         write(*,*) t, dt
         
-        if (print_states) then 
-          write(io_unit,'(14ES20.12)') t,y_init(:)
-        end if 
       end do 
 
       ! SAVE THE TIMESTAMP FOR WHEN THE SIMULATION STOPPED
