@@ -869,7 +869,7 @@ module f16_m
       real, allocatable :: eul(:)
       real :: alpha, beta, trim_state(6)
       character(100), intent(in) :: filename
-      type(json_value), pointer :: j_connections, j_graphics 
+      type(json_value), pointer :: j_connections, j_graphics
 
       ! OPEN A FILE TO WRITE TO 
       open(newunit=io_unit, file='f16_output.txt', status='replace', action='write')
