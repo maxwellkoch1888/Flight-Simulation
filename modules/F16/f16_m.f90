@@ -9,8 +9,9 @@ module f16_m
     ! JSON POINTER
     type(json_value), pointer :: j_main
 
-    ! UDP POINTER
+    ! UDP POINTERS
     type(connection) :: graphics
+    type(connection) :: user_controls
 
     ! BUILD GLOBAL VARIABLES FOR THE MODULE
     real :: mass
@@ -1004,6 +1005,10 @@ module f16_m
       call jsonx_get(j_main, 'connections', j_connections)
       call jsonx_get(j_connections, 'graphics', j_graphics)
       call graphics%init(j_graphics)
+
+      call jsonx_get(j_connections, 'user_controls', j_user_controls)
+      call user_controls%init(j_user_controls)
+
     end subroutine init
 
   !=========================
@@ -1063,6 +1068,9 @@ module f16_m
         s(1) = t 
         s(2:14) = y_new(1:13)
         call graphics%send(s)
+
+        ! RECEIVE USER CONTROLS OVER CONNECTION
+        controls = user_controls%recv()
 
         ! UPDATE THE STATE AND TIME        
         if(real_time) then

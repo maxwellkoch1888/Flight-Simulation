@@ -1,7 +1,7 @@
 {
     "simulation" : {
         "time_step[s]" : 0.0, 
-        "total_time[s]" : 5.0,
+        "total_time[s]" : 20.0,
         "rk4_verbose" : false,
         "print_states": true 
 
@@ -20,7 +20,14 @@
             "number_of_values": 14, 
             "refresh_rate": 60,
             "channel_type": "udp",
-            "port_ID": 50000
+            "port_ID": 9000
+        },
+        "user_controls": {
+            "type": "receive", 
+            "number_of_values": 4, 
+            "refresh_rate": 60,
+            "channel_type": "udp",
+            "port_ID": 9001
         }
     },
 
@@ -105,23 +112,20 @@
     },
     "initial" : {
         "type" : "trim", 
-        "airspeed[ft/s]" : 150.0,
-        "altitude[ft]" : 5.0,
-        "Euler_angles[deg]" : [0.0872664626, -0.1745329252, 0.0],
+        "airspeed[ft/s]" : 350.0,
+        "altitude[ft]" : 4500.0,
+        "Euler_angles[deg]" : [0.0, 0.0, 0.0],
         "aileron[deg]" : 0.0, 
         "elevator[deg]" : 0.0,
         "rudder[deg]" : 0.0,
         "throttle" : 0.0,     
-        "x_pos_ft": -350.0,   
+        "x_pos_ft": 0.0,   
         "state" : {
                 "alpha[deg]" : 0.0,
                 "beta[deg]" : 0.0,
                 "p[deg/s]" : 0.0,
                 "q[deg/s]" : 0.0, 
                 "r[deg/s]" : 0.0
-                
-
-
         }, 
         "trim" : {
                 "verbose": false,
@@ -130,7 +134,7 @@
                 "_bank_angle[deg]":  0.0,
                 "sideslip[deg]": 0.0,
                 "_elevation_angle[deg]" : 0.0,
-                "climb_angle[deg]" :  0.0, 
+                "climb_angle[deg]" :  5.0, 
                 "solver" : {
                     "finite_difference_step_size" : 0.01,
                     "relaxation_factor" : 0.9, 
