@@ -869,7 +869,7 @@ module f16_m
       real, allocatable :: eul(:)
       real :: alpha, beta, trim_state(6)
       character(100), intent(in) :: filename
-      type(json_value), pointer :: j_connections, j_graphics
+      type(json_value), pointer :: j_connections, j_graphics, j_user_controls, j_test_controls
 
       ! OPEN A FILE TO WRITE TO 
       open(newunit=io_unit, file='f16_output.txt', status='replace', action='write')
@@ -1006,6 +1006,7 @@ module f16_m
       call jsonx_get(j_connections, 'graphics', j_graphics)
       call graphics%init(j_graphics)
 
+      ! TEST SECTION
       call jsonx_get(j_connections, 'user_controls', j_user_controls)
       call user_controls%init(j_user_controls)
 
@@ -1018,6 +1019,7 @@ module f16_m
       real :: t, dt, tf, y_new(13), s(14) 
       real :: cpu_start_time, cpu_end_time, actual_time, integrated_time, time_error
       real :: time_1, time_2, y_init(13)
+      real :: controls_input(6)
       logical :: real_time = .false.
 
       call jsonx_get(j_main, 'simulation.time_step[s]',  dt, 0.0)
@@ -1070,7 +1072,10 @@ module f16_m
         call graphics%send(s)
 
         ! RECEIVE USER CONTROLS OVER CONNECTION
-        controls = user_controls%recv()
+        controls_input = user_controls%recv()
+        controls_input(2:4) = controls_input(2:4) * pi / 180
+        controls = controls_input(2:5)
+        write(io_unit,*) controls_input
 
         ! UPDATE THE STATE AND TIME        
         if(real_time) then

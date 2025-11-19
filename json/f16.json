@@ -1,9 +1,9 @@
 {
     "simulation" : {
         "time_step[s]" : 0.0, 
-        "total_time[s]" : 20.0,
+        "total_time[s]" : 10.0,
         "rk4_verbose" : false,
-        "print_states": true 
+        "print_states": false 
 
     },
 
@@ -21,6 +21,13 @@
             "refresh_rate": 60,
             "channel_type": "udp",
             "port_ID": 9000
+        },
+        "test_user_controls": {
+            "type": "send", 
+            "number_of_values": 4, 
+            "refresh_rate": 60,
+            "channel_type": "udp",
+            "port_ID": 9001
         },
         "user_controls": {
             "type": "receive", 
@@ -129,7 +136,7 @@
         }, 
         "trim" : {
                 "verbose": false,
-                "exam_answers": true, 
+                "exam_answers": false, 
                 "type" : "shss", 
                 "_bank_angle[deg]":  0.0,
                 "sideslip[deg]": 0.0,
