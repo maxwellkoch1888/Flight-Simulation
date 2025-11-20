@@ -1,12 +1,11 @@
 {
     "simulation" : {
         "time_step[s]" : 0.0, 
-        "total_time[s]" : 10.0,
+        "total_time[s]" : 60.0,
         "rk4_verbose" : false,
         "print_states": false 
 
     },
-
     "connections" :{
         "_graphics": {
             "type": "send", 
@@ -22,25 +21,16 @@
             "channel_type": "udp",
             "port_ID": 9000
         },
-        "test_user_controls": {
-            "type": "send", 
-            "number_of_values": 4, 
-            "refresh_rate": 60,
-            "channel_type": "udp",
-            "port_ID": 9001
-        },
         "user_controls": {
             "type": "receive", 
-            "number_of_values": 4, 
+            "number_of_values": 6, 
             "refresh_rate": 60,
             "channel_type": "udp",
             "port_ID": 9001
         }
     },
-
     "vehicle" : {
         "aero_ref_location[ft]" : [-1.0, 0.0, 0.0], 
-
         "mass" : {
             "weight[lbf]" : 20500.0,
             "Ixx[slug-ft^2]" : 9496.0,
@@ -149,6 +139,5 @@
                     "max_iterations" : 100
                 }
         }
-
     }
 }
