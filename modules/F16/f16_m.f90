@@ -27,14 +27,14 @@ module f16_m
     integer :: io_unit
 
     ! DEFINE AERODYNAMIC PROPERTIES
-    real:: planform_area, longitudinal_length, lateral_length
+    real:: planform_area, longitudinal_length, lateral_length, sweep
     real:: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
     real:: CS_beta, CS_pbar, CS_alpha_pbar, CS_rbar, CS_aileron, CS_rudder
     real:: CD_L0, CD_L1, CD_L1_L1, CD_CS_CS, CD_qbar, CD_alpha_qbar, CD_elevator, CD_alpha_elevator, CD_elevator_elevator
     real:: Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
     real:: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
     real:: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
-    logical :: rk4_verbose, print_states
+    logical :: compressibility, rk4_verbose, print_states
 
     ! ADD VARIABLES FOR TRIM ALGORITHM
     character(:), allocatable :: sim_type
@@ -216,6 +216,7 @@ module f16_m
       real :: V, Uc(3)
       real :: Cl_pitch0, alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
       real :: CL, CL1, CD, CS, L, D, S, Cl_pitch, Cm, Cn
+      real :: CM1, CM2, mach_num, gamma, R
       real :: ca, cb, sa, sb
       real :: alpha_hat, beta_hat
       real :: delta_a, delta_e, delta_r
@@ -267,6 +268,17 @@ module f16_m
             + (CD_qbar + CD_alpha_qbar * alpha) * qbar + (CD_elevator + CD_alpha_elevator * alpha) &
             * delta_e + CD_elevator_elevator * delta_e ** 2
 
+      ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
+      ! CHAPTER 3.10 IN BOOK, PRANDTL-GLAUERT CORRECTION
+      if (compressibility == .true.) then 
+        CM1 = 2.13/ (sweep + 0.15)**2
+        CM2 = 15.35*sweep**2 - 19.64*sweep +16.86
+
+        CL = CL / (sqrt(1-sos_ft_per_sec**2))
+        CS = CS / (sqrt(1-sos_ft_per_sec**2))
+        CD = CD * (1.0 + CM1 * sos_ft_per_sec**CM2)
+      end if 
+
       L =   CL * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
       S =   CS * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
       D =   CD * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
@@ -300,6 +312,13 @@ module f16_m
       Cn =       Cn_beta * beta + (Cn_pbar + Cn_alpha_pbar * alpha) * pbar + Cn_rbar * rbar &
                  + (Cn_aileron + Cn_alpha_aileron * alpha) * delta_a + Cn_rudder * delta_r ! yaw moment
 
+      ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
+      if (compressibility == .true.) then 
+        cl_pitch = cl_pitch / (sqrt(1-sos_ft_per_sec**2))
+        Cm       = Cm       / (sqrt(1-sos_ft_per_sec**2))
+        Cn       = Cn       / (sqrt(1-sos_ft_per_sec**2))
+      end if 
+      
       FM(4) = Cl_pitch * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
       FM(5) = Cm       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * longitudinal_length)
       FM(6) = Cn       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
@@ -886,6 +905,8 @@ module f16_m
       call jsonx_get(j_main, 'vehicle.thrust.Ta',      Ta)
 
       ! READ IN ALL AERODYNAMIC DATA
+      call jsonx_get(j_main, 'vehicle.aerodynamics.compressibility',                   compressibility, .false.)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.sweep[deg]',                        sweep, 0.0)
       call jsonx_get(j_main, 'vehicle.aerodynamics.reference.area[ft^2]',              planform_area)
       call jsonx_get(j_main, 'vehicle.aerodynamics.reference.longitudinal_length[ft]', longitudinal_length)
       call jsonx_get(j_main, 'vehicle.aerodynamics.reference.lateral_length[ft]',      lateral_length)
@@ -987,6 +1008,9 @@ module f16_m
       call jsonx_get(j_main, 'initial.throttle',             controls(4))
 
       controls(1:3) = controls(1:3) * pi / 180.0
+
+      ! CONVERT SWEEP TO RADIANS
+      sweep = sweep * pi / 180.0
 
       ! STORE THE DENSITY AT SEA LEVEL
       rho0 = 2.3768921839070335E-03
