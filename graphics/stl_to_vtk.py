@@ -63,7 +63,7 @@ lines = templines[0:nlines,:,:]
 points = np.zeros((1,3))
 points[0,:] = lines[0,0,:]
 
-lineid = np.zeros((nlines,2), dytpye = int)
+lineid = np.zeros((nlines,2), dtype = int)
 
 print("Removing duplicate points for ",nlines," lines...")
 num_unique = 1 
@@ -72,13 +72,13 @@ for f in range(nlines): # loop over all the lines
     for i in range(2): # loop over all the points on each lines
         pa = lines[f,i,:]
         found = False 
-        for i in range(num_unique): # loop through the unique points
+        for j in range(num_unique): # loop through the unique points
             p1 = points[j,:]
             dx = pa[0] - p1[0]
             dy = pa[1] - p1[1]
             dz = pa[2] - p1[2]
 
-            if(abs(dx) + abs(dy) + abs(dz) < PRESCISION): #points match
+            if(abs(dx) + abs(dy) + abs(dz) < PRESCISION): # points match
                 found = True 
                 lineid[f,i] = j 
                 break 

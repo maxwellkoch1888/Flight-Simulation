@@ -13,95 +13,89 @@ with open('json/graphics.json', 'r') as file:
 # CREATE CONNECTION
 states_connection = connection(graphics["connections"]["receive_states"])
 
-# # ----------------- EXAMPLE UDP RECEIVER -----------------
-# states = [0]*14 
-
-# frame = 0
-# fps = 0.0
-
-# while(frame< 1000):
-#     time_begin = time.time()
-
-#     states = states_connection.recv()
-#     print(states)
-
-#     time_end = time.time()
-#     fps = 1/(time_end - time_begin)
-#     print("update hz = ", fps)
-
-# UNPACK THE VALUES IN JSON FILE  
-dvp   = graphics['camera']['view_plane']['distance[ft]']
-theta = graphics['camera']['view_plane']['angle[deg]']
-RAvp  = graphics['camera']['view_plane']['aspect_ratio']
-
-camera_location    = graphics['camera']['location[ft]']
-camera_orientation = graphics['camera']['orientation[deg]']
-
-altitude = graphics["ground"]["altitude[ft]"]
+altitude    = graphics["ground"]["altitude[ft]"]
 grid_number = graphics["ground"]["grid_number"]
-grid_scale = graphics["ground"]["grid_scale[ft]"]
-color = graphics["ground"]["color"]
-
-
-camera_location = np.array([[camera_location[0]], [camera_location[1]], [camera_location[2]]])
-theta              = np.radians(theta)
-camera_orientation = np.radians(camera_orientation)
-camera_orientation_quat = eul_to_quat(camera_orientation)
-
+grid_scale  = graphics["ground"]["grid_scale[ft]"]
+color       = graphics["ground"]["color"]
 
 class Camera:
-    def __init__(self, orientation:np.ndarray, location:np.ndarray, vp_distance:float, vp_angle:float, vp_aspect_ratio:float):
-        # FIND THE CAMERA LOCATION AND ORIENTATION
-        eul = orientation
-        self.location = location 
-        self.quat = eul_to_quat(eul)
-
+    def __init__(
+            self, 
+            camera_dict: dict
+            ):
+        
+        # FIND THE FOLLOW DISTANCE
+        self.type = camera_dict['type']
+        if (self.type == 'follow'):
+            self.follow_distance = camera_dict["follow_distance[ft]"]
+        else:
+            self.follow_distance = 0.0
         # FIND THE VIEW PLANE PROPERTIES
-        self.vp_distance = vp_distance
-        self.vp_angle = vp_angle
-        self.vp_aspect_ratio = vp_aspect_ratio
+        self.d_vp     = camera_dict['view_plane']['distance[ft]']
+        self.theta_vp = np.radians(camera_dict['view_plane']['angle[deg]'])
+        self.RA_vp    = camera_dict['view_plane']['aspect_ratio']
 
-        self.wvp = 2.0 * self.vp_distance * np.tan(self.vp_angle)
-        self.hvp = self.wvp / self.vp_aspect_ratio
+        self.wvp = 2.0 * self.d_vp * np.tan(self.theta_vp)
+        self.hvp = self.wvp / self.RA_vp
+
+        # FIND THE CAMERA LOCATION AND ORIENTATION
+        self.orientation = camera_dict['orientation[deg]']
+        self.location = camera_dict['location[ft]']
 
         # INITIALIZE VIEW PLANE BODY FIXED COORDINATES
-        self.vp_xv = np.array([self.vp_distance, self.vp_distance, self.vp_distance, self.vp_distance], dtype=np.float64)
-        self.vp_yv = np.array([-self.wvp, -self.wvp, self.wvp, self.wvp], dtype=np.float64) * 0.5
-        self.vp_zv = np.array([-self.hvp, self.hvp, self.hvp, -self.hvp], dtype=np.float64) * 0.5 
-        camera_fixed = np.array([self.vp_xv, self.vp_yv, self.vp_zv])
+        self.xc_vp    =  np.full(4, self.d_vp)
 
-        # INITIALIZE VIEW PLANE EARTH FIXED COORDINATES 
-        self.vp_xf = np.array([0.0, 0.0, 0.0, 0.0])
-        self.vp_yf = np.array([0.0, 0.0, 0.0, 0.0])
-        self.vp_zf = np.array([0.0, 0.0, 0.0, 0.0])
+        self.yc_vp    =  np.full(4, self.wvp) * 0.5
+        self.yc_vp[0] = -1 * self.yc_vp[0]
+        self.yc_vp[1] = -1 * self.yc_vp[1]
+
+        self.zc_vp    =  np.full(4, self.hvp) * 0.5 
+        self.zc_vp[0] = -1 * self.zc_vp[0]
+        self.zc_vp[3] = -1 * self.zc_vp[3]
+
+        self.camera_fixed = np.array([self.xc_vp, self.yc_vp, self.zc_vp])
+
+        # print(self.camera_fixed)
+
+    def set_state(
+            self, 
+            location:np.ndarray, 
+            quat:np.ndarray
+            ):
         
-        self.lines2D = np.zeros((2,2))
-
-        self.dx = self.wvp
-        self.dy = self.hvp
-
-    def set_state(self, location:np.ndarray, quat:np.ndarray):
         # SET THE LOCATION AND ORIENTATION 
         self.location = location 
         self.quat = quat 
 
-        # CALCULATE VIEW IN EARTH FIXED PLANE
+        # INITIALIZE QUATERNION VALUES
         e0 = self.quat[0]
         ex = self.quat[1]
         ey = self.quat[2]
         ez = self.quat[3]
 
-        camera_fixed = np.array([self.vp_xv, self.vp_yv, self.vp_zv])
+        self.camera_fixed = np.array([self.xc_vp, self.yc_vp, self.zc_vp])
 
+        # BUILD ROTATION MATRIX AND INVERSE
         rotation_matrix = np.array([[ex**2 + e0**2 - ey**2 - ez**2, 2*(ex*ey + ez*e0), 2*(ex*ez - ey*e0)],
                                     [2*(ex*ey - ez*e0), ey**2 + e0**2 - ex**2 - ez**2, 2*(ey*ez + ex*e0)],
                                     [2*(ex*ez + ey*e0), 2*(ey*ez - ex*e0), ez**2 + e0**2 - ex**2 - ey**2]])
+        
+        rotation_matrix_inv = np.linalg.inv(rotation_matrix)
 
-        earth_fixed = np.matmul(np.linalg.inv(rotation_matrix), camera_fixed) + camera_location            
+        # UPDATE IF FOLLOWING AIRCRAFT
+        if(self.type == 'follow'):
+            self.location = self.location + np.matmul(rotation_matrix_inv, self.follow_distance)
 
-        self.vp_xf = earth_fixed[0,:]
-        self.vp_yf = earth_fixed[1,:]
-        self.vp_zf = earth_fixed[2,:]
+        # CALCULATE VIEW IN EARTH FIXED PLANE
+        self.location = np.array(self.location)
+        earth_fixed = np.matmul(rotation_matrix_inv, self.camera_fixed) + self.location[:,np.newaxis]
+
+        self.xf_vp = earth_fixed[0,:]
+        self.yf_vp = earth_fixed[1,:]
+        self.zf_vp = earth_fixed[2,:]
+        print(self.xf_vp)
+        print(self.yf_vp)
+        print(self.zf_vp)
 
         # BUILD CENTER POINT OF PLANE
         self.P0 = np.array([[np.mean(earth_fixed[0])], [np.mean(earth_fixed[1])], [np.mean(earth_fixed[2])]]).flatten()
@@ -111,34 +105,44 @@ class Camera:
         P2 = np.array([earth_fixed[0,1], earth_fixed[1,1], earth_fixed[2,1]])
         self.nvp = np.cross(P1 - self.P0, P2 - self.P0)
             
-class Lines:
-    def __init__(self, grid_number:int, grid_scale:float, altitude:float, ax):
-        # BUILD POINTS TO BE PLOTTED 
-        nxlines = grid_number * 2 + 1 
-        self.nlines = 2*nxlines
-        self.points = np.zeros((4*nxlines,3))
-        self.lines = np.zeros((2*nxlines,2), dtype=int)
-        for i in range(nxlines):
-            self.points[2*i,   :] = [-grid_number*grid_scale, (i-grid_number)*grid_scale, -altitude]
-            self.points[2*i+1, :] = [ grid_number*grid_scale, (i-grid_number)*grid_scale, -altitude]
-            self.lines[i,0] = 2*i
-            self.lines[i,1] = 2*i+1
-
-        for i in range(nxlines):
-            self.points[2*i+2*nxlines  , :] = [(i-grid_number)*grid_scale, -grid_number*grid_scale, -altitude]
-            self.points[2*i+2*nxlines+1, :] = [(i-grid_number)*grid_scale,  grid_number*grid_scale, -altitude]
-            self.lines[i+nxlines,0] = 2*i+2*nxlines 
-            self.lines[i+nxlines,1] = 2*i+2*nxlines+1
-
-        self.npoints = len(self.points)
-        self.nlines = len(self.lines)
-
+class LinesObject:
+    def __init__(
+            self, 
+            lines_dict:dict, 
+            ax
+            ):
         # SET UP AXES FOR DRAWING
+        color = lines_dict["color"]            
         self.ax, = ax.plot([], [], marker='', ls='-', color=color)
+        
+        # BUILD GROUND PLANE IF SPECIFIED 
+        if(lines_dict["type"] == "ground_plane"): 
+            # BUILD POINTS TO BE PLOTTED 
+            nxlines = grid_number * 2 + 1 
+            self.nlines = 2*nxlines
+            self.points = np.zeros((4*nxlines,3))
+            self.lines = np.zeros((2*nxlines,2), dtype=int)
+            for i in range(nxlines):
+                self.points[2*i,   :] = [-grid_number*grid_scale, (i-grid_number)*grid_scale, -altitude]
+                self.points[2*i+1, :] = [ grid_number*grid_scale, (i-grid_number)*grid_scale, -altitude]
+                self.lines[i,0] = 2*i
+                self.lines[i,1] = 2*i+1
 
+            for i in range(nxlines):
+                self.points[2*i+2*nxlines  , :] = [(i-grid_number)*grid_scale, -grid_number*grid_scale, -altitude]
+                self.points[2*i+2*nxlines+1, :] = [(i-grid_number)*grid_scale,  grid_number*grid_scale, -altitude]
+                self.lines[i+nxlines,0] = 2*i+2*nxlines 
+                self.lines[i+nxlines,1] = 2*i+2*nxlines+1
+
+            self.npoints = len(self.points)
+            self.nlines = len(self.lines)
+
+        # BUILD FROM VTK FILE
+        if(lines_dict["type"] == "vtk"):
+            i 
+            
         # ALLOCATE SPACE FOR 3D POINTS IN EARTH FIXED COORDINATES
         self.points3D = np.zeros((self.npoints,3))
-        # self.set_state([0.0, 0.0, 0.0,], [1.0, 0.0, 0.0, 0.0])
 
         # ALLOCATE SPACE FOR 2D POINTS ON VIEWPLANE
         self.points2D = np.zeros((self.npoints,2))
@@ -187,112 +191,61 @@ class Lines:
         self.ax.set_data(self.lines2D[:,0], self.lines2D[:,1])
 
 # BUILD THE CAMERA
+camera_dict = graphics['camera']
 camera = Camera(
-            orientation= camera_orientation,
-            location=camera_location, 
-            vp_distance=dvp,
-            vp_angle=theta,
-            vp_aspect_ratio=RAvp
+            camera_dict=camera_dict
             )
-
-quat_init = eul_to_quat(camera_orientation)
-
-camera.set_state(
-    location=camera_location, 
-    quat=quat_init
-    )
+quat = eul_to_quat(camera.orientation)
+camera.set_state(location=camera.location, quat=quat)
 
 # PLOT THE FIGURE
-fig = plt.figure(figsize=(camera.vp_aspect_ratio*5.0,5.0))
+fig = plt.figure(figsize=(camera.RA_vp*5.0,5.0))
 ax = fig.add_subplot(111)
 plt.subplots_adjust(top=1.0, bottom=0.0, left=0.0, right=1.0)
 plt.axis('off')
-ax.axes.set_xlim(camera.vp_yv[0], camera.vp_yv[2])
-ax.axes.set_ylim(-camera.vp_zv[1], -camera.vp_zv[0])
+ax.axes.set_xlim(camera.yc_vp[0], camera.yc_vp[2])
+ax.axes.set_ylim(-camera.zc_vp[1], -camera.zc_vp[0])
 ax.axes.xaxis.set_ticklabels([])
 ax.axes.yaxis.set_ticklabels([])
 ax.set_xticks([])
 ax.set_yticks([])
 ax.axes.set_aspect('equal')
 fig.canvas.draw()
-# ground.plot()
-# plt.show()
-plt.show(block=False)
 
-# BUILD THE LINES
-ground = Lines(
-            grid_number=grid_number,
-            grid_scale=grid_scale,
-            altitude=altitude,
-            ax=ax
-            )
+# BUILD THE GROUND
+ground_dict = graphics['ground']
+ground = LinesObject(ground_dict, ax)
+ground.plot(camera)
+plt.show()
+# plt.show(block=False)
 
+# # BUILD THE LINES
+# ground = Lines(
+#             grid_number=grid_number,
+#             grid_scale=grid_scale,
+#             altitude=altitude,
+#             ax=ax
+#             )
 
-# # PRINT RESULTS
-# print('------------------------------------ Results ------------------------------------')
-# print('11.2.1:')
-# print(f'w_vp:    {camera.wvp:.11f} ft')
-# print(f'h_vp:    {camera.hvp:.11f} ft')
-# print('')
-# np.set_printoptions(precision=2, suppress=True)
-# print(f'x_c_vp:  {camera.vp_xv} ft')
-# np.set_printoptions(precision=11, suppress=True)
-# print(f'y_c_vp:  {camera.vp_yv} ft')
-# np.set_printoptions(precision=12, suppress=True)
-# print(f'z_c_vp:  {camera.vp_zv} ft')
-# print('')
-# print('11.2.1:')
-# np.set_printoptions(precision=10, suppress=True)
-# print(f'x_f_vp:  {camera.vp_xf}')
-# np.set_printoptions(precision=11, suppress=True)
-# print(f'y_f_vp:  {camera.vp_yf}')
-# print(f'z_f_vp:  {camera.vp_zf}')
-# print('')
-# print('11.3.1:')
-# print(f'P0:      {camera.P0}')
-# print(f'n_vp:    {camera.nvp}')
-# print(f'P0 - PC: {(camera.P0 - camera_location.flatten())}')
-# print('lca: ')
-# print(ground.lca)
-# print('gamma: ')
-# print(ground.gamma)
-# np.set_printoptions(precision=12, suppress=True)
-# print('x_vp: ')
-# print(ground.x_vp)
-# print('y_vp: ')
-# print(ground.y_vp)
+# location = camera.location 
+# quat = camera.quat 
 
-location = camera.location 
-quat = camera.quat 
+# frame = 0
+# fps = 0.0
+# states = [0]*14 
 
-# # EXAMPLE SIMULATION
-# while(location[0] < 0):
+# while(frame< 1000):
 #     time_begin = time.time()
+#     states = states_connection.recv()
+#     location = states[7:10]
+#     location = np.array(states[7:10])
+#     location[2] = -location[2]
+#     quat = np.array(states[10:14])
+#     # print(location)
 #     camera.set_state(location=location, quat=quat)
 #     ground.plot(camera=camera)
 #     fig.canvas.draw()
 #     fig.canvas.flush_events()
-#     location[0] += 0.01
 #     time_end = time.time()
 #     fps = 1/(time_end - time_begin)
 #     # print('graphics rate [hz]:', fps)
-
-frame = 0
-fps = 0.0
-states = [0]*14 
-
-while(frame< 1000):
-    time_begin = time.time()
-    states = states_connection.recv()
-    location = states[7:10]
-    location = np.array(states[7:10])
-    location[2] = -location[2]
-    quat = np.array(states[10:14])
-    # print(location)
-    camera.set_state(location=location, quat=quat)
-    ground.plot(camera=camera)
-    fig.canvas.draw()
-    fig.canvas.flush_events()
-    time_end = time.time()
-    fps = 1/(time_end - time_begin)
-    # print('graphics rate [hz]:', fps)

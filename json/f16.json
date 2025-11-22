@@ -48,6 +48,8 @@
             "Ta" : 0.84
         },
         "aerodynamics" : {
+            "compressibility": true,
+            "sweep[deg]": 40, 
             "reference" : {
                 "area[ft^2]" : 300.0,
                 "longitudinal_length[ft]" : 11.32,
