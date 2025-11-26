@@ -221,6 +221,8 @@ module f16_m
       real :: alpha_hat, beta_hat
       real :: delta_a, delta_e, delta_r
       real :: T, throttle
+      real :: CL_ss, CD_ss, Cm_ss, CL_s, CD_s, Cm_s 
+      real :: sigma_D, sigma_L, sigma_m 
         
       ! BUILD THE ATMOSPHERE 
       geometric_altitude_ft = -state(9)
@@ -269,7 +271,7 @@ module f16_m
       ! STALL MODEL FOR FORCES
       CL_s = 2 * (sin(alpha))**2 * cos(alpha) * (alpha / abs(alpha))
       CD_s = 2 * (sin(alpha))**3
-      simga_L = calc_sigma(7.0, 0.0, 43.0, alpha)
+      sigma_L = calc_sigma(7.0, 0.0, 43.0, alpha)
       sigma_D = calc_sigma(7.0, 5.0, 45.0, alpha)
       
       CL = CL_ss * (1 - sigma_L) + CL_s * sigma_L 
@@ -277,13 +279,14 @@ module f16_m
 
       ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
       ! CHAPTER 3.10 IN BOOK, PRANDTL-GLAUERT CORRECTION
-      if (compressibility == .true.) then 
+      if (compressibility) then 
         CM1 = 2.13/ (sweep + 0.15)**2
         CM2 = 15.35*sweep**2 - 19.64*sweep +16.86
+        mach_num = V / sos_ft_per_sec
 
-        CL = CL / (sqrt(1-sos_ft_per_sec**2))
-        CS = CS / (sqrt(1-sos_ft_per_sec**2))
-        CD = CD * (1.0 + CM1 * sos_ft_per_sec**CM2)
+        CL = CL / (sqrt(1-mach_num**2))
+        CS = CS / (sqrt(1-mach_num**2))
+        CD = CD * (1.0 + CM1 * mach_num**CM2)
       end if 
 
       L =   CL * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
@@ -326,10 +329,10 @@ module f16_m
       Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
 
       ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
-      if (compressibility == .true.) then 
-        cl_pitch = cl_pitch / (sqrt(1-sos_ft_per_sec**2))
-        Cm       = Cm       / (sqrt(1-sos_ft_per_sec**2))
-        Cn       = Cn       / (sqrt(1-sos_ft_per_sec**2))
+      if (compressibility) then 
+        cl_pitch = cl_pitch / (sqrt(1-mach_num**2))
+        Cm       = Cm       / (sqrt(1-mach_num**2))
+        Cn       = Cn       / (sqrt(1-mach_num**2))
       end if 
       
       FM(4) = Cl_pitch * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
@@ -369,13 +372,13 @@ module f16_m
 
   !=========================
   ! Calculate Sigma
-    function calc_sigma(lambda_b, alpha_0, alpha_s, alpha) return(sigma)
+    function calc_sigma(lambda_b, alpha_0, alpha_s, alpha) result(sigma)
       implicit none
       real, intent(in) :: lambda_b, alpha_0, alpha_s, alpha
       real :: sigma 
 
       sigma = (1 + exp(-lambda_b * (alpha - alpha_0 - alpha_s)) + exp(lambda_b * (alpha - alpha_0 + alpha_s))) &
-               / ((1+exp(-lambda_b * (alpha - alpha_0 - alpha_s)) * (1 + exp(lambda_b * (alpha - alpha_0 + alpha_s)))))
+               / ((1+exp(-lambda_b * (alpha - alpha_0 - alpha_s))) * (1 + exp(lambda_b * (alpha - alpha_0 + alpha_s))))
 
     end function calc_sigma
 
