@@ -203,7 +203,7 @@ module f16_m
         write(io_unit,*) ''
       end if
 
-      end function differential_equations
+    end function differential_equations
 
   !=========================
   ! Aerodynamic Forces and Moments for f16
@@ -239,8 +239,6 @@ module f16_m
       beta_f = atan2(state(2) , state(1))
 
       ! CALCULATE ALPHA_HAT USING EQN 3.4.20
-      ! alpha_hat = dalpha_dtime * longitudinal_length / (2 * V)
-      ! beta_ hat = dbeta_dtime * lateral_length / (2 * V)
       alpha_hat = 0.0
       beta_hat = 0.0
 
@@ -259,14 +257,23 @@ module f16_m
       delta_r = controls(3)
       throttle = controls(4)
 
-      ! CALCULATE THE LIFT, DRAG, AND SIDE COEFFICIENTS
+      ! CALCULATE THE LIFT, DRAG, AND SIDE FORCE COEFFICIENTS
       CL1 =  CL0 + CL_alpha * alpha
-      CL  = CL1 + CL_qbar * qbar + CL_alphahat * alpha_hat + CL_elevator * delta_e
+      CL_ss  = CL1 + CL_qbar * qbar + CL_alphahat * alpha_hat + CL_elevator * delta_e
       CS  = CS_beta * beta + (CS_pbar + CS_alpha_pbar * alpha) * pbar + CS_rbar * rbar &
            + CS_aileron * delta_a + CS_rudder * delta_r
-      CD  =  CD_L0 + CD_L1 * CL1 + CD_L1_L1 * CL1 **2 + CD_CS_CS * CS **2 &
+      CD_ss  =  CD_L0 + CD_L1 * CL1 + CD_L1_L1 * CL1 **2 + CD_CS_CS * CS **2 &
             + (CD_qbar + CD_alpha_qbar * alpha) * qbar + (CD_elevator + CD_alpha_elevator * alpha) &
             * delta_e + CD_elevator_elevator * delta_e ** 2
+
+      ! STALL MODEL FOR FORCES
+      CL_s = 2 * (sin(alpha))**2 * cos(alpha) * (alpha / abs(alpha))
+      CD_s = 2 * (sin(alpha))**3
+      simga_L = calc_sigma(7.0, 0.0, 43.0, alpha)
+      sigma_D = calc_sigma(7.0, 5.0, 45.0, alpha)
+      
+      CL = CL_ss * (1 - sigma_L) + CL_s * sigma_L 
+      CD = CD_ss * (1 - sigma_D) + CD_s * sigma_D 
 
       ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
       ! CHAPTER 3.10 IN BOOK, PRANDTL-GLAUERT CORRECTION
@@ -308,9 +315,15 @@ module f16_m
       ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
       Cl_pitch = Cl_beta * beta + Cl_pbar * pbar + (Cl_rbar + Cl_alpha_rbar * alpha) * rbar &
                  + Cl_aileron * delta_a + Cl_rudder * delta_r  ! roll moment
-      Cm =       Cm_0 + Cm_alpha * alpha + Cm_qbar * qbar + Cm_alphahat * alpha_hat + Cm_elevator * delta_e ! pitch moment
+      Cm_ss =    Cm_0 + Cm_alpha * alpha + Cm_qbar * qbar + Cm_alphahat * alpha_hat + Cm_elevator * delta_e ! pitch moment
       Cn =       Cn_beta * beta + (Cn_pbar + Cn_alpha_pbar * alpha) * pbar + Cn_rbar * rbar &
                  + (Cn_aileron + Cn_alpha_aileron * alpha) * delta_a + Cn_rudder * delta_r ! yaw moment
+
+      ! STALL MODEL FOR MOMENTS
+      Cm_s = -0.6184 * (sin(alpha))**2 * (alpha / abs(alpha))
+      sigma_m = calc_sigma(6.0, 20.0, 40.0, alpha)
+
+      Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
 
       ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
       if (compressibility == .true.) then 
@@ -353,6 +366,18 @@ module f16_m
       end if 
 
     end subroutine pseudo_aero
+
+  !=========================
+  ! Calculate Sigma
+    function calc_sigma(lambda_b, alpha_0, alpha_s, alpha) return(sigma)
+      implicit none
+      real, intent(in) :: lambda_b, alpha_0, alpha_s, alpha
+      real :: sigma 
+
+      sigma = (1 + exp(-lambda_b * (alpha - alpha_0 - alpha_s)) + exp(lambda_b * (alpha - alpha_0 + alpha_s))) &
+               / ((1+exp(-lambda_b * (alpha - alpha_0 - alpha_s)) * (1 + exp(lambda_b * (alpha - alpha_0 + alpha_s)))))
+
+    end function calc_sigma
 
   !=========================
   ! Mass and Inertia
