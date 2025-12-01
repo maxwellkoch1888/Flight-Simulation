@@ -55,6 +55,25 @@
                 "longitudinal_length[ft]" : 11.32,
                 "lateral_length[ft]" : 30.0
             },
+            "stall": {
+                "stall_flag": true,
+                "CL": {
+                    "lambda_b": 7.0,
+                    "alpha_0": 0.0, 
+                    "alpha_s": 43.0
+                },
+                "CD": {
+                    "lambda_b": 7.0,
+                    "alpha_0": 5.0, 
+                    "alpha_s": 45.0                   
+                },
+                "Cm": {
+                    "lambda_b": 6.0,
+                    "alpha_0": 20.0, 
+                    "alpha_s": 40.0,
+                    "min": -0.6184
+                }
+            },
             "coefficients" : {
                 "CL" : {
                     "0" : 0.0535,

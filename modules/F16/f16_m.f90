@@ -27,14 +27,16 @@ module f16_m
     integer :: io_unit
 
     ! DEFINE AERODYNAMIC PROPERTIES
-    real:: planform_area, longitudinal_length, lateral_length, sweep
-    real:: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
-    real:: CS_beta, CS_pbar, CS_alpha_pbar, CS_rbar, CS_aileron, CS_rudder
-    real:: CD_L0, CD_L1, CD_L1_L1, CD_CS_CS, CD_qbar, CD_alpha_qbar, CD_elevator, CD_alpha_elevator, CD_elevator_elevator
-    real:: Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
-    real:: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
-    real:: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
-    logical :: compressibility, rk4_verbose, print_states
+    real :: planform_area, longitudinal_length, lateral_length, sweep
+    real :: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
+    real :: CS_beta, CS_pbar, CS_alpha_pbar, CS_rbar, CS_aileron, CS_rudder
+    real :: CD_L0, CD_L1, CD_L1_L1, CD_CS_CS, CD_qbar, CD_alpha_qbar, CD_elevator, CD_alpha_elevator, CD_elevator_elevator
+    real :: Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
+    real :: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
+    real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
+    real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
+    real :: Cm_alpha_0, Cm_alpha_s, Cm_min
+    logical :: compressibility, rk4_verbose, print_states, stall 
 
     ! ADD VARIABLES FOR TRIM ALGORITHM
     character(:), allocatable :: sim_type
@@ -269,13 +271,15 @@ module f16_m
             * delta_e + CD_elevator_elevator * delta_e ** 2
 
       ! STALL MODEL FOR FORCES
-      CL_s = 2 * (sin(alpha))**2 * cos(alpha) * (alpha / abs(alpha))
-      CD_s = 2 * (sin(alpha))**3
-      sigma_L = calc_sigma(7.0, 0.0, 43.0, alpha)
-      sigma_D = calc_sigma(7.0, 5.0, 45.0, alpha)
-      
-      CL = CL_ss * (1 - sigma_L) + CL_s * sigma_L 
-      CD = CD_ss * (1 - sigma_D) + CD_s * sigma_D 
+      if (stall) then 
+        CL_s = 2 * (sin(alpha))**2 * cos(alpha) * (alpha / abs(alpha))
+        CD_s = 2 * (sin(alpha))**3
+        sigma_L = calc_sigma(CL_lambda_b, CL_alpha_0, CL_alpha_s, alpha)
+        sigma_D = calc_sigma(CD_lambda_b, CD_alpha_0, CD_alpha_s, alpha)
+        
+        CL = CL_ss * (1 - sigma_L) + CL_s * sigma_L 
+        CD = CD_ss * (1 - sigma_D) + CD_s * sigma_D 
+      end if 
 
       ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
       ! CHAPTER 3.10 IN BOOK, PRANDTL-GLAUERT CORRECTION
@@ -323,10 +327,12 @@ module f16_m
                  + (Cn_aileron + Cn_alpha_aileron * alpha) * delta_a + Cn_rudder * delta_r ! yaw moment
 
       ! STALL MODEL FOR MOMENTS
-      Cm_s = -0.6184 * (sin(alpha))**2 * (alpha / abs(alpha))
-      sigma_m = calc_sigma(6.0, 20.0, 40.0, alpha)
+      if (stall) then 
+        Cm_s = CM_min * (sin(alpha))**2 * (alpha / abs(alpha))
+        sigma_m = calc_sigma(Cm_lambda_b, Cm_alpha_0, Cm_alpha_s, alpha)
 
-      Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
+        Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
+      end if
 
       ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
       if (compressibility) then 
@@ -731,7 +737,8 @@ module f16_m
         write(io_unit,'(A30,ES25.13E3)') '       throttle[deg]       :', controls(4)
 
       end if 
-      end function trim_algorithm
+    end function trim_algorithm
+
   !=========================
   ! Newton's Method Solver to find G (alpha, beta, delta_a, delta_e, delta_r, throttle)
     subroutine newtons_method(V_mag, height, euler, angular_rates, G)
@@ -938,6 +945,18 @@ module f16_m
       call jsonx_get(j_main, 'vehicle.aerodynamics.reference.area[ft^2]',              planform_area)
       call jsonx_get(j_main, 'vehicle.aerodynamics.reference.longitudinal_length[ft]', longitudinal_length)
       call jsonx_get(j_main, 'vehicle.aerodynamics.reference.lateral_length[ft]',      lateral_length)
+
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.stall_flag',  stall)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CL.lambda_b', CL_lambda_b)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CL.alpha_0',  CL_alpha_0)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CL.alpha_s',  CL_alpha_s)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CD.lambda_b', CD_lambda_b)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CD.alpha_0',  CD_alpha_0)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CD.alpha_s',  CD_alpha_s)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.Cm.lambda_b', Cm_lambda_b)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.Cm.alpha_0',  Cm_alpha_0)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.Cm.alpha_s',  Cm_alpha_s)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.Cm.min',      Cm_min)
 
       call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.0',        CL0)
       call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.alpha',    CL_alpha)
