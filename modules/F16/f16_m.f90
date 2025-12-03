@@ -272,7 +272,7 @@ module f16_m
 
       ! STALL MODEL FOR FORCES
       if (stall) then 
-        CL_s = 2 * (sin(alpha))**2 * cos(alpha) * (alpha / abs(alpha))
+        CL_s = 2 * (sin(alpha))**2 * cos(alpha)
         CD_s = 2 * (sin(alpha))**3
         sigma_L = calc_sigma(CL_lambda_b, CL_alpha_0, CL_alpha_s, alpha)
         sigma_D = calc_sigma(CD_lambda_b, CD_alpha_0, CD_alpha_s, alpha)
@@ -288,8 +288,8 @@ module f16_m
         CM2 = 15.35*sweep**2 - 19.64*sweep +16.86
         mach_num = V / sos_ft_per_sec
 
-        CL = CL / (sqrt(1-mach_num**2))
-        CS = CS / (sqrt(1-mach_num**2))
+        CL = CL / (sqrt(1-mach_num**2 + 1e-12))
+        CS = CS / (sqrt(1-mach_num**2 + 1e-12))
         CD = CD * (1.0 + CM1 * mach_num**CM2)
       end if 
 
@@ -328,7 +328,7 @@ module f16_m
 
       ! STALL MODEL FOR MOMENTS
       if (stall) then 
-        Cm_s = CM_min * (sin(alpha))**2 * (alpha / abs(alpha))
+        Cm_s = CM_min * (sin(alpha))**2
         sigma_m = calc_sigma(Cm_lambda_b, Cm_alpha_0, Cm_alpha_s, alpha)
 
         Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
@@ -336,9 +336,9 @@ module f16_m
 
       ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
       if (compressibility) then 
-        cl_pitch = cl_pitch / (sqrt(1-mach_num**2))
-        Cm       = Cm       / (sqrt(1-mach_num**2))
-        Cn       = Cn       / (sqrt(1-mach_num**2))
+        cl_pitch = cl_pitch / (sqrt(1-mach_num**2 + 1e-12))
+        Cm       = Cm       / (sqrt(1-mach_num**2 + 1e-12))
+        Cn       = Cn       / (sqrt(1-mach_num**2 + 1e-12))
       end if 
       
       FM(4) = Cl_pitch * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
