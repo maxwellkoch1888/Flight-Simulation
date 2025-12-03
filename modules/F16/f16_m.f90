@@ -36,7 +36,7 @@ module f16_m
     real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
     real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
     real :: Cm_alpha_0, Cm_alpha_s, Cm_min
-    logical :: compressibility, rk4_verbose, print_states, stall 
+    logical :: compressibility, rk4_verbose, print_states, stall, print_stall
 
     ! ADD VARIABLES FOR TRIM ALGORITHM
     character(:), allocatable :: sim_type
@@ -332,6 +332,9 @@ module f16_m
         sigma_m = calc_sigma(Cm_lambda_b, Cm_alpha_0, Cm_alpha_s, alpha)
 
         Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
+        if (print_stall) then 
+          write(io_unit, *) alpha*180.0/pi, CL, CD, Cm
+        end if 
       end if
 
       ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
@@ -375,6 +378,30 @@ module f16_m
       end if 
 
     end subroutine pseudo_aero
+
+  !=========================
+  ! Test Stall Function
+    subroutine test_stall()
+      real :: state(13), alpha_deg, V_mag, alpha, beta
+      
+      ! INITIALIZE THE RANGE OF ANGLE OF ATTACK/ STATE
+      alpha_deg = -180.0
+      beta = 0.0
+      V_mag = 350
+      state(1:13) = 0.0
+      write(io_unit,*) 'alpha[deg]        CL        CD        Cm'
+
+      do while (alpha_deg < 180.0)
+        alpha = alpha_deg * pi / 180.0
+
+        ! UPDATE STATE VELOCITIES
+        state(1) = V_mag * cos(alpha)* cos(beta) 
+        state(2) = V_mag * sin(beta) 
+        state(3) = V_mag * sin(alpha) * cos(beta)
+
+        call pseudo_aero(state)
+      end do 
+    end subroutine
 
   !=========================
   ! Calculate Sigma
@@ -947,6 +974,7 @@ module f16_m
       call jsonx_get(j_main, 'vehicle.aerodynamics.reference.lateral_length[ft]',      lateral_length)
 
       call jsonx_get(j_main, 'vehicle.aerodynamics.stall.stall_flag',  stall)
+      call jsonx_get(j_main, 'vehicle.aerodynamics.stall.print_stall', print_stall)
       call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CL.lambda_b', CL_lambda_b)
       call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CL.alpha_0',  CL_alpha_0)
       call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CL.alpha_s',  CL_alpha_s)
@@ -1077,9 +1105,14 @@ module f16_m
       call jsonx_get(j_connections, 'graphics', j_graphics)
       call graphics%init(j_graphics)
 
-      ! TEST SECTION
+      ! ADD CONTROLS
       call jsonx_get(j_connections, 'user_controls', j_user_controls)
       call user_controls%init(j_user_controls)
+
+      ! TEST STALL IF SPECIFIED 
+      if (print_stall) then 
+        call test_stall()
+      end if 
 
     end subroutine init
 
