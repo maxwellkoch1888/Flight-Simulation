@@ -30,7 +30,7 @@
         }
     },
     "vehicle" : {
-        "aero_ref_location[ft]" : [-1.0, 0.0, 0.0], 
+        "_aero_ref_location[ft]" : [-1.0, 0.0, 0.0], 
         "mass" : {
             "weight[lbf]" : 20500.0,
             "Ixx[slug-ft^2]" : 9496.0,
@@ -48,7 +48,7 @@
             "Ta" : 0.84
         },
         "aerodynamics" : {
-            "compressibility": true,
+            "compressibility": false,
             "sweep[deg]": 40, 
             "reference" : {
                 "area[ft^2]" : 300.0,
@@ -57,7 +57,7 @@
             },
             "stall": {
                 "stall_flag": true,
-                "print_stall": true, 
+                "test_stall": true, 
                 "CL": {
                     "lambda_b": 7.0,
                     "alpha_0": 0.0, 
