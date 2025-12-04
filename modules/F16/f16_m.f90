@@ -25,6 +25,7 @@ module f16_m
     real :: T0, Ta
     real, allocatable :: aero_ref_location(:)
     integer :: io_unit
+    real :: init_airspeed 
 
     ! DEFINE AERODYNAMIC PROPERTIES
     real :: planform_area, longitudinal_length, lateral_length, sweep
@@ -216,7 +217,7 @@ module f16_m
       real :: Re, geometric_altitude_ft, geopotential_altitude_ft
       real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
       real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
-      real :: V, Uc(3)
+      real :: V
       real :: Cl_pitch0, alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
       real :: CL, CL1, CD, CS, L, D, S, Cl_pitch, Cm, Cn
       real :: CM1, CM2, mach_num, gamma, R
@@ -225,7 +226,7 @@ module f16_m
       real :: delta_a, delta_e, delta_r
       real :: T, throttle
       real :: CL_ss, CD_ss, Cm_ss, CL_s, CD_s, Cm_s 
-      real :: sigma_D, sigma_L, sigma_m 
+      real :: sigma_D, sigma_L, sigma_m, sign_a
         
       ! BUILD THE ATMOSPHERE 
       geometric_altitude_ft = -state(9)
@@ -236,12 +237,16 @@ module f16_m
 
       ! CALCULATE VELOCITY UNIT VECTOR
       V =  (state(1)**2 + state(2)**2 + state(3)**2)**0.5
-      Uc = (/state(1:3)/) / V
 
       ! CALCULATE ALPHA AND BETA 3.4.4 and 3.4.5
       alpha =  atan2(state(3) , state(1))
       beta =   asin(state(2) / V)
       beta_f = atan2(state(2) , state(1))
+
+      ca = cos(alpha)
+      cb = cos(beta)
+      sa = sin(alpha)
+      sb = sin(beta)
 
       ! CALCULATE ALPHA_HAT USING EQN 3.4.20
       alpha_hat = 0.0
@@ -271,19 +276,35 @@ module f16_m
             + (CD_qbar + CD_alpha_qbar * alpha) * qbar + (CD_elevator + CD_alpha_elevator * alpha) &
             * delta_e + CD_elevator_elevator * delta_e ** 2
 
+      ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
+      Cl_pitch = Cl_beta * beta + Cl_pbar * pbar + (Cl_rbar + Cl_alpha_rbar * alpha) * rbar &
+                 + Cl_aileron * delta_a + Cl_rudder * delta_r  ! roll moment
+      Cm_ss =    Cm_0 + Cm_alpha * alpha + Cm_qbar * qbar + Cm_alphahat * alpha_hat + Cm_elevator * delta_e ! pitch moment
+      Cn =       Cn_beta * beta + (Cn_pbar + Cn_alpha_pbar * alpha) * pbar + Cn_rbar * rbar &
+                 + (Cn_aileron + Cn_alpha_aileron * alpha) * delta_a + Cn_rudder * delta_r ! yaw moment
+
       ! STALL MODEL FOR FORCES
       if (stall) then 
-        CL_s = 2 * (sin(alpha))**2 * cos(alpha)
-        CD_s = 2 * (sin(alpha))**3
+        sign_a = sign(1.0,alpha)
+        CL_s = 2 * sign_a * sa**2 * ca 
+        CD_s = 2 * (sin(abs(alpha)))**3
         sigma_L = calc_sigma(CL_lambda_b, CL_alpha_0, CL_alpha_s, alpha)
         sigma_D = calc_sigma(CD_lambda_b, CD_alpha_0, CD_alpha_s, alpha)
         
         CL = CL_ss * (1 - sigma_L) + CL_s * sigma_L 
         CD = CD_ss * (1 - sigma_D) + CD_s * sigma_D 
+
+        Cm_s = CM_min * sa**2 * sign_a
+        sigma_m = calc_sigma(Cm_lambda_b, Cm_alpha_0, Cm_alpha_s, alpha)
+        Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
+
+        ! if (print_stall) then 
+        !   write(io_unit, *) alpha*180.0/pi, CL, CD, Cm, CL_s, CL_ss, CD_s, CD_ss, Cm_s, Cm_ss
+        !   ! write(io_unit, *) alpha*180.0/pi, CL, CD, Cm
+        ! end if         
       end if 
 
-      ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
-      ! CHAPTER 3.10 IN BOOK, PRANDTL-GLAUERT CORRECTION
+      ! COMPRESSIBILIITY MODEL, USING PRANDTL-GLAUERT CORRECTION
       if (compressibility) then 
         CM1 = 2.13/ (sweep + 0.15)**2
         CM2 = 15.35*sweep**2 - 19.64*sweep +16.86
@@ -292,63 +313,36 @@ module f16_m
         CL = CL / (sqrt(1-mach_num**2 + 1e-12))
         CS = CS / (sqrt(1-mach_num**2 + 1e-12))
         CD = CD * (1.0 + CM1 * mach_num**CM2)
+
+        cl_pitch = cl_pitch / (sqrt(1-mach_num**2 + 1e-12))
+        Cm       = Cm       / (sqrt(1-mach_num**2 + 1e-12))
+        Cn       = Cn       / (sqrt(1-mach_num**2 + 1e-12))        
       end if 
 
       L =   CL * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
       S =   CS * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
       D =   CD * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
 
-      ca = cos(alpha)
-      cb = cos(beta)
-      sa = sin(alpha)
-      sb = sin(beta)
-
       ! TABLE 3.4.4
       FM(1) = (D*ca*cb + S*ca*sb - L*sa) * (-1.0)
       FM(2) = (S*cb - D*sb)
       FM(3) = (D*sa*cb + S*sa*sb + L*ca) * (-1.0)
 
+      FM(4) = Cl_pitch * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
+      FM(5) = Cm       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * longitudinal_length)
+      FM(6) = Cn       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
+
       ! ADD THE ENGINE THRUST
       if (throttle < 0.0) then
-        throttle = 0.0
-      else if (throttle > 1.0) then
-        throttle = 1.0
-      else 
-        throttle = throttle 
+          throttle = 0.0
+        else if (throttle > 1.0) then
+          throttle = 1.0
+        else 
+          throttle = throttle 
       end if 
 
       T = throttle * T0 * (density_slugs_per_ft3/rho0) ** Ta
       FM(1) = FM(1) + T
-
-      ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
-      Cl_pitch = Cl_beta * beta + Cl_pbar * pbar + (Cl_rbar + Cl_alpha_rbar * alpha) * rbar &
-                 + Cl_aileron * delta_a + Cl_rudder * delta_r  ! roll moment
-      Cm_ss =    Cm_0 + Cm_alpha * alpha + Cm_qbar * qbar + Cm_alphahat * alpha_hat + Cm_elevator * delta_e ! pitch moment
-      Cn =       Cn_beta * beta + (Cn_pbar + Cn_alpha_pbar * alpha) * pbar + Cn_rbar * rbar &
-                 + (Cn_aileron + Cn_alpha_aileron * alpha) * delta_a + Cn_rudder * delta_r ! yaw moment
-
-      ! STALL MODEL FOR MOMENTS
-      if (stall) then 
-        Cm_s = CM_min * (sin(alpha))**2
-        sigma_m = calc_sigma(Cm_lambda_b, Cm_alpha_0, Cm_alpha_s, alpha)
-        
-        Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
-        if (print_stall) then 
-          write(io_unit, *) alpha*180.0/pi, CL_s, CL_ss, CL, CD_s, CD_ss, CD, Cm_s, Cm_ss, Cm
-          ! write(io_unit, *) alpha*180.0/pi, CL, CD, Cm
-        end if 
-      end if
-
-      ! ACCOUNT FOR COMPRESSIBILITY IF SPECIFIED
-      if (compressibility) then 
-        cl_pitch = cl_pitch / (sqrt(1-mach_num**2 + 1e-12))
-        Cm       = Cm       / (sqrt(1-mach_num**2 + 1e-12))
-        Cn       = Cn       / (sqrt(1-mach_num**2 + 1e-12))
-      end if 
-      
-      FM(4) = Cl_pitch * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
-      FM(5) = Cm       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * longitudinal_length)
-      FM(6) = Cn       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
 
       ! SHIFT CG LOCATION
       FM(4:6) = FM(4:6) + cross_product(aero_ref_location, FM(1:3))
@@ -383,40 +377,59 @@ module f16_m
 
   !=========================
   ! Check stall blending funtion
-    subroutine check_stall()
-      real :: state(13), alpha_deg, V_mag, alpha, beta
-      print_stall = .true.
-      
-      ! INITIALIZE THE RANGE OF ANGLE OF ATTACK/ STATE
-      alpha_deg = -180.0
-      beta = 0.0
-      V_mag = 350.0
-      state(1:13) = 0.0
-      if (print_stall) then
-        write(io_unit,*) '  CL_lambda_b               CL_alpha_0[deg]          CL_alpha_s[deg] ' 
-        write(io_unit,*) CL_lambda_b, CL_alpha_0 * 180.0 / pi, CL_alpha_s * 180.0 / pi
-        write(io_unit,*) '  CD_lambda_b               CD_alpha_0[deg]          CD_alpha_s[deg] ' 
-        write(io_unit,*) CD_lambda_b, CD_alpha_0 * 180.0 / pi, CD_alpha_s * 180.0 / pi
-        write(io_unit,*) '  Cm_lambda_b               Cm_alpha_0[deg]          Cm_alpha_s[deg] ' 
-        write(io_unit,*) Cm_lambda_b, Cm_alpha_0 * 180.0 / pi, Cm_alpha_s * 180.0 / pi               
-        write(io_unit,*) '  alpha[deg]                CL_s                      CL_ss                     CL                        &
-        CD_s                      CD_ss                     CD                       &
-        Cm_s                      Cm_ss                     Cm'
-        ! write(io_unit,*) '  alpha[deg]                CL                        CD                        Cm'  
-      end if 
+    subroutine check_stall(state) 
+      implicit none 
+      integer :: i 
+      real :: state(13)
+      real :: alpha, beta, states(13), N, Y, A
+      real :: ca, cb, sa, sb
+      real :: CL, CD, Cm
+      real :: const, geometric_altitude_ft, geopotential_altitude_ft, temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
+
+      geometric_altitude_ft = -initial_state(9)
+      call std_atm_English(&
+        geometric_altitude_ft, geopotential_altitude_ft,     & 
+        temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, & 
+        dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
+
+      const = (0.5 * density_slugs_per_ft3 * init_airspeed**2 * planform_area)
+      write(io_unit,*) 'altitude', geometric_altitude_ft
+      write(io_unit,*) 'rho', density_slugs_per_ft3 
+      write(io_unit,*) 'airspeed', init_airspeed 
+      write(io_unit,*) 'planform area', planform_area
+
+      controls = 0.0 
+      states = 0.0 
+
+      write(io_unit,*) '  alpha[deg]                CL                        CD                        Cm'  
+      do i=-180, 180, 1 
+        alpha = real(i) * pi / 180.0
+        beta = 0.0
+
+        ca = cos(alpha) 
+        cb = cos(beta) 
+        sa = sin(alpha) 
+        sb = sin(beta) 
+
+        states(1) = init_airspeed *ca * cb 
+        states(2) = init_airspeed * sb 
+        states(3) = init_airspeed * sa * cb 
+        states(9) = initial_state(9)
+
+        call pseudo_aero(states) 
+        A = -FM(1) 
+        Y =  FM(2)
+        N = -FM(3) 
         
-      do while (alpha_deg <= -170.0)
-        alpha = alpha_deg * pi / 180.0
+        CL = N * ca - A* sa
+        CD = A * ca * cb - Y * sb + N * sa * cb 
+        Cm = FM(5) 
 
-        ! UPDATE STATE VELOCITIES
-        state(1) = V_mag * cos(alpha)* cos(beta) 
-        state(2) = V_mag * sin(beta) 
-        state(3) = V_mag * sin(alpha) * cos(beta)
-
-        call pseudo_aero(state)
-        alpha_deg = alpha_deg + 1.0
+        CL = CL / const 
+        CD = CD / const 
+        Cm = Cm / const / longitudinal_length
+        write(io_unit,*) alpha*180.0/pi, CL, CD, Cm
       end do 
-      print_stall = .false.
     end subroutine
 
   !=========================
@@ -424,10 +437,11 @@ module f16_m
     function calc_sigma(lambda_b, alpha_0, alpha_s, alpha) result(sigma)
       implicit none
       real, intent(in) :: lambda_b, alpha_0, alpha_s, alpha
-      real :: sigma 
+      real :: sigma, neg, pos
 
-      sigma = (1.0 + exp(-lambda_b*(alpha - alpha_0 - alpha_s)) + exp(lambda_b*(alpha - alpha_0 + alpha_s))) / &
-              ((1.0+exp(-lambda_b*(alpha - alpha_0 - alpha_s))) * (1.0 + exp(lambda_b*(alpha - alpha_0 + alpha_s))))
+      pos = exp( lambda_b * (alpha - alpha_0 + alpha_s))
+      neg = exp(-lambda_b * (alpha - alpha_0 - alpha_s))
+      sigma = (1.0 + neg + pos) / ((1.0 + neg)*(1.0 + pos))
       ! if (print_stall) then 
       !   write(io_unit,*) 'sigma', sigma
       ! end if 
@@ -964,7 +978,7 @@ module f16_m
   ! Init Subroutine
     subroutine init(filename)
       implicit none 
-      real :: airspeed, alpha_deg, beta_deg
+      real :: alpha_deg, beta_deg
       real, allocatable :: eul(:)
       real :: alpha, beta, trim_state(6)
       character(100), intent(in) :: filename
@@ -1051,7 +1065,7 @@ module f16_m
 
       ! TRIM VARIABLES
       call jsonx_get(j_main, 'initial.type',                                    sim_type)
-      call jsonx_get(j_main, 'initial.airspeed[ft/s]',                          airspeed)
+      call jsonx_get(j_main, 'initial.init_airspeed[ft/s]',                          init_airspeed)
       call jsonx_get(j_main, 'initial.altitude[ft]',                            initial_state(9))
       call jsonx_get(j_main, 'initial.Euler_angles[deg]',                       eul, 0.0, 3)
 
@@ -1095,9 +1109,9 @@ module f16_m
       Cm_alpha_s = Cm_alpha_s * pi / 180.0
 
       ! CALCULATE INITIAL SPEED IN U, V, W DIRECTIONS
-      initial_state(1) = airspeed * cos(alpha) * cos(beta)
-      initial_state(2) = airspeed * sin(beta)
-      initial_state(3) = airspeed * sin(alpha) * cos(beta)
+      initial_state(1) = init_airspeed * cos(alpha) * cos(beta)
+      initial_state(2) = init_airspeed * sin(beta)
+      initial_state(3) = init_airspeed * sin(alpha) * cos(beta)
 
       ! CALCULATE THE INITIAL ORIENTATION
       initial_state(10:13) = euler_to_quat(eul)
@@ -1122,7 +1136,7 @@ module f16_m
       ! CALCULATE THE SPECIFIED TRIM CONDITION IF GIVEN 
       if (sim_type == 'trim') then 
         write(*,*) 'call trim'
-        trim_state = trim_algorithm(airspeed, initial_state(9), eul, tolerance, trim_type)
+        trim_state = trim_algorithm(init_airspeed, initial_state(9), eul, tolerance, trim_type)
       end if 
 
       call jsonx_get(j_main, 'initial.x_pos_ft', initial_state(7))
@@ -1141,7 +1155,7 @@ module f16_m
       ! TEST STALL IF SPECIFIED 
       write(*,*) 'test stall'
       if (test_stall) then 
-        call check_stall()
+        call check_stall(initial_state)
       end if 
 
     end subroutine init

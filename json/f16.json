@@ -131,8 +131,8 @@
     },
     "initial" : {
         "type" : "trim", 
-        "airspeed[ft/s]" : 350.0,
-        "altitude[ft]" : 4500.0,
+        "init_airspeed[ft/s]" : 350.0,
+        "altitude[ft]" : 10000.0,
         "Euler_angles[deg]" : [0.0, 0.0, 0.0],
         "aileron[deg]" : 0.0, 
         "elevator[deg]" : 0.0,
@@ -153,7 +153,7 @@
                 "_bank_angle[deg]":  0.0,
                 "sideslip[deg]": 0.0,
                 "_elevation_angle[deg]" : 0.0,
-                "climb_angle[deg]" :  5.0, 
+                "climb_angle[deg]" :  0.0, 
                 "solver" : {
                     "finite_difference_step_size" : 0.01,
                     "relaxation_factor" : 0.9, 

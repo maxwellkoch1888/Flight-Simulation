@@ -317,7 +317,7 @@ module arrow_m
 
       call jsonx_get(j_main, 'simulation.time_step[s]', dt)
       call jsonx_get(j_main, 'simulation.straight', fletchings_straight)
-      call jsonx_get(j_main, 'initial.airspeed[ft/s]', V)
+      call jsonx_get(j_main, 'initial.init_airspeed[ft/s]', V)
       call jsonx_get(j_main, 'initial.altitude[ft]', h)
       call jsonx_get(j_main, 'initial.elevation_angle[deg]', elevation_angle_deg)
       straight = fletchings_straight

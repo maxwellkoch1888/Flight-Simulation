@@ -4,7 +4,7 @@
         "straight" : false
     },
     "initial" : {
-        "airspeed[ft/s]" : 210.0,
+        "init_airspeed[ft/s]" : 210.0,
         "altitude[ft]" : 5.0,
         "elevation_angle[deg]" : 5.0
     }
