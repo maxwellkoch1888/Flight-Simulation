@@ -331,10 +331,11 @@ module f16_m
       if (stall) then 
         Cm_s = CM_min * (sin(alpha))**2
         sigma_m = calc_sigma(Cm_lambda_b, Cm_alpha_0, Cm_alpha_s, alpha)
-
+        
         Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
         if (print_stall) then 
           write(io_unit, *) alpha*180.0/pi, CL_s, CL_ss, CL, CD_s, CD_ss, CD, Cm_s, Cm_ss, Cm
+          ! write(io_unit, *) alpha*180.0/pi, CL, CD, Cm
         end if 
       end if
 
@@ -381,7 +382,7 @@ module f16_m
     end subroutine pseudo_aero
 
   !=========================
-  ! Test Stall Function
+  ! Check stall blending funtion
     subroutine check_stall()
       real :: state(13), alpha_deg, V_mag, alpha, beta
       print_stall = .true.
@@ -389,18 +390,22 @@ module f16_m
       ! INITIALIZE THE RANGE OF ANGLE OF ATTACK/ STATE
       alpha_deg = -180.0
       beta = 0.0
-      V_mag = 350
+      V_mag = 350.0
       state(1:13) = 0.0
-      write(io_unit,*) '  Cm_lambda_b               Cm_alpha_0                Cm_alpha_s'
-      write(io_unit,*) Cm_lambda_b, Cm_alpha_0, Cm_alpha_s
-      write(io_unit,*) '  CD_lambda_b               CD_alpha_0                CD_alpha_s'
-      write(io_unit,*) CD_lambda_b, CD_alpha_0, CD_alpha_s   
-      write(io_unit,*) '  CL_lambda_b               CL_alpha_0                CL_alpha_s'
-      write(io_unit,*) CL_lambda_b, CL_alpha_0, CL_alpha_s            
-      write(io_unit,*) '  alpha[deg]                CL_s                      CL_ss                     CL                        &
-      CD_s                      CD_ss                     CD                       &
-      Cm_s                      Cm_ss                     Cm'
-      do while (alpha_deg <= 180.0)
+      if (print_stall) then
+        write(io_unit,*) '  CL_lambda_b               CL_alpha_0[deg]          CL_alpha_s[deg] ' 
+        write(io_unit,*) CL_lambda_b, CL_alpha_0 * 180.0 / pi, CL_alpha_s * 180.0 / pi
+        write(io_unit,*) '  CD_lambda_b               CD_alpha_0[deg]          CD_alpha_s[deg] ' 
+        write(io_unit,*) CD_lambda_b, CD_alpha_0 * 180.0 / pi, CD_alpha_s * 180.0 / pi
+        write(io_unit,*) '  Cm_lambda_b               Cm_alpha_0[deg]          Cm_alpha_s[deg] ' 
+        write(io_unit,*) Cm_lambda_b, Cm_alpha_0 * 180.0 / pi, Cm_alpha_s * 180.0 / pi               
+        write(io_unit,*) '  alpha[deg]                CL_s                      CL_ss                     CL                        &
+        CD_s                      CD_ss                     CD                       &
+        Cm_s                      Cm_ss                     Cm'
+        ! write(io_unit,*) '  alpha[deg]                CL                        CD                        Cm'  
+      end if 
+        
+      do while (alpha_deg <= -170.0)
         alpha = alpha_deg * pi / 180.0
 
         ! UPDATE STATE VELOCITIES
@@ -1082,6 +1087,13 @@ module f16_m
       sideslip_angle0  = to_radians_if_valid(sideslip_angle0)
       bank_angle0      = to_radians_if_valid(bank_angle0)
 
+      CL_alpha_0 = CL_alpha_0 * pi / 180.0
+      CL_alpha_s = CL_alpha_s * pi / 180.0
+      CD_alpha_0 = CD_alpha_0 * pi / 180.0
+      CD_alpha_s = CD_alpha_s * pi / 180.0
+      Cm_alpha_0 = Cm_alpha_0 * pi / 180.0
+      Cm_alpha_s = Cm_alpha_s * pi / 180.0
+
       ! CALCULATE INITIAL SPEED IN U, V, W DIRECTIONS
       initial_state(1) = airspeed * cos(alpha) * cos(beta)
       initial_state(2) = airspeed * sin(beta)
@@ -1109,6 +1121,7 @@ module f16_m
 
       ! CALCULATE THE SPECIFIED TRIM CONDITION IF GIVEN 
       if (sim_type == 'trim') then 
+        write(*,*) 'call trim'
         trim_state = trim_algorithm(airspeed, initial_state(9), eul, tolerance, trim_type)
       end if 
 
@@ -1117,13 +1130,16 @@ module f16_m
       ! INITIALIZE CONNECTIONS
       call jsonx_get(j_main, 'connections', j_connections)
       call jsonx_get(j_connections, 'graphics', j_graphics)
+      write(*,*) 'call graphics%init(j_graphics)'
       call graphics%init(j_graphics)
 
+      write(*,*) 'add controls'
       ! ADD CONTROLS
       call jsonx_get(j_connections, 'user_controls', j_user_controls)
       call user_controls%init(j_user_controls)
 
       ! TEST STALL IF SPECIFIED 
+      write(*,*) 'test stall'
       if (test_stall) then 
         call check_stall()
       end if 
