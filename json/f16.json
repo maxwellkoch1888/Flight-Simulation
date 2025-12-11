@@ -1,20 +1,20 @@
 {
     "simulation" : {
         "time_step[s]" : 0.0, 
-        "total_time[s]" : 1.0,
+        "total_time[s]" : 60.0,
         "rk4_verbose" : false,
         "print_states": false 
 
     },
     "connections" :{
-        "graphics": {
+        "_graphics": {
             "type": "send", 
             "number_of_values": 14, 
             "refresh_rate": 60,
             "channel_type": "file",
             "filename": "graphics.csv"
         },
-        "_graphics": {
+        "graphics": {
             "type": "send", 
             "number_of_values": 14, 
             "refresh_rate": 60,

@@ -1259,20 +1259,20 @@ module f16_m
 
       end subroutine run
   ! 
-  ! LQR CONTROLLER 
-    !=========================
-    ! Estimate the jacobian 
-      function estimate_jacobian(state,variables) result(jacobian_matrix) 
-        implicit none 
-        real :: state(13), G(6)
-        real, allocatable :: variables
+  ! ! LQR CONTROLLER 
+  !   !=========================
+  !   ! Estimate the jacobian 
+  !     function estimate_jacobian(state,variables) result(jacobian_matrix) 
+  !       implicit none 
+  !       real :: state(13), G(6)
+  !       real, allocatable :: variables
 
-        len = size(variables)
-        G = state(1:6)
+  !       len = size(variables)
+  !       G = state(1:6)
         
-        do j = 1,len 
-        end do 
-      end function  
+  !       do j = 1,len 
+  !       end do 
+  !     end function  
           
 
 
