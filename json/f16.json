@@ -1,7 +1,7 @@
 {
     "simulation" : {
         "time_step[s]" : 0.0, 
-        "total_time[s]" : 60.0,
+        "total_time[s]" : 1.0,
         "rk4_verbose" : false,
         "print_states": false 
 
@@ -48,7 +48,8 @@
             "Ta" : 0.84
         },
         "aerodynamics" : {
-            "compressibility": false,
+            "compressibility": true,
+            "test_compressibility": true,
             "sweep[deg]": 40, 
             "reference" : {
                 "area[ft^2]" : 300.0,

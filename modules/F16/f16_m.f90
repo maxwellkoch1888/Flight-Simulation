@@ -42,7 +42,7 @@ module f16_m
     real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
     real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
     real :: Cm_alpha_0, Cm_alpha_s, Cm_min
-    logical :: compressibility, rk4_verbose, print_states, stall, test_stall
+    logical :: compressibility, rk4_verbose, print_states, stall, test_stall, test_compressibility
     logical :: print_stall
 
     ! ADD VARIABLES FOR TRIM ALGORITHM
@@ -234,6 +234,13 @@ module f16_m
         real :: T, throttle
         real :: CL_ss, CD_ss, Cm_ss, CL_s, CD_s, Cm_s 
         real :: sigma_D, sigma_L, sigma_m, sign_a
+        
+        ! COMPRESSIBILITY
+        real :: blend, drag_factor, lift_factor, moment_factor, drag_rise
+        real :: pg_factor, kt_factor
+        real :: m_high, m_low, m_trans_start, m_trans_end
+        real :: k, var
+        real :: tran, max_factor, transonic_blend
           
         ! BUILD THE ATMOSPHERE 
         geometric_altitude_ft = -state(9)
@@ -304,11 +311,7 @@ module f16_m
           Cm_s = CM_min * sa**2 * sign_a
           sigma_m = calc_sigma(Cm_lambda_b, Cm_alpha_0, Cm_alpha_s, alpha)
           Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
-
-          ! if (print_stall) then 
-          !   write(io_unit, *) alpha*180.0/pi, CL, CD, Cm, CL_s, CL_ss, CD_s, CD_ss, Cm_s, Cm_ss
-          !   ! write(io_unit, *) alpha*180.0/pi, CL, CD, Cm
-          ! end if         
+     
         end if 
 
         ! COMPRESSIBILIITY MODEL, USING PRANDTL-GLAUERT CORRECTION
@@ -317,13 +320,50 @@ module f16_m
           CM2 = 15.35*sweep**2 - 19.64*sweep +16.86
           mach_num = V / sos_ft_per_sec
 
-          CL = CL / (sqrt(1-mach_num**2 + 1e-12))
-          CS = CS / (sqrt(1-mach_num**2 + 1e-12))
-          CD = CD * (1.0 + CM1 * mach_num**CM2)
+          ! MACH BREAKPOINTS
+          m_low         = 0.60    ! only use prandtl-glauert
+          m_high        = 0.92    ! only use karman-tsien
+          m_trans_start = 0.88    ! start transsonic region
 
-          cl_pitch = cl_pitch / (sqrt(1-mach_num**2 + 1e-12))
-          Cm       = Cm       / (sqrt(1-mach_num**2 + 1e-12))
-          Cn       = Cn       / (sqrt(1-mach_num**2 + 1e-12))        
+          ! Prandtl-Glauert factor
+          pg_factor = 1.0 / sqrt(max(1.0 - mach_num**2, tol))
+
+          ! Karman-Tsien factor
+          kt_factor = pg_factor * (1.0 + mach_num**2 / (1.0 + sqrt(max(1.0 - mach_num**2, tol))))
+
+          ! BLEND BETWEEN PG AND KT
+          if (mach_num <= m_low) then
+            blend = 0.0
+          else if (mach_num >= m_high) then
+            blend = 1.0
+          else
+            blend = (mach_num - m_low) / (m_high - m_low)
+          end if
+
+          ! FINAL FACTOR USING BLEND
+          lift_factor = (1.0 - blend) * pg_factor + blend * kt_factor
+          moment_factor = lift_factor
+          drag_factor = 1.0 + CM1 * mach_num**CM2
+
+          ! APPLY THE FACTORS
+          max_factor = 6.5
+          if (mach_num < 0.92) then ! accurate range
+            CL = CL * lift_factor
+            CS = CS * lift_factor
+            Cl_pitch = Cl_pitch * moment_factor
+            Cm       = Cm * moment_factor
+            Cn       = Cn * moment_factor
+            CD       = CD * drag_factor
+          else
+            CL       = CL * min(lift_factor, max_factor)
+            CS       = CS * min(lift_factor, max_factor)
+            Cl_pitch = Cl_pitch * min(moment_factor, max_factor)
+            Cm       = Cm * min(moment_factor, max_factor)
+            Cn       = Cn * min(moment_factor, max_factor)
+          end if
+
+          ! apply drag multiplier
+          CD = CD * min(drag_factor, max_factor)
         end if 
 
         L =   CL * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
@@ -439,6 +479,84 @@ module f16_m
         end do 
       end subroutine
 
+    !=========================
+    ! Check Compressiblity model
+      subroutine check_compressibility(state)
+        implicit none
+
+        integer :: i, j
+        real :: state(13)
+        real :: alpha, beta, states(13)
+        real :: N, Y, A
+        real :: ca, cb, sa, sb
+        real :: CL, CD, Cm
+        real :: const
+        real :: geometric_altitude_ft, geopotential_altitude_ft
+        real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
+        real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
+        real :: airspeed, mach_num
+        real, dimension(9) :: mach_num_list
+
+        ! Mach numbers to sweep
+        mach_num_list = (/ 0.3, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1 /)
+
+        ! Get altitude for density
+        geometric_altitude_ft = -initial_state(9)
+        call std_atm_English( &
+          geometric_altitude_ft, geopotential_altitude_ft, &
+          temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, &
+          dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
+
+        controls = 0.0
+        states   = 0.0
+
+        ! Main Mach loop -----------------------------------------------
+        do j = 1, size(mach_num_list)
+          mach_num = mach_num_list(j)
+
+          write(io_unit,*) '--------------------------------------------------'
+          write(io_unit,*) 'Mach Number = ', mach_num
+          write(io_unit,*) '--------------------------------------------------'
+
+          airspeed = mach_num * sos_ft_per_sec
+
+          const = 0.5 * density_slugs_per_ft3 * airspeed**2 * planform_area
+
+          write(io_unit,*) '   alpha(deg)                CL                        CD                        Cm'
+
+          do i = -180, 180
+            alpha = real(i) * pi / 180.0
+            beta  = 0.0
+
+            ca = cos(alpha)
+            cb = cos(beta)
+            sa = sin(alpha)
+            sb = sin(beta)
+
+            states = 0.0
+            states(1) = airspeed * ca * cb
+            states(2) = airspeed * sb
+            states(3) = airspeed * sa * cb
+            states(9) = initial_state(9)
+
+            call pseudo_aero(states)
+
+            A = -FM(1)
+            Y =  FM(2)
+            N = -FM(3)
+
+            ! Aerodynamic coefficients
+            CL = (N * ca - A * sa) / const
+            CD = (A * ca * cb - Y * sb + N * sa * cb) / const
+            Cm = FM(5) / (const * longitudinal_length)
+
+            write(io_unit,*) alpha*180.0/pi, CL, CD, Cm
+          end do
+
+        end do
+
+      end subroutine
+       
     !=========================
     ! Calculate Sigma
       function calc_sigma(lambda_b, alpha_0, alpha_s, alpha) result(sigma)
@@ -1016,6 +1134,7 @@ module f16_m
 
         ! READ IN ALL AERODYNAMIC DATA
         call jsonx_get(j_main, 'vehicle.aerodynamics.compressibility',                   compressibility, .false.)
+        call jsonx_get(j_main, 'vehicle.aerodynamics.test_compressibility',              test_compressibility, .false.)
         call jsonx_get(j_main, 'vehicle.aerodynamics.sweep[deg]',                        sweep, 0.0)
         call jsonx_get(j_main, 'vehicle.aerodynamics.reference.area[ft^2]',              planform_area)
         call jsonx_get(j_main, 'vehicle.aerodynamics.reference.longitudinal_length[ft]', longitudinal_length)
@@ -1081,7 +1200,7 @@ module f16_m
 
         ! TRIM VARIABLES
         call jsonx_get(j_main, 'initial.type',                                    sim_type)
-        call jsonx_get(j_main, 'initial.init_airspeed[ft/s]',                          init_airspeed)
+        call jsonx_get(j_main, 'initial.init_airspeed[ft/s]',                     init_airspeed)
         call jsonx_get(j_main, 'initial.altitude[ft]',                            initial_state(9))
         call jsonx_get(j_main, 'initial.Euler_angles[deg]',                       eul, 0.0, 3)
 
@@ -1155,14 +1274,14 @@ module f16_m
           trim_state = trim_algorithm(init_airspeed, initial_state(9), eul, tolerance, trim_type)
           call compute_A()
           call compute_B()
-          write(io_unit,*) 'Amat:'
-          do i = 1, 6
-              write(io_unit,'(6F12.6)') Amat(i,1:6)
-          end do
-          write(io_unit,*) 'Bmat:'
-          do i = 1, 6
-              write(io_unit,'(4F12.6)') Bmat(i,1:4)
-          end do     
+          ! write(io_unit,*) 'Amat:'
+          ! do i = 1, 6
+          !     write(io_unit,'(6F12.6)') Amat(i,1:6)
+          ! end do
+          ! write(io_unit,*) 'Bmat:'
+          ! do i = 1, 6
+          !     write(io_unit,'(4F12.6)') Bmat(i,1:4)
+          ! end do     
         end if 
 
         call jsonx_get(j_main, 'initial.x_pos_ft', initial_state(7))
@@ -1173,15 +1292,19 @@ module f16_m
         write(*,*) 'call graphics%init(j_graphics)'
         call graphics%init(j_graphics)
 
-        write(*,*) 'add controls'
         ! ADD CONTROLS
         call jsonx_get(j_connections, 'user_controls', j_user_controls)
         call user_controls%init(j_user_controls)
 
         ! TEST STALL IF SPECIFIED 
-        write(*,*) 'test stall'
+        
         if (test_stall) then 
           call check_stall(initial_state)
+        end if 
+
+        ! TEST COMPRESSIBILITY IF SPECIFIED
+        if (test_compressibility) then 
+          call check_compressibility(initial_state)
         end if 
 
       end subroutine init
