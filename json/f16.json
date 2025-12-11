@@ -1,7 +1,7 @@
 {
     "simulation" : {
         "time_step[s]" : 0.0, 
-        "total_time[s]" : 60.0,
+        "total_time[s]" : 1.0,
         "rk4_verbose" : false,
         "print_states": false 
 
@@ -57,7 +57,7 @@
             },
             "stall": {
                 "stall_flag": true,
-                "test_stall": true, 
+                "test_stall": false, 
                 "CL": {
                     "lambda_b": 7.0,
                     "alpha_0": 0.0, 

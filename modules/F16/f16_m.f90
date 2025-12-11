@@ -29,6 +29,9 @@ module f16_m
     integer :: io_unit
     real :: init_airspeed 
 
+    ! CONTROLLER VARIABLES 
+    real :: Amat(6,6), Bmat(6,4), xd(13), ud(4) 
+
     ! DEFINE AERODYNAMIC PROPERTIES
     real :: planform_area, longitudinal_length, lateral_length, sweep
     real :: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
@@ -766,6 +769,11 @@ module f16_m
         initial_state(4:6)   = angular_rates
         initial_state(9)     = height
         initial_state(10:13) = euler_to_quat(euler)    
+
+        ! UPDATE DESIRED STATE FOR CONTROLLER
+        xd = initial_state
+        ud = controls
+
         if (trim_verbose) then 
           write(io_unit,*) '---------------------- Trim Solution ----------------------'
           write(io_unit,'(A30,F20.13)') '       azimuth_angle[deg]  :', euler(3)
@@ -869,6 +877,9 @@ module f16_m
           write(io_unit,'(A,6(1X,ES20.12))') 'Delta G =', (delta_G(k), k=1,6)
         end if 
 
+        ! UPDATE B MATRIX
+        Bmat = jac(:, 3:6)
+
       end subroutine newtons_method
 
     !=========================
@@ -969,16 +980,16 @@ module f16_m
 
     !=========================
     ! CONVERT DEG TO RAD IF NEEDED
-    function to_radians_if_valid(angle) result(new_angle)
-      implicit none
-      real, intent(in) :: angle
-      real :: new_angle
-      if (angle == -999.0) then
-        new_angle = angle
-      else
-        new_angle = angle * pi / 180.0
-      end if
-    end function to_radians_if_valid  
+      function to_radians_if_valid(angle) result(new_angle)
+        implicit none
+        real, intent(in) :: angle
+        real :: new_angle
+        if (angle == -999.0) then
+          new_angle = angle
+        else
+          new_angle = angle * pi / 180.0
+        end if
+      end function to_radians_if_valid  
   ! 
   ! INITIALIZE AND RUN
     !=========================
@@ -990,6 +1001,7 @@ module f16_m
         real :: alpha, beta, trim_state(6)
         character(100), intent(in) :: filename
         type(json_value), pointer :: j_connections, j_graphics, j_user_controls, j_test_controls
+        integer :: i
 
         ! OPEN A FILE TO WRITE TO 
         open(newunit=io_unit, file='f16_output.txt', status='replace', action='write')
@@ -1144,6 +1156,15 @@ module f16_m
         if (sim_type == 'trim') then 
           write(*,*) 'call trim'
           trim_state = trim_algorithm(init_airspeed, initial_state(9), eul, tolerance, trim_type)
+          call compute_A(xd, ud)
+          write(io_unit,*) 'Amat:'
+          do i = 1, 6
+              write(io_unit,'(6F12.6)') Amat(i,1:6)
+          end do
+          write(io_unit,*) 'Bmat:'
+          do i = 1, 6
+              write(io_unit,'(4F12.6)') Bmat(i,1:4)
+          end do     
         end if 
 
         call jsonx_get(j_main, 'initial.x_pos_ft', initial_state(7))
@@ -1260,20 +1281,65 @@ module f16_m
       end subroutine run
   ! 
   ! ! LQR CONTROLLER 
-  !   !=========================
-  !   ! Estimate the jacobian 
-  !     function estimate_jacobian(state,variables) result(jacobian_matrix) 
-  !       implicit none 
-  !       real :: state(13), G(6)
-  !       real, allocatable :: variables
+    !=========================
+    ! Estimate the jacobian 
+      subroutine compute_A(xd, ud)
+        implicit none
+        real, intent(in)  :: xd(13), ud(:)
+        real :: A(13,13)
+        real :: f_plus(13), f_minus(13)
+        real :: x_plus(13), x_minus(13)
+        real :: eps
+        integer :: i
 
-  !       len = size(variables)
-  !       G = state(1:6)
-        
-  !       do j = 1,len 
-  !       end do 
-  !     end function  
+        ! FINITE DIFFERENCE STEP
+        eps = 1.0e-6   
+        write(io_unit,*) 'controls:', controls 
+
+        ! ESTIMATE A WITH CENTRAL DIFFERENCE METHOD
+        do i = 1, 13
+          ! DESIRED STATE PERTURBATIONS
+          x_plus  = xd
+          x_minus = xd
+
+          x_plus(i)  = x_plus(i)  + eps
+          x_minus(i) = x_minus(i) - eps
+
+          ! Evaluate the system derivatives
+          f_plus = differential_equations(0.0, x_plus)
+          f_minus =  differential_equations(0.0, x_minus)
+
+          ! Central difference for column i of A
+          A(:, i) = (f_plus - f_minus) / (2.0 * eps)
+        end do
+
+        write(io_unit,*) 'A:'
+        do i = 1, 13
+            write(io_unit,'(6F12.6)') A(i,1:6)
+        end do  
+
+        Amat = A(1:6,1:6)
+
+    end subroutine compute_A
           
+    function get_control() result(K)
+      real :: Q(6,6), R(4,4), K(4,6)
+
+      ! Balanced Q
+      Q(1,1) = 0.25    ! u
+      Q(2,2) = 0.25    ! v
+      Q(3,3) = 0.25    ! w
+      Q(4,4) = 100.0   ! p
+      Q(5,5) = 100.0   ! q
+      Q(6,6) = 100.0   ! r
+
+      ! Balanced R (throttle, elevator, aileron, rudder)
+      R(1,1) = 11.111111
+      R(2,2) = 100.0
+      R(3,3) = 100.0
+      R(4,4) = 100.0
+      
+    end function 
 
 
 end module f16_m
