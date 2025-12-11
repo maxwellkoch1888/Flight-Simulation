@@ -877,9 +877,6 @@ module f16_m
           write(io_unit,'(A,6(1X,ES20.12))') 'Delta G =', (delta_G(k), k=1,6)
         end if 
 
-        ! UPDATE B MATRIX
-        Bmat = jac(:, 3:6)
-
       end subroutine newtons_method
 
     !=========================
@@ -1156,7 +1153,8 @@ module f16_m
         if (sim_type == 'trim') then 
           write(*,*) 'call trim'
           trim_state = trim_algorithm(init_airspeed, initial_state(9), eul, tolerance, trim_type)
-          call compute_A(xd, ud)
+          call compute_A()
+          call compute_B()
           write(io_unit,*) 'Amat:'
           do i = 1, 6
               write(io_unit,'(6F12.6)') Amat(i,1:6)
@@ -1280,13 +1278,12 @@ module f16_m
 
       end subroutine run
   ! 
-  ! ! LQR CONTROLLER 
+  ! LQR CONTROLLER 
     !=========================
-    ! Estimate the jacobian 
-      subroutine compute_A(xd, ud)
+    ! ESTIMATE A MATRIX  
+      subroutine compute_A()
         implicit none
-        real, intent(in)  :: xd(13), ud(:)
-        real :: A(13,13)
+        real :: A(13,6)
         real :: f_plus(13), f_minus(13)
         real :: x_plus(13), x_minus(13)
         real :: eps
@@ -1294,10 +1291,10 @@ module f16_m
 
         ! FINITE DIFFERENCE STEP
         eps = 1.0e-6   
-        write(io_unit,*) 'controls:', controls 
+        controls = ud  
 
         ! ESTIMATE A WITH CENTRAL DIFFERENCE METHOD
-        do i = 1, 13
+        do i = 1, 6
           ! DESIRED STATE PERTURBATIONS
           x_plus  = xd
           x_minus = xd
@@ -1313,17 +1310,47 @@ module f16_m
           A(:, i) = (f_plus - f_minus) / (2.0 * eps)
         end do
 
-        write(io_unit,*) 'A:'
-        do i = 1, 13
-            write(io_unit,'(6F12.6)') A(i,1:6)
-        end do  
-
-        Amat = A(1:6,1:6)
+        Amat = A(1:6, :)
 
     end subroutine compute_A
-          
-    function get_control() result(K)
-      real :: Q(6,6), R(4,4), K(4,6)
+
+    !=========================    
+    ! ESTIMATE B MATRIX 
+    subroutine compute_B()
+        implicit none
+        real :: f_plus(13), f_minus(13)
+        real :: u_plus(4), u_minus(4)
+        real :: eps
+        integer :: i
+
+        ! FINITE DIFFERENCE STEP
+        eps = 1.0e-6
+        ! ESTIMATE B WITH CENTRAL DIFFERENCE METHOD
+        do i = 1, 4
+            ! Perturb control i
+            u_plus  = ud
+            u_minus = ud
+
+            u_plus(i)  = u_plus(i)  + eps
+            u_minus(i) = u_minus(i) - eps
+
+            ! Evaluate system derivatives with perturbed controls
+            controls = u_plus
+            f_plus  = differential_equations(0.0, xd)
+            controls = u_minus
+            f_minus = differential_equations(0.0, xd)
+
+            ! Central difference for column i of B
+            Bmat(:,i) = (f_plus(1:6) - f_minus(1:6)) / (2.0 * eps)
+        end do
+
+    end subroutine compute_B
+
+    !=========================
+    ! GET CONTROL INPUT
+    function get_control(state) result(u)
+      real :: Q(6,6), R(4,4), K(4,6), matlab_K(6,4)
+      real :: u(4), state(13), state6(6), xd6(6)
 
       ! Balanced Q
       Q(1,1) = 0.25    ! u
@@ -1338,7 +1365,18 @@ module f16_m
       R(2,2) = 100.0
       R(3,3) = 100.0
       R(4,4) = 100.0
-      
+
+      matlab_K = reshape( (/ &
+      -0.0000,   -0.0126,    0.0000,   -0.9212,    0.0001,    0.3333, &
+       0.0040,    0.0000,   -0.0455,    0.0001,   -2.5648,   -0.0006, &
+      -0.0000,    0.0399,    0.0000,    0.3865,   -0.0004,   -3.9043, &
+       0.1493,   -0.0000,    0.0094,   -0.0000,   -0.3653,    0.0002  /), (/6,4/) )
+      K = transpose(matlab_K)
+
+      state6 = state(1:6)
+      xd6 = xd(1:6)
+      u = -matmul(K, state6 - xd6)
+
     end function 
 
 
