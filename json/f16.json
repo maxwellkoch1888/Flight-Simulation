@@ -1,7 +1,7 @@
 {
     "simulation" : {
         "time_step[s]" : 0.0, 
-        "total_time[s]" : 1.0,
+        "total_time[s]" : 60.0,
         "rk4_verbose" : false,
         "print_states": false 
 
