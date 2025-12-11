@@ -240,7 +240,7 @@ module f16_m
         real :: pg_factor, kt_factor
         real :: m_high, m_low, m_trans_start, m_trans_end
         real :: k, var
-        real :: tran, max_factor, transonic_blend
+        real :: tran, max_CL_factor, max_CD_factor, max_Cl_pitch_factor, transonic_blend
           
         ! BUILD THE ATMOSPHERE 
         geometric_altitude_ft = -state(9)
@@ -346,7 +346,10 @@ module f16_m
           drag_factor = 1.0 + CM1 * mach_num**CM2
 
           ! APPLY THE FACTORS
-          max_factor = 6.5
+          max_CL_factor = 6.5
+          max_CD_factor = 4
+          max_Cl_pitch_factor = 2.5
+
           if (mach_num < 0.92) then ! accurate range
             CL = CL * lift_factor
             CS = CS * lift_factor
@@ -355,15 +358,15 @@ module f16_m
             Cn       = Cn * moment_factor
             CD       = CD * drag_factor
           else
-            CL       = CL * min(lift_factor, max_factor)
-            CS       = CS * min(lift_factor, max_factor)
-            Cl_pitch = Cl_pitch * min(moment_factor, max_factor)
-            Cm       = Cm * min(moment_factor, max_factor)
-            Cn       = Cn * min(moment_factor, max_factor)
+            CL       = CL * min(lift_factor, max_CL_factor)
+            CS       = CS * min(lift_factor, max_CL_factor)
+            Cl_pitch = Cl_pitch * min(moment_factor, max_Cl_pitch_factor)
+            Cm       = Cm * min(moment_factor, max_Cl_pitch_factor)
+            Cn       = Cn * min(moment_factor, max_Cl_pitch_factor)
           end if
 
           ! apply drag multiplier
-          CD = CD * min(drag_factor, max_factor)
+          CD = CD * min(drag_factor, max_CD_factor)
         end if 
 
         L =   CL * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
