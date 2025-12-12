@@ -19,7 +19,7 @@ module f16_m
     real :: mass
     real :: inertia(3,3)
     real :: inertia_inv(3,3)
-    real :: h(3)
+    real, target :: h(3)
     real :: FM(6)
     real :: initial_state(13)
     real :: controls(4)
@@ -63,29 +63,10 @@ module f16_m
         real, dimension(13) :: state, k1, k2, k3, k4
 
         ! DEFINE THE K TERMS FOR RK4 METHOD
-        if(rk4_verbose) then 
-          write(io_unit,*) "diff_eq function called: "
-          write(io_unit,*) "              RK4 call number =  1"
-        end if
         k1 = differential_equations(t0, y1)
-        if(rk4_verbose) then 
-          write(io_unit,*) "diff_eq function called: "
-          write(io_unit,*) "              RK4 call number =  2"
-        end if
         k2 = differential_equations(t0 + delta_t*0.5, y1 + k1 * delta_t*0.5)
-        if(rk4_verbose) then 
-          write(io_unit,*) "diff_eq function called: "
-          write(io_unit,*) "              RK4 call number =  3"
-          write(io_unit,*) " initial state", y1
-          write(io_unit,*) " k2", k2   
-        end if
         k3 = differential_equations(t0 + delta_t*0.5, y1 + k2 * delta_t*0.5)
-        if(rk4_verbose) then 
-          write(io_unit,*) "diff_eq function called: "
-          write(io_unit,*) "              RK4 call number =  4"
-        end if
         k4 = differential_equations(t0 + delta_t, y1 + k3 * delta_t)
-
 
         ! DEFINE THE RESULT FROM RK4
         state = y1 + (delta_t/6) * (k1 + 2*k2 + 2*k3 + k4)
@@ -96,49 +77,52 @@ module f16_m
     ! Equations of Motion: (/u,v,w, p,q,r, x,y,z, e0,ex,ey,ez/)
       function differential_equations(t, state) result(dstate_dt)
         implicit none 
-        real, intent(in) :: t, state(13) 
+        real, intent(in) :: t
+        real, target :: state(13) 
         real :: dstate_dt(13) 
-        real :: u, v, w, p, q, r, x, y, z, e0, ex, ey, ez 
-        real :: acceleration(3), angular_accelerations(3), velocity(3), quat_change(4) 
-        real :: velocity_quat(4), quat_inv(4) 
+        real :: acceleration(3), angular_accelerations(3), rhs(3), velocity(3), quat_change(4) 
+        real :: quat_inv(4) 
         real :: orientation_effect(3), angular_v_effect(3), gyroscopic_change(3)
         real :: inertia_effects(3), wind_velocity(3), gyroscopic_effects(3,3) 
-        real :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz 
         real :: quat_matrix(4,3) 
-        real :: hxb, hyb, hzb, hxb_dot, hyb_dot, hzb_dot
+        real :: hxb_dot, hyb_dot, hzb_dot
         real :: Vxw, Vyw, Vzw, gravity_ft_per_sec2 
-        real :: v1(4), v2(4), angular_inertia(3,3)
+        real :: angular_inertia(3,3), angular_inertia_inv(3,3)
         real :: avoid_warning
+        real, pointer :: u, v, w, p, q, r, e0, ex, ey, ez
+        real, pointer :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz 
+        real, pointer :: hxb, hyb, hzb
 
         avoid_warning = t
 
         ! UNPACK STATES
-        u  = state(1)  
-        v  = state(2)  
-        w  = state(3)
-        p  = state(4)  
-        q  = state(5)  
-        r  = state(6)
-        x  = state(7)  
-        y  = state(8)  
-        z  = state(9)
-        e0 = state(10) 
-        ex = state(11) 
-        ey = state(12) 
-        ez = state(13) 
+        u  => state(1)
+        v  => state(2)
+        w  => state(3)
+        p  => state(4)
+        q  => state(5)
+        r  => state(6)
+        e0 => state(10)
+        ex => state(11)
+        ey => state(12)
+        ez => state(13) 
 
         ! UNPACK INERTIA
-        Ixx = inertia(1,1); Iyy = inertia(2,2); Izz = inertia(3,3)
-        Ixy = inertia(1,2); Ixz = inertia(1,3); Iyz = inertia(2,3)
+        Ixx = inertia(1,1)
+        Iyy = inertia(2,2)
+        Izz = inertia(3,3)
+        Ixy = inertia(1,2)
+        Ixz = inertia(1,3)
+        Iyz = inertia(2,3)
       
         ! CALCULATE FORCES AND MOMENTS
         call pseudo_aero(state)
         gravity_ft_per_sec2 = gravity_English(-state(9))
 
         ! SET GYROSCOPIC EFFECTS
-        hxb = h(1)
-        hyb = h(2)
-        hzb = h(3)
+        hxb => h(1)
+        hyb => h(2)
+        hzb => h(3)
 
         ! SET GYROSCOPIC CHANGE AND WIND VELOCITY TO ZERO
         hxb_dot = 0.0
@@ -149,70 +133,102 @@ module f16_m
         Vzw = 0.0
 
         ! BUILD MATRICES/ VECTORS USED IN DIFFERENTIAL EQUATION
-        orientation_effect =  (/2 * (ex*ez - ey*e0), &
-                                2 * (ey*ez + ex*e0), & 
-                                ez**2 + e0**2 - ex**2 - ey**2/)
+        orientation_effect(1) = 2 * (ex*ez - ey*e0)
+        orientation_effect(2) = 2 * (ey*ez + ex*e0)
+        orientation_effect(3) = ez**2 + e0**2 - ex**2 - ey**2
 
-        angular_v_effect =    (/r*v - q*w, p*w - r*u, q*u - p*v/)
+        angular_v_effect(1) = r*v - q*w 
+        angular_v_effect(2) = p*w - r*u
+        angular_v_effect(3) = q*u - p*v
 
-        gyroscopic_effects = reshape((/ 0.0,  hzb,  -hyb, &
-                                      -hzb,  0.0,   hxb, &
-                                        hyb, -hxb,    0.0 /), (/3,3/))
+        gyroscopic_effects(1,1) =  0.0
+        gyroscopic_effects(1,2) =  hzb
+        gyroscopic_effects(1,3) = -hyb
 
-        angular_inertia = reshape((/  Ixx, -Ixy, -Ixz, &
-                                    -Ixy,  Iyy, -Iyz, &
-                                    -Ixz, -Iyz,  Izz /), (/3,3/))
+        gyroscopic_effects(2,1) = -hzb
+        gyroscopic_effects(2,2) =  0.0
+        gyroscopic_effects(2,3) =  hxb
 
-        gyroscopic_change =   (/hxb_dot, hyb_dot, hzb_dot/)
-        
-        inertia_effects =     (/(Iyy - Izz)*q*r + Iyz*(q**2 -r**2) + Ixz*p*q - Ixy*p*r, &
-                                (Izz - Ixx)*p*r + Ixz*(r**2 -p**2) + Ixy*q*r - Iyz*p*q, &
-                                (Ixx - Iyy)*p*q + Ixy*(p**2 -q**2) + Iyz*p*r - Ixz*q*r/)
-        wind_velocity = (/Vxw, Vyw, Vzw/)
+        gyroscopic_effects(3,1) =  hyb
+        gyroscopic_effects(3,2) = -hxb
+        gyroscopic_effects(3,3) =  0.0
 
-        velocity_quat = (/0.0, u, v, w/)
-        quat_inv = (/e0, -ex, -ey, -ez/)
-        quat_matrix = reshape((/ -ex,  e0,  ez, -ey, &
-                                -ey, -ez,  e0,  ex, &
-                                -ez,  ey, -ex,  e0  /), (/4,3/))             
+        angular_inertia(1,1) =  Ixx
+        angular_inertia(1,2) = -Ixy
+        angular_inertia(1,3) = -Ixz
+
+        angular_inertia(2,1) = -Ixy
+        angular_inertia(2,2) =  Iyy
+        angular_inertia(2,3) = -Iyz
+
+        angular_inertia(3,1) = -Ixz
+        angular_inertia(3,2) = -Iyz
+        angular_inertia(3,3) =  Izz
+
+        angular_inertia_inv = matrix_inv(angular_inertia)
+
+        gyroscopic_change(1) = hxb_dot
+        gyroscopic_change(2) = hyb_dot
+        gyroscopic_change(3) = hzb_dot
+
+        inertia_effects(1) = (Iyy - Izz)*q*r + Iyz*(q**2 -r**2) + Ixz*p*q - Ixy*p*r
+        inertia_effects(2) = (Izz - Ixx)*p*r + Ixz*(r**2 -p**2) + Ixy*q*r - Iyz*p*q
+        inertia_effects(3) = (Ixx - Iyy)*p*q + Ixy*(p**2 -q**2) + Iyz*p*r - Ixz*q*r
+
+        wind_velocity(1) = Vxw
+        wind_velocity(2) = Vyw
+        wind_velocity(3) = Vzw
+
+        quat_inv(1) =  e0
+        quat_inv(2) = -ex
+        quat_inv(3) = -ey
+        quat_inv(4) = -ez
+
+        quat_matrix(1,1) = -ex
+        quat_matrix(1,2) =  e0
+        quat_matrix(1,3) =  ez
+
+        quat_matrix(2,1) = -ey
+        quat_matrix(2,2) = -ez
+        quat_matrix(2,3) =  e0
+
+        quat_matrix(3,1) = -ez
+        quat_matrix(3,2) =  ey
+        quat_matrix(3,3) = -ex
+
+        quat_matrix(4,1) = -ey
+        quat_matrix(4,2) =  ex
+        quat_matrix(4,3) =  e0            
 
         ! BUILD THE DIFFERENTIAL EQUATIONS
         ! ACCELERATION IN BODY FRAME
-        acceleration = 1.0 / mass * FM(1:3) + gravity_ft_per_sec2 * orientation_effect + angular_v_effect
+        acceleration(1) = FM(1)/mass + gravity_ft_per_sec2*orientation_effect(1) + angular_v_effect(1)
+        acceleration(2) = FM(2)/mass + gravity_ft_per_sec2*orientation_effect(2) + angular_v_effect(2)
+        acceleration(3) = FM(3)/mass + gravity_ft_per_sec2*orientation_effect(3) + angular_v_effect(3)
 
         ! ROLL, PITCH, YAW ACCELERATIONS
-        angular_accelerations = matmul(matrix_inv(angular_inertia) , FM(4:6) + &
-                                matmul(gyroscopic_effects, (/p, q, r/)) + inertia_effects - gyroscopic_change)
+        rhs(1) = FM(4) + gyroscopic_effects(1,1)*p + gyroscopic_effects(1,2)*q + gyroscopic_effects(1,3)*r + inertia_effects(1) - gyroscopic_change(1)
+        rhs(2) = FM(5) + gyroscopic_effects(2,1)*p + gyroscopic_effects(2,2)*q + gyroscopic_effects(2,3)*r + inertia_effects(2) - gyroscopic_change(2)
+        rhs(3) = FM(6) + gyroscopic_effects(3,1)*p + gyroscopic_effects(3,2)*q + gyroscopic_effects(3,3)*r + inertia_effects(3) - gyroscopic_change(3)
+
+        angular_accelerations(1) = angular_inertia_inv(1,1)*rhs(1) + angular_inertia_inv(1,2)*rhs(2) + angular_inertia_inv(1,3)*rhs(3)
+        angular_accelerations(2) = angular_inertia_inv(2,1)*rhs(1) + angular_inertia_inv(2,2)*rhs(2) + angular_inertia_inv(2,3)*rhs(3)
+        angular_accelerations(3) = angular_inertia_inv(3,1)*rhs(1) + angular_inertia_inv(3,2)*rhs(2) + angular_inertia_inv(3,3)*rhs(3)
 
         ! VELOCITY IN THE INERITAL FRAME
-        v1 = quat_mult(state(10:13), (/0.0, state(1:3)/))
-        v2 = quat_mult(v1, quat_inv)
-        velocity = v2(2:4) + wind_velocity
+        velocity = quat_base_to_dependent(state(1:3), state(10:13)) + wind_velocity
 
         ! AIRCRAFT ORIENTATION RATE OF CHANGE
-        quat_change = 0.5 * matmul(quat_matrix, (/p, q, r/))
-
+        quat_change(1) = 0.5 * (quat_matrix(1,1)*p + quat_matrix(1,2)*q + quat_matrix(1,3)*r)
+        quat_change(2) = 0.5 * (quat_matrix(2,1)*p + quat_matrix(2,2)*q + quat_matrix(2,3)*r)
+        quat_change(3) = 0.5 * (quat_matrix(3,1)*p + quat_matrix(3,2)*q + quat_matrix(3,3)*r)
+        quat_change(4) = 0.5 * (quat_matrix(4,1)*p + quat_matrix(4,2)*q + quat_matrix(4,3)*r)
 
         ! RETURN THE STATE DERIVATIVE
         dstate_dt(1:3)  = acceleration
         dstate_dt(4:6)  = angular_accelerations
         dstate_dt(7:9)  = velocity
         dstate_dt(10:13) = quat_change
-
-        ! PRINT STEPS IF SPECIFIED
-        if(rk4_verbose) then
-          write(io_unit,'(A,13(1X,ES20.12))') "                     time [s] =", t
-          write(io_unit,'(A,*(1X,ES20.12))') '    State vector coming in    =', state, controls
-
-          write(io_unit,'(A,6 (1X,ES20.12))') "    Pseudo aerodynamics (F,M) =", FM
-          ! write(io_unit,*) "v1", v1
-          ! write(io_unit,*) "v2", v2
-          ! write(io_unit,*) "velocity", velocity
-          ! write(io_unit,*) "quat change", quat_change
-          write(io_unit,'(A,13(1X,ES20.12))') "    Diff. Eq. results         =", dstate_dt
-          write(io_unit,*) ''
-        end if
-
       end function differential_equations
   ! 
   ! AERODYNAMICS AND FORCES
@@ -224,7 +240,7 @@ module f16_m
         real :: Re, geometric_altitude_ft, geopotential_altitude_ft
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
         real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
-        real :: V
+        real :: V, dyn_pressure
         real :: Cl_pitch0, alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
         real :: CL, CL1, CD, CS, L, D, S, Cl_pitch, Cm, Cn
         real :: CM1, CM2, mach_num, gamma, R
@@ -239,7 +255,7 @@ module f16_m
         real :: blend, drag_factor, lift_factor, moment_factor, drag_rise
         real :: pg_factor, kt_factor
         real :: m_high, m_low, m_trans_start, m_trans_end
-        real :: k, var
+        real :: k, var, sqrt_term
         real :: tran, max_CL_factor, max_CD_factor, max_Cl_pitch_factor, transonic_blend
           
         ! BUILD THE ATMOSPHERE 
@@ -251,7 +267,7 @@ module f16_m
 
         ! CALCULATE VELOCITY UNIT VECTOR
         V =  (state(1)**2 + state(2)**2 + state(3)**2)**0.5
-
+        dyn_pressure = 0.5 * density_slugs_per_ft3 * V **2 * planform_area
         ! CALCULATE ALPHA AND BETA 3.4.4 and 3.4.5
         alpha =  atan2(state(3) , state(1))
         beta =   asin(state(2) / V)
@@ -267,13 +283,16 @@ module f16_m
         beta_hat = 0.0
 
         ! CALCULATE PBAR, QBAR, AND RBAR from eq 3.4.23
-        angular_rates = 1 / (2*V) * (/state(4) * lateral_length, state(5) * longitudinal_length, state(6) * lateral_length/)
+        angular_rates(1) = 1 / (2*V) * state(4) * lateral_length
+        angular_rates(2) = 1 / (2*V) * state(5) * longitudinal_length
+        angular_rates(3) = 1 / (2*V) * state(6) * lateral_length
+
         pbar = angular_rates(1)
         qbar = angular_rates(2)
         rbar = angular_rates(3)
 
         ! CALCULATE THE REYNOLDS NUMBER
-        Re = density_slugs_per_ft3 * V * 2 * longitudinal_length / dyn_viscosity_slug_per_ft_sec
+        ! Re = density_slugs_per_ft3 * V * 2 * longitudinal_length / dyn_viscosity_slug_per_ft_sec
 
         ! PULL OUT CONTROLS
         delta_a = controls(1)
@@ -326,10 +345,11 @@ module f16_m
           m_trans_start = 0.88    ! start transsonic region
 
           ! Prandtl-Glauert factor
-          pg_factor = 1.0 / sqrt(max(1.0 - mach_num**2, tol))
+          sqrt_term = sqrt(max(1.0 - mach_num**2, tol))
+          pg_factor = 1.0 / sqrt_term
 
           ! Karman-Tsien factor
-          kt_factor = pg_factor * (1.0 + mach_num**2 / (1.0 + sqrt(max(1.0 - mach_num**2, tol))))
+          kt_factor = pg_factor * (1.0 + mach_num**2 / (1.0 + sqrt_term))
 
           ! BLEND BETWEEN PG AND KT
           if (mach_num <= m_low) then
@@ -369,18 +389,18 @@ module f16_m
           CD = CD * min(drag_factor, max_CD_factor)
         end if 
 
-        L =   CL * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
-        S =   CS * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
-        D =   CD * (0.5 * density_slugs_per_ft3 * V **2 * planform_area)
+        L =   CL * dyn_pressure
+        S =   CS * dyn_pressure
+        D =   CD * dyn_pressure
 
         ! TABLE 3.4.4
-        FM(1) = (D*ca*cb + S*ca*sb - L*sa) * (-1.0)
+        FM(1) = - (ca*(D*cb + S*sb) - L*sa)
         FM(2) = (S*cb - D*sb)
-        FM(3) = (D*sa*cb + S*sa*sb + L*ca) * (-1.0)
+        FM(3) = - (sa*(D*cb + S*sb) + L*ca) * (-1.0)
 
-        FM(4) = Cl_pitch * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
-        FM(5) = Cm       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * longitudinal_length)
-        FM(6) = Cn       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * lateral_length)
+        FM(4) = Cl_pitch * dyn_pressure * lateral_length
+        FM(5) = Cm       * dyn_pressure * longitudinal_length
+        FM(6) = Cn       * dyn_pressure * lateral_length
 
         ! ADD THE ENGINE THRUST
         if (throttle < 0.0) then
@@ -396,33 +416,6 @@ module f16_m
 
         ! SHIFT CG LOCATION
         FM(4:6) = FM(4:6) + cross_product(aero_ref_location, FM(1:3))
-        
-        ! PRINT STEPS IF SPECIFIED
-        if(rk4_verbose) then
-          write(io_unit,*) "V_mag = ", V
-          write(io_unit,*) "pbar = ", pbar
-          write(io_unit,*) "qbar = ", qbar
-          write(io_unit,*) "rbar = ", rbar
-          write(io_unit,*) "cos(alpha) = ", cos(alpha)
-          write(io_unit,*) "sin(alpha) = ", sin(alpha)
-          write(io_unit,*) "cos(beta) = ", cos(beta)
-          write(io_unit,*) "sin(beta) = ", sin(beta)
-          write(io_unit,*) "alpha = ", alpha
-          write(io_unit,*) "beta = ", beta
-          write(io_unit,*) "beta_flank = ", beta_f
-          write(io_unit,*) "CL1", CL1
-          write(io_unit,*) "CL", CL
-          write(io_unit,*) "CS", CS
-          write(io_unit,*) "CD", CD
-          write(io_unit,*) "C_l", Cl_pitch
-          write(io_unit,*) "Cm", Cm
-          write(io_unit,*) "Cn", Cn
-          write(io_unit,*) "delta_a", delta_a * 180.0 / pi
-          write(io_unit,*) "delta_e", delta_e * 180.0 / pi
-          write(io_unit,*) "delta_r", delta_r * 180.0 / pi
-          write(io_unit,*) "T", T
-        end if 
-
       end subroutine pseudo_aero
 
     !=========================
@@ -570,9 +563,7 @@ module f16_m
         pos = exp( lambda_b * (alpha - alpha_0 + alpha_s))
         neg = exp(-lambda_b * (alpha - alpha_0 - alpha_s))
         sigma = (1.0 + neg + pos) / ((1.0 + neg)*(1.0 + pos))
-        ! if (print_stall) then 
-        !   write(io_unit,*) 'sigma', sigma
-        ! end if 
+
       end function calc_sigma
 
     !=========================
@@ -598,9 +589,15 @@ module f16_m
         call jsonx_get(j_main, 'vehicle.mass.hz[slug-ft^2/s]', h(3))
 
         ! DEFINE IDENTITY MATRIX 
-        inertia = reshape((/ Ixx, Ixy, Ixz, &
-                            Ixy, Iyy, Iyz, &
-                            Ixz, Iyz, Izz /), (/3,3/))
+        inertia(1,1) = Ixx
+        inertia(1,2) = Ixy
+        inertia(1,3) = Ixz
+        inertia(2,1) = Ixy
+        inertia(2,2) = Iyy
+        inertia(2,3) = Iyz
+        inertia(3,1) = Ixz
+        inertia(3,2) = Iyz
+        inertia(3,3) = Izz
 
         ! CALCULATE MASS AND INERTIA
         mass = weight / 32.17404855643
@@ -1047,53 +1044,47 @@ module f16_m
     !=========================
     ! Matrix Inverse
       function matrix_inv(A) result(A_inv)
-        implicit none
-        real, dimension(3,3), intent(in) :: A
-        real, dimension(3,3) :: A_inv, A_adj
-        real :: det
+          implicit none
+          real, dimension(3,3), intent(in) :: A
+          real, dimension(3,3) :: A_inv
+          real :: det
+          real :: a11, a12, a13, a21, a22, a23, a31, a32, a33
 
-        ! CALCULATE THE DETERMINANT
-        det = A(1,1) * A(2,2) * A(3,3) + A(1,2) * A(2,3) * A(3,1) + A(1,3) * A(2,1) * A(3,2) &
-            - A(1,3) * A(2,2) * A(3,1) - A(1,2) * A(2,1) * A(3,3) - A(1,1) * A(2,3) * A(3,2)
+          ! UNPACK ELEMENTS
+          a11 = A(1,1); a12 = A(1,2); a13 = A(1,3)
+          a21 = A(2,1); a22 = A(2,2); a23 = A(2,3)
+          a31 = A(3,1); a32 = A(3,2); a33 = A(3,3)
 
-        ! CALCULATE THE ADJUGATE MATRIX
-        A_adj(1,1) = A(2,2) * A(3,3) - A(2,3) * A(3,2)
-        A_adj(1,2) = A(1,3) * A(3,2) - A(1,2) * A(3,3)
-        A_adj(1,3) = A(1,2) * A(2,3) - A(1,3) * A(2,2)
+          ! CALCULATE DETERMINANT
+          det = a11*(a22*a33 - a23*a32) - a12*(a21*a33 - a23*a31) + a13*(a21*a32 - a22*a31)
 
-        A_adj(2,1) = A(2,3) * A(3,1) - A(2,1) * A(3,3)
-        A_adj(2,2) = A(1,1) * A(3,3) - A(1,3) * A(3,1)
-        A_adj(2,3) = A(1,3) * A(2,1) - A(1,1) * A(2,3)
+          ! CALCULATE INVERSE ELEMENT-WISE
+          A_inv(1,1) =  (a22*a33 - a23*a32)/det
+          A_inv(1,2) = -(a12*a33 - a13*a32)/det
+          A_inv(1,3) =  (a12*a23 - a13*a22)/det
 
-        A_adj(3,1) = A(2,1) * A(3,2) - A(2,2) * A(3,1)
-        A_adj(3,2) = A(1,2) * A(3,1) - A(1,1) * A(3,2)
-        A_adj(3,3) = A(1,1) * A(2,2) - A(1,2) * A(2,1)
+          A_inv(2,1) = -(a21*a33 - a23*a31)/det
+          A_inv(2,2) =  (a11*a33 - a13*a31)/det
+          A_inv(2,3) = -(a11*a23 - a13*a21)/det
 
-        ! CALCULATE THE INVERSE MATRIX
-        A_inv = 1/det * A_adj
+          A_inv(3,1) =  (a21*a32 - a22*a31)/det
+          A_inv(3,2) = -(a11*a32 - a12*a31)/det
+          A_inv(3,3) =  (a11*a22 - a12*a21)/det
+
       end function matrix_inv
 
+
     !=========================
-    ! CROSS PRODUCT
-      function cross_product(vector_a, vector_b) result(vector_c)
-        implicit none 
-        real, intent(in) :: vector_a(3), vector_b(3)
-        real :: vector_c(3)
-        real :: a1, a2, a3, b1, b2, b3
+    ! Cross product
+      function cross_product(a, b) result(c)
+          implicit none
+          real, intent(in) :: a(3), b(3)
+          real :: c(3)
 
-        ! BREAK DOWN VECTOR 1 AND 2
-        a1 = vector_a(1)
-        a2 = vector_a(2)
-        a3 = vector_a(3)
-
-        b1 = vector_b(1)
-        b2 = vector_b(2)
-        b3 = vector_b(3)
-
-        ! CALCULATE ORTHOGONAL VECTOR
-        vector_c(1) = a2*b3 - a3*b2
-        vector_c(2) = a3*b1 - a1*b3
-        vector_c(3) = a1*b2 - a2*b1
+          ! DIRECTLY COMPUTE CROSS PRODUCT
+          c(1) = a(2)*b(3) - a(3)*b(2)
+          c(2) = a(3)*b(1) - a(1)*b(3)
+          c(3) = a(1)*b(2) - a(2)*b(1)
       end function cross_product
 
     !=========================
@@ -1361,7 +1352,7 @@ module f16_m
 
           ! NORMALIZE THE QUATERNION
           call quat_norm(y_new(10:13))
-
+          
           if (print_states) then 
             write(io_unit,'(14ES20.12)') t,y_init(:)
           end if 
@@ -1386,7 +1377,7 @@ module f16_m
           y_init = y_new
           t = t + dt
           integrated_time = integrated_time + dt
-          write(*,*) t, dt
+          ! write(*,*) t, dt
           
         end do 
 
