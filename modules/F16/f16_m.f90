@@ -94,7 +94,7 @@ module f16_m
         real, pointer :: hxb, hyb, hzb
 
         avoid_warning = t
-
+        
         ! UNPACK STATES
         u  => state(1)
         v  => state(2)
@@ -107,8 +107,10 @@ module f16_m
         ey => state(12)
         ez => state(13) 
 
+        write(*,*) 'unpack inertia'
         ! UNPACK INERTIA
         Ixx = inertia(1,1)
+        write(*,*) 'first inertia'
         Iyy = inertia(2,2)
         Izz = inertia(3,3)
         Ixy = inertia(1,2)
@@ -200,6 +202,7 @@ module f16_m
         quat_matrix(4,2) =  ex
         quat_matrix(4,3) =  e0            
 
+        write(*,*) 'build diff eq'
         ! BUILD THE DIFFERENTIAL EQUATIONS
         ! ACCELERATION IN BODY FRAME
         acceleration(1) = FM(1)/mass + gravity_ft_per_sec2*orientation_effect(1) + angular_v_effect(1)
@@ -229,6 +232,7 @@ module f16_m
         dstate_dt(4:6)  = angular_accelerations
         dstate_dt(7:9)  = velocity
         dstate_dt(10:13) = quat_change
+        write(*,*) 'end diff eq'
       end function differential_equations
   ! 
   ! AERODYNAMICS AND FORCES
@@ -779,7 +783,6 @@ module f16_m
           s_elev = sin(euler(2))
           c_elev = cos(euler(2)) 
 
-
           ! CALCULATE THE ANGULAR RATES
           if (any(case_number == [1,2])) then
             angular_rates = (gravity * s_bank * c_elev) / (u*c_elev*c_bank + w*s_elev) &
@@ -927,6 +930,7 @@ module f16_m
           write(io_unit,'(A30,ES25.13E3)') '       throttle[deg]       :', controls(4)
 
         end if 
+        write(*,*) 'end trim'
       end function trim_algorithm
 
     !=========================
@@ -1026,6 +1030,7 @@ module f16_m
           sb = sin(G(2))
         end if
 
+        write(*,*) 'calc initial states'
         ! CALCUALTE INITIAL STATES
         temp_state(1:3)   = V_mag * (/ca*cb, sb, sa*cb/) 
         temp_state(4:6)   = angular_rates
@@ -1033,8 +1038,8 @@ module f16_m
         temp_state(7:8)   = 0
         temp_state(10:13) = euler_to_quat(euler)
 
-
         ! CALCULATE RESIDUAL
+        write(*,*) 'call diff eq'        
         dummy_R = differential_equations(0.0, temp_state)
         R = dummy_R(1:6)
 
@@ -1291,7 +1296,6 @@ module f16_m
         call user_controls%init(j_user_controls)
 
         ! TEST STALL IF SPECIFIED 
-        
         if (test_stall) then 
           call check_stall(initial_state)
         end if 
