@@ -89,8 +89,8 @@ module f16_m
         real :: Vxw, Vyw, Vzw, gravity_ft_per_sec2 
         real :: angular_inertia(3,3), angular_inertia_inv(3,3)
         real :: avoid_warning
+        real :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz 
         real, pointer :: u, v, w, p, q, r, e0, ex, ey, ez
-        real, pointer :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz 
         real, pointer :: hxb, hyb, hzb
 
         avoid_warning = t
@@ -107,10 +107,9 @@ module f16_m
         ey => state(12)
         ez => state(13) 
 
-        write(*,*) 'unpack inertia'
+
         ! UNPACK INERTIA
         Ixx = inertia(1,1)
-        write(*,*) 'first inertia'
         Iyy = inertia(2,2)
         Izz = inertia(3,3)
         Ixy = inertia(1,2)
@@ -202,7 +201,6 @@ module f16_m
         quat_matrix(4,2) =  ex
         quat_matrix(4,3) =  e0            
 
-        write(*,*) 'build diff eq'
         ! BUILD THE DIFFERENTIAL EQUATIONS
         ! ACCELERATION IN BODY FRAME
         acceleration(1) = FM(1)/mass + gravity_ft_per_sec2*orientation_effect(1) + angular_v_effect(1)
@@ -232,7 +230,6 @@ module f16_m
         dstate_dt(4:6)  = angular_accelerations
         dstate_dt(7:9)  = velocity
         dstate_dt(10:13) = quat_change
-        write(*,*) 'end diff eq'
       end function differential_equations
   ! 
   ! AERODYNAMICS AND FORCES
@@ -930,7 +927,6 @@ module f16_m
           write(io_unit,'(A30,ES25.13E3)') '       throttle[deg]       :', controls(4)
 
         end if 
-        write(*,*) 'end trim'
       end function trim_algorithm
 
     !=========================
@@ -1030,7 +1026,6 @@ module f16_m
           sb = sin(G(2))
         end if
 
-        write(*,*) 'calc initial states'
         ! CALCUALTE INITIAL STATES
         temp_state(1:3)   = V_mag * (/ca*cb, sb, sa*cb/) 
         temp_state(4:6)   = angular_rates
@@ -1039,7 +1034,6 @@ module f16_m
         temp_state(10:13) = euler_to_quat(euler)
 
         ! CALCULATE RESIDUAL
-        write(*,*) 'call diff eq'        
         dummy_R = differential_equations(0.0, temp_state)
         R = dummy_R(1:6)
 
@@ -1221,6 +1215,9 @@ module f16_m
         call jsonx_get(j_main, 'initial.state.q[deg/s]',  initial_state(5))
         call jsonx_get(j_main, 'initial.state.r[deg/s]',  initial_state(6))
 
+        ! CALCULATE MASS AND INERTIA
+        call mass_inertia()         
+
         ! CONVERT ALTITUDE TO CORRECT DIRECTION
         initial_state(9) = initial_state(9) * (-1.0)
 
@@ -1264,12 +1261,8 @@ module f16_m
         ! STORE THE DENSITY AT SEA LEVEL
         rho0 = 2.3768921839070335E-03
 
-        ! CALCULATE MASS AND INERTIA
-        call mass_inertia() 
-
         ! CALCULATE THE SPECIFIED TRIM CONDITION IF GIVEN 
         if (sim_type == 'trim') then 
-          write(*,*) 'call trim'
           trim_state = trim_algorithm(init_airspeed, initial_state(9), eul, tolerance, trim_type)
           call compute_A()
           call compute_B()
@@ -1381,7 +1374,7 @@ module f16_m
           y_init = y_new
           t = t + dt
           integrated_time = integrated_time + dt
-          ! write(*,*) t, dt
+          write(*,*) t, dt
           
         end do 
 
