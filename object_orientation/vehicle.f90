@@ -19,32 +19,36 @@ module vehicle_m
 
       ! mass constants
       real :: mass
-      real :: inetia(3,3)
+      real :: inertia(3,3)
       real :: inertia_inv(3,3)
       real, allocatable :: h(:)
 
       ! aerodynamic constants
-      real,allocatable :: aero_ref_location(:) ! has to be allocatable because will be read from json object
-      real :: sref, long_ref, lat_ref
-      real :: CL0, CLa, CLahat, CLqbar, CLde
-      real :: CD0, CD1, CD2, CDS, CDqbar, CDaqbar, CDde, CDade, CDde2
-      real :: CSb, CSpbar, CSapbar, CSrbar, CSda, CSdr
-      real :: Cll0, Clb, Clpbar, Clrbar, Clarbar, Clda, Cldr
-      real :: Cm0, Cma, Cmqbar, Cmahat, Cmde
-      real :: Cnb, Cnpbar, Cnapbar, Cnrbar, Cnda, Cnada, Cndr
+      real, allocatable :: aero_ref_location(:)
+      real :: planform_area, longitudinal_length, lateral_length, sweep
+      real :: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
+      real :: CS_beta, CS_pbar, CS_alpha_pbar, CS_rbar, CS_aileron, CS_rudder
+      real :: CD_L0, CD_L1, CD_L1_L1, CD_CS_CS, CD_qbar, CD_alpha_qbar, CD_elevator, CD_alpha_elevator, CD_elevator_elevator
+      real :: Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
+      real :: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
+      real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
+      real :: Cm_alpha_0, Cm_alpha_s, Cm_min
       real :: T0, Ta, thrust_quat(4)
       real, allocatable :: thrust_location(:)
+      logical :: compressibility, rk4_verbose, print_states, test_compressibility
 
       ! stall model constants
-      logical :: include_stall
-      type(stall_settings_t) :: CLstall, CDstall, Cmstall
+      logical :: stall, test_stall
+      ! type(stall_settings_t) :: CLstall, CDstall, Cmstall
 
+      real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
+      
       ! initialization constants
-      real :: init_V, init_alt, init_state(13)
+      real :: init_airspeed, init_alt, init_state(13)
       real, allocatable :: init_eul(:) ! has to be allocatable because will be read from json object
 
       ! variables
-      real :: state(13)
+      real :: initial_state(13)
       real :: controls(4)
 
       type(trim_settings_t) :: trim
@@ -61,35 +65,10 @@ module vehicle_m
     type(connection) :: user_controls
 
     ! BUILD GLOBAL VARIABLES FOR THE MODULE
-    real :: mass
-    real :: inertia(3,3)
-    real :: inertia_inv(3,3)
-    real, target :: h(3)
     real :: FM(6)
-    real :: initial_state(13)
-    real :: controls(4)
     real :: rho0
-    real :: T0, Ta, thrust_quat(4)
-    real, allocatable :: thrust_location(:)
-    real, allocatable :: aero_ref_location(:)
     integer :: io_unit
     real :: init_airspeed 
-
-    ! CONTROLLER VARIABLES 
-    real :: Amat(6,6), Bmat(6,4), xd(13), ud(4) 
-
-    ! DEFINE AERODYNAMIC PROPERTIES
-    real :: planform_area, longitudinal_length, lateral_length, sweep
-    real :: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
-    real :: CS_beta, CS_pbar, CS_alpha_pbar, CS_rbar, CS_aileron, CS_rudder
-    real :: CD_L0, CD_L1, CD_L1_L1, CD_CS_CS, CD_qbar, CD_alpha_qbar, CD_elevator, CD_alpha_elevator, CD_elevator_elevator
-    real :: Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
-    real :: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
-    real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
-    real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
-    real :: Cm_alpha_0, Cm_alpha_s, Cm_min
-    logical :: compressibility, rk4_verbose, print_states, stall, test_stall, test_compressibility
-    logical :: print_stall
 
     ! ADD VARIABLES FOR TRIM ALGORITHM
     character(:), allocatable :: sim_type
