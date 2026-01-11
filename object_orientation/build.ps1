@@ -1,14 +1,16 @@
-gfortran -ffree-line-length-512 -fdefault-real-8 \
-../modules/json.f90 \
-../modules/jsonx.f90 \
-../modules/linalg_mod.f90 \
-../modules/micro_time.f90  \
-../koch.f90 \
-../vehicle.f90 \
-../sim.f90 \ 
-../main.f90 \
+$root = $PSScriptRoot
 
--o run.exe
+gfortran -ffree-line-length-512 -fdefault-real-8 `
+"$root\source\json.f90" `
+"$root\source\jsonx.f90" `
+"$root\source\linalg_mod.f90" `
+"$root\source\micro_time.f90" `
+"$root\source\koch.f90" `
+"$root\source\vehicle.f90" `
+"$root\source\sim.f90" `
+"$root\source\main.f90" `
+-o "$root\run.exe"
+
 
 # run with 
-# .\run_f16.exe ..\..\json\f16.json
+

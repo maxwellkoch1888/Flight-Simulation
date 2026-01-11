@@ -248,9 +248,9 @@ module vehicle_m
           t%init_state(10:13) = euler_to_quat(t%init_eul) 
           t%state = t%init_state 
 
-          if(t%save_states) then 
-            call vehicle_write_state(t, 0.0,t%state)
-          end if 
+          ! if(t%save_states) then 
+          !   call vehicle_write_state(t, 0.0,t%state)
+          ! end if 
         end if 
       end subroutine
     !=========================
@@ -320,9 +320,9 @@ module vehicle_m
 
         ! UPDATE AND WRITE THE STATES
         t%state = y1 
-        if(t%save_states) then 
-          call vehicle_write_state(t, time+dt, y1) 
-        end if 
+        ! if(t%save_states) then 
+        !   call vehicle_write_state(t, time+dt, y1) 
+        ! end if 
 
         if (t%rk4_verbose) then 
           write(t%iunit_rk4,*)
