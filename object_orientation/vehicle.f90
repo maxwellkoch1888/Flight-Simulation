@@ -33,7 +33,7 @@ module vehicle_m
       real :: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
       real :: CS_beta, CS_pbar, CS_alpha_pbar, CS_rbar, CS_aileron, CS_rudder
       real :: CD_L0, CD_L1, CD_L1_L1, CD_CS_CS, CD_qbar, CD_alpha_qbar, CD_elevator, CD_alpha_elevator, CD_elevator_elevator
-      real :: Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
+      real :: Cl_l0, Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
       real :: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
       real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
       real :: Cm_alpha_0, Cm_alpha_s, Cm_min
@@ -57,7 +57,7 @@ module vehicle_m
       real :: initial_state(13), state(13)
       real :: controls(4)
 
-      type(trim_settings_t) :: trim
+      ! type(trim_settings_t) :: trim
     end type vehicle_t
 
     ! BUILD GLOBAL VARIABLES FOR THE MODULE
@@ -80,7 +80,6 @@ module vehicle_m
         implicit none 
         type(vehicle_t) :: t
         type(json_value), pointer :: j_vehicle_input
-        real :: denom 
         character(len=:), allocatable :: init_type 
         real, allocatable :: thrust_orientation(:)
 
@@ -137,7 +136,7 @@ module vehicle_m
             call jsonx_get(t%j_vehicle, 'vehicle.aerodynamics.coefficients.CL.alpha',    t%CL_alpha)
             call jsonx_get(t%j_vehicle, 'vehicle.aerodynamics.coefficients.CD.L0',       t%CD_L0)
             call jsonx_get(t%j_vehicle, 'vehicle.aerodynamics.coefficients.CD.CL1_CL1',  t%CD_L1_L1)
-            call jsonx_get(t%j_vehicle, 'vehicle.aerodynamics.coefficients.Cl.0',        t%Cll0)
+            call jsonx_get(t%j_vehicle, 'vehicle.aerodynamics.coefficients.Cl.0',        t%Cl_l0)
             call jsonx_get(t%j_vehicle, 'vehicle.aerodynamics.coefficients.Cl.pbar',     t%Cl_pbar)
             call jsonx_get(t%j_vehicle, 'vehicle.aerodynamics.coefficients.Cm.alpha',    t%Cm_alpha)
             call jsonx_get(t%j_vehicle, 'vehicle.aerodynamics.coefficients.Cm.qbar',     t%Cm_qbar)
@@ -294,14 +293,43 @@ module vehicle_m
         end if     
       end subroutine 
     !=========================
-    ! Calculate initial conditions if trim state is specified
+    ! TRIM INITIAL
       subroutine init_to_trim(t) 
         implicit none 
         type(vehicle_t) :: t
-        type(json_value), pointer :: j_initial, j_state 
+        real :: states(13)
+        ! type(json_value), pointer :: j_initial, j_state 
+
+        states = t%state 
 
       end subroutine
+    !=========================
+    ! TICK A VEHICLE FORWARD IN TIME 
+      subroutine vehicle_tick_state(t, time, dt)
+        implicit none 
+        type(vehicle_t) :: t 
+        real, intent(in) :: time, dt 
+        real :: y(13), y1(13) 
 
+        ! STEP VEHICLE FORWARD IN TIME 
+        y = t%state 
+        y1 = rk4(t, time, y, dt) 
+
+        ! NORMALIZE THE QUATERNION 
+        call quat_norm(y1(10:13)) 
+
+        ! UPDATE AND WRITE THE STATES
+        t%state = y1 
+        if(t%save_states) then 
+          call vehicle_write_state(t, time+dt, y1) 
+        end if 
+
+        if (t%rk4_verbose) then 
+          write(t%iunit_rk4,*)
+          write(t%iunit_rk4,*) 'make statements for rk4 verbose'
+          write(t%iunit_rk4,*)
+        end if 
+      end subroutine
   ! 
   ! INTEGRATOR AND EQN OF MOTION
     !=========================
@@ -494,22 +522,22 @@ module vehicle_m
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
         real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
         real :: V, dyn_pressure
-        real :: Cl_pitch0, alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
+        real :: alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
         real :: CL, CL1, CD, CS, L, D, S, Cl_pitch, Cm, Cn
-        real :: CM1, CM2, mach_num, gamma, R
+        real :: CM1, CM2, mach_num
         real :: ca, cb, sa, sb
         real :: alpha_hat, beta_hat
         real :: delta_a, delta_e, delta_r
         real :: thrust, throttle
-        real :: CL_ss, CD_ss, Cm_ss, CL_s, CD_s, Cm_s 
+        real :: CL_s, CD_s, Cm_s 
         real :: sigma_D, sigma_L, sigma_m, sign_a
         
         ! COMPRESSIBILITY
-        real :: blend, drag_factor, lift_factor, moment_factor, drag_rise
+        real :: blend, drag_factor, lift_factor, moment_factor
         real :: pg_factor, kt_factor
-        real :: m_high, m_low, m_trans_start, m_trans_end
-        real :: k, var, sqrt_term
-        real :: tran, max_CL_factor, max_CD_factor, max_Cl_pitch_factor, transonic_blend
+        real :: m_high, m_low, m_trans_start
+        real :: sqrt_term
+        real :: max_CL_factor, max_CD_factor, max_Cl_pitch_factor
           
         ! BUILD THE ATMOSPHERE 
         geometric_altitude_ft = -state(9)
@@ -544,30 +572,60 @@ module vehicle_m
         qbar = angular_rates(2)
         rbar = angular_rates(3)
 
-        ! CALCULATE THE REYNOLDS NUMBER
-        ! Re = density_slugs_per_ft3 * V * 2 * longitudinal_length / dyn_viscosity_slug_per_ft_sec
+        if(t%type == 'aircraft') then 
+          ! PULL OUT CONTROLS
+          delta_a =  t%controls(1)
+          delta_e =  t%controls(2)
+          delta_r =  t%controls(3)
+          throttle = t%controls(4)
 
-        ! PULL OUT CONTROLS
-        delta_a =  t%controls(1)
-        delta_e =  t%controls(2)
-        delta_r =  t%controls(3)
-        throttle = t%controls(4)
+          ! CALCULATE THE LIFT, DRAG, AND SIDE FORCE COEFFICIENTS
+          CL1 =  t%CL0 + t%CL_alpha * alpha
+          CL  = CL1 + t%CL_qbar * qbar + t%CL_alphahat * alpha_hat + t%CL_elevator * delta_e
+          CS  = t%CS_beta * beta + (t%CS_pbar + t%CS_alpha_pbar * alpha) * pbar + t%CS_rbar * rbar &
+              + t%CS_aileron * delta_a + t%CS_rudder * delta_r
+          CD  =  t%CD_L0 + t%CD_L1 * CL1 + t%CD_L1_L1 * CL1 **2 + t%CD_CS_CS * CS **2 &
+                + (t%CD_qbar + t%CD_alpha_qbar * alpha) * qbar + (t%CD_elevator + t%CD_alpha_elevator * alpha) &
+                * delta_e + t%CD_elevator_elevator * delta_e ** 2
 
-        ! CALCULATE THE LIFT, DRAG, AND SIDE FORCE COEFFICIENTS
-        CL1 =  t%CL0 + t%CL_alpha * alpha
-        CL_ss  = CL1 + t%CL_qbar * qbar + t%CL_alphahat * alpha_hat + t%CL_elevator * delta_e
-        CS  = t%CS_beta * beta + (t%CS_pbar + t%CS_alpha_pbar * alpha) * pbar + t%CS_rbar * rbar &
-            + t%CS_aileron * delta_a + t%CS_rudder * delta_r
-        CD_ss  =  t%CD_L0 + t%CD_L1 * CL1 + t%CD_L1_L1 * CL1 **2 + t%CD_CS_CS * CS **2 &
-              + (t%CD_qbar + t%CD_alpha_qbar * alpha) * qbar + (t%CD_elevator + t%CD_alpha_elevator * alpha) &
-              * delta_e + t%CD_elevator_elevator * delta_e ** 2
+          ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
+          Cl_pitch = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar &
+                     + t%Cl_aileron * delta_a + t%Cl_rudder * delta_r  ! roll moment
+          Cm    = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar + t%Cm_alphahat * alpha_hat + t%Cm_elevator * delta_e ! pitch moment
+          Cn       = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar &
+                     + (t%Cn_aileron + t%Cn_alpha_aileron * alpha) * delta_a + t%Cn_rudder * delta_r ! yaw moment
+        
+        else if (t%type == 'arrow') then 
+          CL = t%CL_alpha * alpha 
+          CS = -t%CL_alpha * beta_f 
+          CD = t%CD_L0 + t%CD_L1_L1*CL**2 + t%CD_L1_L1*CS**2 
+          
+          Cl_pitch = t%Cl_l0 + t%Cl_pbar*pbar
+          Cm       = t%Cm_alpha*alpha + t%CL_qbar*qbar 
+          Cn       = -t%Cm_alpha*beta_f + t%Cm_qbar*rbar
 
-        ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
-        Cl_pitch = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar &
-                  + t%Cl_aileron * delta_a + t%Cl_rudder * delta_r  ! roll moment
-        Cm_ss =    t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar + t%Cm_alphahat * alpha_hat + t%Cm_elevator * delta_e ! pitch moment
-        Cn =       t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar &
-                  + (t%Cn_aileron + t%Cn_alpha_aileron * alpha) * delta_a + t%Cn_rudder * delta_r ! yaw moment
+        else if (t%type == 'sphere') then 
+          CL       = 0.0 
+          CS       = 0.0 
+          Cl_pitch = 0.0 
+          Cm       = 0.0 
+          Cn       = 0.0
+          
+          ! CALCULATE THE REYNOLDS NUMBER
+          Re = density_slugs_per_ft3 * V * 2 * t%longitudinal_length / dyn_viscosity_slug_per_ft_sec
+
+          ! COMPUTE THE DRAG COEFFICIENT
+          if(0.0 < Re .and. Re <= 450000.0) then
+            CD = 24.0/Re + 6.0/(1.0 + Re**0.5) + 0.4
+          else if(450000.0 < Re .and. Re <= 560000.0) then 
+            CD = 1.0E29 * Re **(-5.211)
+          else if(560000 < Re .and. Re <= 14000000) then
+            CD = -2.0E-23 * Re**3 - 1.0E-16*Re**2 + 9.0E-09 * Re + 0.069
+          else if(Re > 1400000) then
+            CD = 0.12
+          end if
+
+        end if 
 
         ! STALL MODEL FOR FORCES
         if (t%stall) then 
@@ -577,12 +635,12 @@ module vehicle_m
           sigma_L = calc_sigma(t%CL_lambda_b, t%CL_alpha_0, t%CL_alpha_s, alpha)
           sigma_D = calc_sigma(t%CD_lambda_b, t%CD_alpha_0, t%CD_alpha_s, alpha)
           
-          CL = CL_ss * (1 - sigma_L) + CL_s * sigma_L 
-          CD = CD_ss * (1 - sigma_D) + CD_s * sigma_D 
+          CL = CL * (1 - sigma_L) + CL_s * sigma_L 
+          CD = CD * (1 - sigma_D) + CD_s * sigma_D 
 
           Cm_s = t%CM_min * sa**2 * sign_a
           sigma_m = calc_sigma(t%Cm_lambda_b, t%Cm_alpha_0, t%Cm_alpha_s, alpha)
-          Cm = Cm_ss * (1 - sigma_m) + Cm_s * sigma_m 
+          Cm = Cm * (1 - sigma_m) + Cm_s * sigma_m 
      
         end if 
 
@@ -673,139 +731,139 @@ module vehicle_m
 
     !=========================
     ! Check stall blending funtion
-      subroutine check_stall(t, state) 
-        implicit none 
-        type(vehicle_t) :: t
-        integer :: i 
-        real :: state(13)
-        real :: alpha, beta, states(13), N, Y, A
-        real :: ca, cb, sa, sb
-        real :: CL, CD, Cm
-        real :: const, geometric_altitude_ft, geopotential_altitude_ft, temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
+      ! subroutine check_stall(t, state) 
+      !   implicit none 
+      !   type(vehicle_t) :: t
+      !   integer :: i 
+      !   real :: state(13)
+      !   real :: alpha, beta, states(13), N, Y, A
+      !   real :: ca, cb, sa, sb
+      !   real :: CL, CD, Cm
+      !   real :: const, geometric_altitude_ft, geopotential_altitude_ft, temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
 
-        geometric_altitude_ft = -t%initial_state(9)
-        call std_atm_English(&
-          geometric_altitude_ft, geopotential_altitude_ft,     & 
-          temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, & 
-          dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
+      !   geometric_altitude_ft = -t%initial_state(9)
+      !   call std_atm_English(&
+      !     geometric_altitude_ft, geopotential_altitude_ft,     & 
+      !     temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, & 
+      !     dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
 
-        const = (0.5 * density_slugs_per_ft3 * t%init_airspeed**2 * t%planform_area)
-        ! write(io_unit,*) 'altitude', geometric_altitude_ft
-        ! write(io_unit,*) 'rho', density_slugs_per_ft3 
-        ! write(io_unit,*) 'airspeed', init_airspeed 
-        ! write(io_unit,*) 'planform area', planform_area
+      !   const = (0.5 * density_slugs_per_ft3 * t%init_airspeed**2 * t%planform_area)
+      !   ! write(io_unit,*) 'altitude', geometric_altitude_ft
+      !   ! write(io_unit,*) 'rho', density_slugs_per_ft3 
+      !   ! write(io_unit,*) 'airspeed', init_airspeed 
+      !   ! write(io_unit,*) 'planform area', planform_area
 
-        t%controls = 0.0 
-        states = 0.0 
+      !   t%controls = 0.0 
+      !   states = 0.0 
 
-        ! write(io_unit,*) '  alpha[deg]                CL                        CD                        Cm'  
-        do i=-180, 180, 1 
-          alpha = real(i) * pi / 180.0
-          beta = 0.0
+      !   ! write(io_unit,*) '  alpha[deg]                CL                        CD                        Cm'  
+      !   do i=-180, 180, 1 
+      !     alpha = real(i) * pi / 180.0
+      !     beta = 0.0
 
-          ca = cos(alpha) 
-          cb = cos(beta) 
-          sa = sin(alpha) 
-          sb = sin(beta) 
+      !     ca = cos(alpha) 
+      !     cb = cos(beta) 
+      !     sa = sin(alpha) 
+      !     sb = sin(beta) 
 
-          states(1) = t%init_airspeed *ca * cb 
-          states(2) = t%init_airspeed * sb 
-          states(3) = t%init_airspeed * sa * cb 
-          states(9) = t%initial_state(9)
+      !     states(1) = t%init_airspeed *ca * cb 
+      !     states(2) = t%init_airspeed * sb 
+      !     states(3) = t%init_airspeed * sa * cb 
+      !     states(9) = t%initial_state(9)
 
-          call pseudo_aero(t, states) 
-          A = -FM(1) 
-          Y =  FM(2)
-          N = -FM(3) 
+      !     call pseudo_aero(t, states) 
+      !     A = -FM(1) 
+      !     Y =  FM(2)
+      !     N = -FM(3) 
           
-          CL = N * ca - A* sa
-          CD = A * ca * cb - Y * sb + N * sa * cb 
-          Cm = FM(5) 
+      !     CL = N * ca - A* sa
+      !     CD = A * ca * cb - Y * sb + N * sa * cb 
+      !     Cm = FM(5) 
 
-          CL = CL / const 
-          CD = CD / const 
-          Cm = Cm / const / t%longitudinal_length
-          ! write(io_unit,*) alpha*180.0/pi, CL, CD, Cm
-        end do 
-      end subroutine
+      !     CL = CL / const 
+      !     CD = CD / const 
+      !     Cm = Cm / const / t%longitudinal_length
+      !     ! write(io_unit,*) alpha*180.0/pi, CL, CD, Cm
+      !   end do 
+      ! end subroutine
 
     !=========================
     ! Check Compressiblity model
-      subroutine check_compressibility(t, state)
-        implicit none
-        type(vehicle_t) :: t
-        integer :: i, j
-        real :: state(13)
-        real :: alpha, beta, states(13)
-        real :: N, Y, A
-        real :: ca, cb, sa, sb
-        real :: CL, CD, Cm
-        real :: const
-        real :: geometric_altitude_ft, geopotential_altitude_ft
-        real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
-        real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
-        real :: airspeed, mach_num
-        real, dimension(9) :: mach_num_list
+      ! subroutine check_compressibility(t, state)
+      !   implicit none
+      !   type(vehicle_t) :: t
+      !   integer :: i, j
+      !   real :: state(13)
+      !   real :: alpha, beta, states(13)
+      !   real :: N, Y, A
+      !   real :: ca, cb, sa, sb
+      !   real :: CL, CD, Cm
+      !   real :: const
+      !   real :: geometric_altitude_ft, geopotential_altitude_ft
+      !   real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
+      !   real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
+      !   real :: airspeed, mach_num
+      !   real, dimension(9) :: mach_num_list
 
-        ! Mach numbers to sweep
-        mach_num_list = (/ 0.3, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1 /)
+      !   ! Mach numbers to sweep
+      !   mach_num_list = (/ 0.3, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1 /)
 
-        ! Get altitude for density
-        geometric_altitude_ft = -t%initial_state(9)
-        call std_atm_English( &
-          geometric_altitude_ft, geopotential_altitude_ft, &
-          temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, &
-          dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
+      !   ! Get altitude for density
+      !   geometric_altitude_ft = -t%initial_state(9)
+      !   call std_atm_English( &
+      !     geometric_altitude_ft, geopotential_altitude_ft, &
+      !     temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, &
+      !     dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
 
-        t%controls = 0.0
-        states   = 0.0
+      !   t%controls = 0.0
+      !   states   = 0.0
 
-        ! Main Mach loop -----------------------------------------------
-        do j = 1, size(mach_num_list)
-          mach_num = mach_num_list(j)
+      !   ! Main Mach loop -----------------------------------------------
+      !   do j = 1, size(mach_num_list)
+      !     mach_num = mach_num_list(j)
 
-          ! write(io_unit,*) '--------------------------------------------------'
-          ! write(io_unit,*) 'Mach Number = ', mach_num
-          ! write(io_unit,*) '--------------------------------------------------'
+      !     ! write(io_unit,*) '--------------------------------------------------'
+      !     ! write(io_unit,*) 'Mach Number = ', mach_num
+      !     ! write(io_unit,*) '--------------------------------------------------'
 
-          airspeed = mach_num * sos_ft_per_sec
+      !     airspeed = mach_num * sos_ft_per_sec
 
-          const = 0.5 * density_slugs_per_ft3 * airspeed**2 * t%planform_area
+      !     const = 0.5 * density_slugs_per_ft3 * airspeed**2 * t%planform_area
 
-          ! write(io_unit,*) '   alpha(deg)                CL                        CD                        Cm'
+      !     ! write(io_unit,*) '   alpha(deg)                CL                        CD                        Cm'
 
-          do i = -180, 180
-            alpha = real(i) * pi / 180.0
-            beta  = 0.0
+      !     do i = -180, 180
+      !       alpha = real(i) * pi / 180.0
+      !       beta  = 0.0
 
-            ca = cos(alpha)
-            cb = cos(beta)
-            sa = sin(alpha)
-            sb = sin(beta)
+      !       ca = cos(alpha)
+      !       cb = cos(beta)
+      !       sa = sin(alpha)
+      !       sb = sin(beta)
 
-            states = 0.0
-            states(1) = airspeed * ca * cb
-            states(2) = airspeed * sb
-            states(3) = airspeed * sa * cb
-            states(9) = t%initial_state(9)
+      !       states = 0.0
+      !       states(1) = airspeed * ca * cb
+      !       states(2) = airspeed * sb
+      !       states(3) = airspeed * sa * cb
+      !       states(9) = t%initial_state(9)
 
-            call pseudo_aero(t, states)
+      !       call pseudo_aero(t, states)
 
-            A = -FM(1)
-            Y =  FM(2)
-            N = -FM(3)
+      !       A = -FM(1)
+      !       Y =  FM(2)
+      !       N = -FM(3)
 
-            ! Aerodynamic coefficients
-            CL = (N * ca - A * sa) / const
-            CD = (A * ca * cb - Y * sb + N * sa * cb) / const
-            Cm = FM(5) / (const * t%longitudinal_length)
+      !       ! Aerodynamic coefficients
+      !       CL = (N * ca - A * sa) / const
+      !       CD = (A * ca * cb - Y * sb + N * sa * cb) / const
+      !       Cm = FM(5) / (const * t%longitudinal_length)
 
-            ! write(io_unit,*) alpha*180.0/pi, CL, CD, Cm
-          end do
+      !       ! write(io_unit,*) alpha*180.0/pi, CL, CD, Cm
+      !     end do
 
-        end do
+      !   end do
 
-      end subroutine
+      ! end subroutine
        
     !=========================
     ! Calculate Sigma
@@ -847,435 +905,435 @@ module vehicle_m
   ! CALCULATE TRIM STATE
     !=========================
     ! Trim Algorithm
-      function trim_algorithm(V_mag, height, euler, tolerance, trim_type) result(G)
-        implicit none 
-        real :: V_mag, height, tolerance
-        real :: alpha, beta, p, q, r, delta_a, delta_e, delta_r, throttle 
-        real :: elevation_angle, azimuth_angle
-        real :: c_bank, c_elev, s_bank, s_elev, ca, cb, sa, sb, error, pw
-        real :: u, v, w, velocities(3), gravity
-        real :: G(6), res(6), iteration_residual(6)
-        real :: angular_rates(3), euler(3), print_statement(13)
-        real :: cgamma, sgamma, climb_angle, solution, theta1, theta2, solution1
-        integer :: k, iteration, case_number
-        character(*), intent(in) :: trim_type
+      ! function trim_algorithm(V_mag, height, euler, tolerance, trim_type) result(G)
+      !   implicit none 
+      !   real :: V_mag, height, tolerance
+      !   real :: alpha, beta, p, q, r, delta_a, delta_e, delta_r, throttle 
+      !   real :: elevation_angle, azimuth_angle
+      !   real :: c_bank, c_elev, s_bank, s_elev, ca, cb, sa, sb, error, pw
+      !   real :: u, v, w, velocities(3), gravity
+      !   real :: G(6), res(6), iteration_residual(6)
+      !   real :: angular_rates(3), euler(3), print_statement(13)
+      !   real :: cgamma, sgamma, climb_angle, solution, theta1, theta2, solution1
+      !   integer :: k, iteration, case_number
+      !   character(*), intent(in) :: trim_type
         
-        ! DETERMINE THE TRIM TYPE BEING SPECIFIED
-        if (trim_type == 'sct') then 
-          if (elevation_angle0 /= -999.0) then 
-            case_number = 1 ! sct, elevation_angle, bank_angle
-          else
-            case_number = 2 ! sct, climb_angle, bank_angle
-          end if 
-        else 
-          if (elevation_angle0 /= -999.0) then 
-            if (t%sideslip_angle0 == -999.0) then 
-              case_number = 3 ! shss, elevation_angle, bank_angle 
-            else 
-              case_number = 4 ! shss, elevation_angle, sideslip_angle
-            end if 
-          else 
-            if (sideslip_angle0 == -999.0) then 
-              case_number = 5 ! shss, climb_angle, bank_angle
-            else 
-              case_number = 6 ! shss, climb_angle, sideslip_angle
-            end if 
-          end if 
-        end if 
+      !   ! DETERMINE THE TRIM TYPE BEING SPECIFIED
+      !   if (trim_type == 'sct') then 
+      !     if (elevation_angle0 /= -999.0) then 
+      !       case_number = 1 ! sct, elevation_angle, bank_angle
+      !     else
+      !       case_number = 2 ! sct, climb_angle, bank_angle
+      !     end if 
+      !   else 
+      !     if (elevation_angle0 /= -999.0) then 
+      !       if (t%sideslip_angle0 == -999.0) then 
+      !         case_number = 3 ! shss, elevation_angle, bank_angle 
+      !       else 
+      !         case_number = 4 ! shss, elevation_angle, sideslip_angle
+      !       end if 
+      !     else 
+      !       if (sideslip_angle0 == -999.0) then 
+      !         case_number = 5 ! shss, climb_angle, bank_angle
+      !       else 
+      !         case_number = 6 ! shss, climb_angle, sideslip_angle
+      !       end if 
+      !     end if 
+      !   end if 
         
-        if (trim_verbose) then 
-          write(io_unit,*) 'Case Number:', case_number
-          write(io_unit,*) 'Initial Airspeed:', V_mag 
-          write(io_unit,*) 'Initial Height', height 
-        end if 
+      !   if (trim_verbose) then 
+      !     write(io_unit,*) 'Case Number:', case_number
+      !     write(io_unit,*) 'Initial Airspeed:', V_mag 
+      !     write(io_unit,*) 'Initial Height', height 
+      !   end if 
 
-        ! CALCULATE GRAVITY
-        gravity = gravity_English(-height)
+      !   ! CALCULATE GRAVITY
+      !   gravity = gravity_English(-height)
 
-        ! SET INITIAL GUESSSES TO ZERO
-        G        = 0.0
-        p        = 0.0
-        q        = 0.0
-        r        = 0.0
-        alpha    = G(1)
-        beta     = G(2)
-        delta_a  = G(3)
-        delta_e  = G(4)
-        delta_r  = G(5)
-        throttle = G(6)
+      !   ! SET INITIAL GUESSSES TO ZERO
+      !   G        = 0.0
+      !   p        = 0.0
+      !   q        = 0.0
+      !   r        = 0.0
+      !   alpha    = G(1)
+      !   beta     = G(2)
+      !   delta_a  = G(3)
+      !   delta_e  = G(4)
+      !   delta_r  = G(5)
+      !   throttle = G(6)
 
-        if (trim_verbose) then
-          write(io_unit,*) 'Trimming Aircraft for ', trim_type
-          write(io_unit,'(A,ES20.12)') '  --> Azimuth angle set to psi [deg] =', euler(3) * 180 / pi
-          if (elevation_angle0 /= -999.0) then 
-            write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle0 * 180 / pi
-          else 
-            write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle0
-          end if 
-          if (sideslip_angle0 /= -999.0) then 
-            write(io_unit,'(A,ES20.12)') '  --> Sideslip angle set to beta [deg] =', sideslip_angle0 * 180 / pi 
-          else 
-            write(io_unit,'(A,ES20.12)') '  --> Bank angle set to phi [deg] =', bank_angle0 * 180 / pi
-          end if
-          write(io_unit,'(A)') ''
-          if (elevation_angle0 /= -999.0) then 
-            write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle0 * 180 / pi 
-            write(io_unit,'(A,ES20.12)') 'Initial gamma [deg] =', climb_angle0 
-          else 
-            write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle0
-            write(io_unit,'(A,ES20.12)') 'Initial gamma [deg] =', climb_angle0 * 180 / pi 
-          end if 
-          write(io_unit,'(A,ES20.12)') 'Initial phi [deg]   =', bank_angle0 * 180 / pi
-          write(io_unit,'(A,ES20.12)') 'Initial beta [deg]  =', beta * 180 / pi 
-          write(io_unit,'(A)') ''
-          write(io_unit,'(A)') 'Newton Solver Settings:'
-          write(io_unit,'(A,ES20.12)') 'Finite Difference Step Size =', finite_difference_step_size
-          write(io_unit,'(A,ES20.12)') '          Relaxation Factor =', relaxation_factor
-          write(io_unit,'(A,ES20.12)') '                  Tolerance =', tolerance
-          write(io_unit,'(A)') ''
-          write(io_unit,'(A)') ''
-        end if
+      !   if (trim_verbose) then
+      !     write(io_unit,*) 'Trimming Aircraft for ', trim_type
+      !     write(io_unit,'(A,ES20.12)') '  --> Azimuth angle set to psi [deg] =', euler(3) * 180 / pi
+      !     if (elevation_angle0 /= -999.0) then 
+      !       write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle0 * 180 / pi
+      !     else 
+      !       write(io_unit,'(A,ES20.12)') '  --> Elevation angle set to theta [deg] =', elevation_angle0
+      !     end if 
+      !     if (sideslip_angle0 /= -999.0) then 
+      !       write(io_unit,'(A,ES20.12)') '  --> Sideslip angle set to beta [deg] =', sideslip_angle0 * 180 / pi 
+      !     else 
+      !       write(io_unit,'(A,ES20.12)') '  --> Bank angle set to phi [deg] =', bank_angle0 * 180 / pi
+      !     end if
+      !     write(io_unit,'(A)') ''
+      !     if (elevation_angle0 /= -999.0) then 
+      !       write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle0 * 180 / pi 
+      !       write(io_unit,'(A,ES20.12)') 'Initial gamma [deg] =', climb_angle0 
+      !     else 
+      !       write(io_unit,'(A,ES20.12)') 'Initial theta [deg] =', elevation_angle0
+      !       write(io_unit,'(A,ES20.12)') 'Initial gamma [deg] =', climb_angle0 * 180 / pi 
+      !     end if 
+      !     write(io_unit,'(A,ES20.12)') 'Initial phi [deg]   =', bank_angle0 * 180 / pi
+      !     write(io_unit,'(A,ES20.12)') 'Initial beta [deg]  =', beta * 180 / pi 
+      !     write(io_unit,'(A)') ''
+      !     write(io_unit,'(A)') 'Newton Solver Settings:'
+      !     write(io_unit,'(A,ES20.12)') 'Finite Difference Step Size =', finite_difference_step_size
+      !     write(io_unit,'(A,ES20.12)') '          Relaxation Factor =', relaxation_factor
+      !     write(io_unit,'(A,ES20.12)') '                  Tolerance =', tolerance
+      !     write(io_unit,'(A)') ''
+      !     write(io_unit,'(A)') ''
+      !   end if
 
-        ! PULL OUT AZIMUTH, BANK, AND ELEVATION ANGLES
-        azimuth_angle = euler(3)
+      !   ! PULL OUT AZIMUTH, BANK, AND ELEVATION ANGLES
+      !   azimuth_angle = euler(3)
         
-        if (any(case_number == [4,6])) then 
-          beta = sideslip_angle0
-          euler(1) = 0.0
-        else 
-          euler(1) = bank_angle0
-        end if 
+      !   if (any(case_number == [4,6])) then 
+      !     beta = sideslip_angle0
+      !     euler(1) = 0.0
+      !   else 
+      !     euler(1) = bank_angle0
+      !   end if 
 
-        if (any(case_number == [1,3,4])) then 
-          euler(2) = elevation_angle0
-        end if 
+      !   if (any(case_number == [1,3,4])) then 
+      !     euler(2) = elevation_angle0
+      !   end if 
 
-        ! LOOP FOR FINDING TRIM STATE
-        error = 1.0
-        iteration = 1
-        do while (error > tolerance)
-          if (iteration > max_iterations) then 
-            write(*,*) 'No trim solutions... Reached max iterations...'
-          end if     
-          ! DEFINE COS AND SIN TERMS TO SAVE TIME
-          alpha = G(1)
-          if (any(case_number == [1,2,3,5])) then
-            beta = G(2)
-          else 
-            euler(1) = G(2)
-          end if 
+      !   ! LOOP FOR FINDING TRIM STATE
+      !   error = 1.0
+      !   iteration = 1
+      !   do while (error > tolerance)
+      !     if (iteration > max_iterations) then 
+      !       write(*,*) 'No trim solutions... Reached max iterations...'
+      !     end if     
+      !     ! DEFINE COS AND SIN TERMS TO SAVE TIME
+      !     alpha = G(1)
+      !     if (any(case_number == [1,2,3,5])) then
+      !       beta = G(2)
+      !     else 
+      !       euler(1) = G(2)
+      !     end if 
 
-          ca = cos(alpha)
-          cb = cos(beta) 
-          sa = sin(alpha) 
-          sb = sin(beta)
-          c_bank = cos(euler(1))
-          s_bank = sin(euler(1))
+      !     ca = cos(alpha)
+      !     cb = cos(beta) 
+      !     sa = sin(alpha) 
+      !     sb = sin(beta)
+      !     c_bank = cos(euler(1))
+      !     s_bank = sin(euler(1))
 
 
-          ! CALCULATE VELOCITIES FROM 3.4.12
-          velocities = V_mag * (/ca*cb, sb, sa*cb/) 
+      !     ! CALCULATE VELOCITIES FROM 3.4.12
+      !     velocities = V_mag * (/ca*cb, sb, sa*cb/) 
 
-          u = velocities(1)
-          v = velocities(2)
-          w = velocities(3)
+      !     u = velocities(1)
+      !     v = velocities(2)
+      !     w = velocities(3)
 
-          ! CALCULATE ELEVATION ANGLE IF CLIMB ANGLE SPECIFIED
-          if (any(case_number == [2,5,6])) then 
-            if (trim_verbose) then 
-              write(io_unit,*) ' '            
-              write(io_unit,*) 'Solving for elevation angle given a climb angle:'
-            end if 
-            climb_angle = climb_angle0
-            cgamma = cos(climb_angle)
-            sgamma = sin(climb_angle)
+      !     ! CALCULATE ELEVATION ANGLE IF CLIMB ANGLE SPECIFIED
+      !     if (any(case_number == [2,5,6])) then 
+      !       if (trim_verbose) then 
+      !         write(io_unit,*) ' '            
+      !         write(io_unit,*) 'Solving for elevation angle given a climb angle:'
+      !       end if 
+      !       climb_angle = climb_angle0
+      !       cgamma = cos(climb_angle)
+      !       sgamma = sin(climb_angle)
 
-              theta1 = asin((u*V_mag*sgamma + (v*s_bank + w*c_bank) * & 
-                sqrt(u**2 + (v*s_bank + w*c_bank)**2 - V_mag**2*sgamma**2)) &
-                / (u**2 + (v*s_bank + w*c_bank)**2))
+      !         theta1 = asin((u*V_mag*sgamma + (v*s_bank + w*c_bank) * & 
+      !           sqrt(u**2 + (v*s_bank + w*c_bank)**2 - V_mag**2*sgamma**2)) &
+      !           / (u**2 + (v*s_bank + w*c_bank)**2))
 
-              theta2 = asin((u*V_mag*sgamma - (v*s_bank + w*c_bank) * & 
-                        sqrt(u**2 + (v*s_bank + w*c_bank)**2 - V_mag**2*sgamma**2)) &
-                        / (u**2 + (v*s_bank + w*c_bank)**2))      
+      !         theta2 = asin((u*V_mag*sgamma - (v*s_bank + w*c_bank) * & 
+      !                   sqrt(u**2 + (v*s_bank + w*c_bank)**2 - V_mag**2*sgamma**2)) &
+      !                   / (u**2 + (v*s_bank + w*c_bank)**2))      
               
-              solution1 = u*sin(theta1) - (v*s_bank + w*c_bank)*cos(theta1)
-              solution = V_mag * sgamma 
+      !         solution1 = u*sin(theta1) - (v*s_bank + w*c_bank)*cos(theta1)
+      !         solution = V_mag * sgamma 
 
-              if (abs(solution1-solution) < tol) then 
-                euler(2) = theta1 
-              else 
-                euler(2) = theta2 
-              end if 
+      !         if (abs(solution1-solution) < tol) then 
+      !           euler(2) = theta1 
+      !         else 
+      !           euler(2) = theta2 
+      !         end if 
 
-              if (trim_verbose) then
-                write(io_unit,*) '        theta 1 [deg] =', theta1 * 180 / pi 
-                write(io_unit,*) '        theta 2 [deg] =', theta2 * 180 / pi 
-                write(io_unit,*) '  Correct theta [deg] =', euler(2) * 180 / pi 
-                write(io_unit,*) '  Correct theta [rad] =', euler(2) 
-                write(io_unit,*) ' '              
-              end if 
-          end if 
+      !         if (trim_verbose) then
+      !           write(io_unit,*) '        theta 1 [deg] =', theta1 * 180 / pi 
+      !           write(io_unit,*) '        theta 2 [deg] =', theta2 * 180 / pi 
+      !           write(io_unit,*) '  Correct theta [deg] =', euler(2) * 180 / pi 
+      !           write(io_unit,*) '  Correct theta [rad] =', euler(2) 
+      !           write(io_unit,*) ' '              
+      !         end if 
+      !     end if 
 
-          s_elev = sin(euler(2))
-          c_elev = cos(euler(2)) 
+      !     s_elev = sin(euler(2))
+      !     c_elev = cos(euler(2)) 
 
-          ! CALCULATE THE ANGULAR RATES
-          if (any(case_number == [1,2])) then
-            angular_rates = (gravity * s_bank * c_elev) / (u*c_elev*c_bank + w*s_elev) &
-                            * (/-s_elev, s_bank*c_elev, c_bank*c_elev/)
-          else if (any(case_number == [3,4,5,6])) then
-            angular_rates = 0.0
+      !     ! CALCULATE THE ANGULAR RATES
+      !     if (any(case_number == [1,2])) then
+      !       angular_rates = (gravity * s_bank * c_elev) / (u*c_elev*c_bank + w*s_elev) &
+      !                       * (/-s_elev, s_bank*c_elev, c_bank*c_elev/)
+      !     else if (any(case_number == [3,4,5,6])) then
+      !       angular_rates = 0.0
 
-          end if 
-          p = angular_rates(1)
-          q = angular_rates(2)
-          r = angular_rates(3)
+      !     end if 
+      !     p = angular_rates(1)
+      !     q = angular_rates(2)
+      !     r = angular_rates(3)
 
-          if (trim_verbose) then 
-            write(io_unit,*) 'Updating rotation rates for ', trim_type
-            write(io_unit,'(A,ES20.12)') 'p [deg/s] = ', p * 180 / pi 
-            write(io_unit,'(A,ES20.12)') 'q [deg/s] = ', q * 180 / pi 
-            write(io_unit,'(A,ES20.12)') 'r [deg/s] = ', r * 180 / pi
-            write(io_unit, '(A)') ''
-          end if 
-          res = calc_r(V_mag, height, euler, angular_rates, G)
+      !     if (trim_verbose) then 
+      !       write(io_unit,*) 'Updating rotation rates for ', trim_type
+      !       write(io_unit,'(A,ES20.12)') 'p [deg/s] = ', p * 180 / pi 
+      !       write(io_unit,'(A,ES20.12)') 'q [deg/s] = ', q * 180 / pi 
+      !       write(io_unit,'(A,ES20.12)') 'r [deg/s] = ', r * 180 / pi
+      !       write(io_unit, '(A)') ''
+      !     end if 
+      !     res = calc_r(V_mag, height, euler, angular_rates, G)
           
-          ! STATE THE DEFINITION OF G
-          if (any(case_number == [4,6])) then 
-            if (trim_verbose) then 
-              write(io_unit,'(A)') 'G defined as G = [alpha, bank_angle, aileron, elevator, rudder, throttle]'
-              write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(k), k=1,6)
-              write(io_unit, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
-              write(io_unit, '(A)') ''
-            end if
-          else 
-            if (trim_verbose) then 
-              write(io_unit,'(A)') 'G defined as G = [alpha, beta, aileron, elevator, rudder, throttle]'
-              write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(k), k=1,6)
-              write(io_unit, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
-              write(io_unit, '(A)') ''
-            end if
-          end if 
+      !     ! STATE THE DEFINITION OF G
+      !     if (any(case_number == [4,6])) then 
+      !       if (trim_verbose) then 
+      !         write(io_unit,'(A)') 'G defined as G = [alpha, bank_angle, aileron, elevator, rudder, throttle]'
+      !         write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(k), k=1,6)
+      !         write(io_unit, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
+      !         write(io_unit, '(A)') ''
+      !       end if
+      !     else 
+      !       if (trim_verbose) then 
+      !         write(io_unit,'(A)') 'G defined as G = [alpha, beta, aileron, elevator, rudder, throttle]'
+      !         write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(k), k=1,6)
+      !         write(io_unit, '(A,6(1X,ES20.12))') '      R =', (res(k), k=1,6)
+      !         write(io_unit, '(A)') ''
+      !       end if
+      !     end if 
           
-          ! SOLVE FOR G 
-          call newtons_method(V_mag, height, euler, angular_rates, G)
+      !     ! SOLVE FOR G 
+      !     call newtons_method(V_mag, height, euler, angular_rates, G)
 
-          ! CALCULATE THE ITERATION ERROR
-          iteration_residual = calc_r(V_mag, height, euler, angular_rates, G)
-          error = maxval(abs(iteration_residual))
+      !     ! CALCULATE THE ITERATION ERROR
+      !     iteration_residual = calc_r(V_mag, height, euler, angular_rates, G)
+      !     error = maxval(abs(iteration_residual))
 
-          if (trim_verbose) then 
-            write(io_unit,'(A)') 'New G:'
-            write(io_unit,'(A,6(1X,ES20.12))') '      G =', (G(k),   k=1,6)
-            write(io_unit,'(A,6(1X,ES20.12))') '      R =', (iteration_residual(k), k=1,6) 
-            write(io_unit,*) ''
-            write(io_unit, '(A)') &
-              'Iteration   Residual           alpha[deg]           beta[deg]            '// & 
-              'p[deg/s]             q[deg/s]             r[deg/s]   ' // &
-              '          phi[deg]             theta[deg]           aileron[deg]         elevator[deg]   ' // &
-              '     rudder[deg]          throttle[]'
-            if (sideslip_angle0 /= -999.0) then 
-              write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1)*180/pi, sideslip_angle0 * 180 / pi, &
-                p * 180 / pi, q * 180 / pi, r * 180 / pi, euler(1) * 180 / pi, euler(2) * 180 / pi, G(3)*180/pi, &
-                G(4)*180/pi, G(5)*180/pi, G(6)
-            else 
-              write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1)*180/pi, G(2)*180/pi, &
-                p * 180 / pi, q * 180 / pi, r * 180 / pi, euler(1) * 180 / pi, euler(2) * 180 / pi, G(3)*180/pi, &
-                G(4)*180/pi, G(5)*180/pi, G(6)
-            end if 
-          end if 
+      !     if (trim_verbose) then 
+      !       write(io_unit,'(A)') 'New G:'
+      !       write(io_unit,'(A,6(1X,ES20.12))') '      G =', (G(k),   k=1,6)
+      !       write(io_unit,'(A,6(1X,ES20.12))') '      R =', (iteration_residual(k), k=1,6) 
+      !       write(io_unit,*) ''
+      !       write(io_unit, '(A)') &
+      !         'Iteration   Residual           alpha[deg]           beta[deg]            '// & 
+      !         'p[deg/s]             q[deg/s]             r[deg/s]   ' // &
+      !         '          phi[deg]             theta[deg]           aileron[deg]         elevator[deg]   ' // &
+      !         '     rudder[deg]          throttle[]'
+      !       if (sideslip_angle0 /= -999.0) then 
+      !         write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1)*180/pi, sideslip_angle0 * 180 / pi, &
+      !           p * 180 / pi, q * 180 / pi, r * 180 / pi, euler(1) * 180 / pi, euler(2) * 180 / pi, G(3)*180/pi, &
+      !           G(4)*180/pi, G(5)*180/pi, G(6)
+      !       else 
+      !         write(io_unit,'(I6,1X,12(1X,ES20.12))') iteration, error, G(1)*180/pi, G(2)*180/pi, &
+      !           p * 180 / pi, q * 180 / pi, r * 180 / pi, euler(1) * 180 / pi, euler(2) * 180 / pi, G(3)*180/pi, &
+      !           G(4)*180/pi, G(5)*180/pi, G(6)
+      !       end if 
+      !     end if 
 
-          ! ENSURE THROTTLE IS IN BOUNDS
-          if (G(6) > 1.0) then 
-            if (trim_verbose) then 
-              write(io_unit,*) 'Overwriting throttle > 1.'
-            G(6) = 1.0
-            end if 
-          else if (G(6) < 0.0) then 
-            if (trim_verbose) then 
-              write(io_unit,*) 'Overwriting throttle < 0.'
-              write(io_unit,*) ''
-            end if 
-            G(6) = 0.0
-          end if 
+      !     ! ENSURE THROTTLE IS IN BOUNDS
+      !     if (G(6) > 1.0) then 
+      !       if (trim_verbose) then 
+      !         write(io_unit,*) 'Overwriting throttle > 1.'
+      !       G(6) = 1.0
+      !       end if 
+      !     else if (G(6) < 0.0) then 
+      !       if (trim_verbose) then 
+      !         write(io_unit,*) 'Overwriting throttle < 0.'
+      !         write(io_unit,*) ''
+      !       end if 
+      !       G(6) = 0.0
+      !     end if 
 
-          iteration = iteration + 1
-        end do
+      !     iteration = iteration + 1
+      !   end do
 
-        ! SAVE THE TRIM STATE AS THE NEW INITIAL CONDITIONS
-        ! SET CONTROLS
-        controls(1:4) = G(3:6)
+      !   ! SAVE THE TRIM STATE AS THE NEW INITIAL CONDITIONS
+      !   ! SET CONTROLS
+      !   controls(1:4) = G(3:6)
 
-        ! PULL OUT ALPHA
-        alpha = G(1)
-        ca = cos(alpha)
-        sa = sin(alpha)     
+      !   ! PULL OUT ALPHA
+      !   alpha = G(1)
+      !   ca = cos(alpha)
+      !   sa = sin(alpha)     
 
-        ! PULL OUT BETA
-        if (any(case_number == [4,6])) then 
-          cb = cos(sideslip_angle0)
-          sb = sin(sideslip_angle0)
-          euler(1) = G(2)
-        else 
-          cb = cos(G(2))
-          sb = sin(G(2))
-        end if
+      !   ! PULL OUT BETA
+      !   if (any(case_number == [4,6])) then 
+      !     cb = cos(sideslip_angle0)
+      !     sb = sin(sideslip_angle0)
+      !     euler(1) = G(2)
+      !   else 
+      !     cb = cos(G(2))
+      !     sb = sin(G(2))
+      !   end if
 
-        ! CALCUALTE INITIAL STATES
-        initial_state(1:3)   = V_mag * (/ca*cb, sb, sa*cb/) 
-        initial_state(4:6)   = angular_rates
-        initial_state(9)     = height
-        initial_state(10:13) = euler_to_quat(euler)    
+      !   ! CALCUALTE INITIAL STATES
+      !   initial_state(1:3)   = V_mag * (/ca*cb, sb, sa*cb/) 
+      !   initial_state(4:6)   = angular_rates
+      !   initial_state(9)     = height
+      !   initial_state(10:13) = euler_to_quat(euler)    
 
-        ! UPDATE DESIRED STATE FOR CONTROLLER
-        xd = initial_state
-        ud = controls
+      !   ! UPDATE DESIRED STATE FOR CONTROLLER
+      !   xd = initial_state
+      !   ud = controls
 
-        if (trim_verbose) then 
-          write(io_unit,*) '---------------------- Trim Solution ----------------------'
-          write(io_unit,'(A30,F20.13)') '       azimuth_angle[deg]  :', euler(3)
-          write(io_unit,'(A30,F20.13)') '       elevation_angle[deg]:', euler(2)
-          write(io_unit,'(A30,F20.13)') '       bank_angle[deg]     :', euler(1) 
-          write(io_unit,'(A30,F20.13)') '       alpha[deg]          :', alpha 
-          write(io_unit,'(A30,F20.13)') '       beta[deg]           :', beta 
-          write(io_unit,'(A30,F20.13)') '       p[deg]              :', p 
-          write(io_unit,'(A30,F20.13)') '       q[deg]              :', q
-          write(io_unit,'(A30,F20.13)') '       r[deg]              :', r
-          write(io_unit,'(A30,F20.13)') '       p_w[deg]            :', initial_state(4)
-          write(io_unit,'(A30,F20.13)') '       q_w[deg]            :', initial_state(5)
-          write(io_unit,'(A30,F20.13)') '       r_w[deg]            :', initial_state(6)
-          write(io_unit,'(A30,F20.13)') '       aileron[deg]        :', controls(1)
-          write(io_unit,'(A30,F20.13)') '       elevator[deg]       :', controls(2)
-          write(io_unit,'(A30,F20.13)') '       rudder[deg]         :', controls(3)
-          write(io_unit,'(A30,F20.13)') '       throttle[deg]       :', controls(4)
-          write(io_unit,'(A30,F20.13)') '       Climb Angle[deg]    :', climb_angle
-        end if 
+      !   if (trim_verbose) then 
+      !     write(io_unit,*) '---------------------- Trim Solution ----------------------'
+      !     write(io_unit,'(A30,F20.13)') '       azimuth_angle[deg]  :', euler(3)
+      !     write(io_unit,'(A30,F20.13)') '       elevation_angle[deg]:', euler(2)
+      !     write(io_unit,'(A30,F20.13)') '       bank_angle[deg]     :', euler(1) 
+      !     write(io_unit,'(A30,F20.13)') '       alpha[deg]          :', alpha 
+      !     write(io_unit,'(A30,F20.13)') '       beta[deg]           :', beta 
+      !     write(io_unit,'(A30,F20.13)') '       p[deg]              :', p 
+      !     write(io_unit,'(A30,F20.13)') '       q[deg]              :', q
+      !     write(io_unit,'(A30,F20.13)') '       r[deg]              :', r
+      !     write(io_unit,'(A30,F20.13)') '       p_w[deg]            :', initial_state(4)
+      !     write(io_unit,'(A30,F20.13)') '       q_w[deg]            :', initial_state(5)
+      !     write(io_unit,'(A30,F20.13)') '       r_w[deg]            :', initial_state(6)
+      !     write(io_unit,'(A30,F20.13)') '       aileron[deg]        :', controls(1)
+      !     write(io_unit,'(A30,F20.13)') '       elevator[deg]       :', controls(2)
+      !     write(io_unit,'(A30,F20.13)') '       rudder[deg]         :', controls(3)
+      !     write(io_unit,'(A30,F20.13)') '       throttle[deg]       :', controls(4)
+      !     write(io_unit,'(A30,F20.13)') '       Climb Angle[deg]    :', climb_angle
+      !   end if 
 
-        if (exam_answers) then 
-          write(io_unit,*) '---------------------- Exam Answers ----------------------'
-          write(io_unit,'(A30,ES25.13E3)') '       elevation_angle[deg]:', euler(2)
-          write(io_unit,'(A30,ES25.13E3)') '       bank_angle[deg]     :', euler(1)
-          write(io_unit,'(A30,ES25.13E3)') '       alpha[deg]          :', alpha
-          write(io_unit,'(A30,ES25.13E3)') '       beta[deg]           :', beta
-          write(io_unit,'(A30,ES25.13E3)') '       p[deg]              :', p
-          write(io_unit,'(A30,ES25.13E3)') '       q[deg]              :', q
-          write(io_unit,'(A30,ES25.13E3)') '       r[deg]              :', r
-          write(io_unit,'(A30,ES25.13E3)') '       aileron[deg]        :', controls(1)
-          write(io_unit,'(A30,ES25.13E3)') '       elevator[deg]       :', controls(2)
-          write(io_unit,'(A30,ES25.13E3)') '       rudder[deg]         :', controls(3)
-          write(io_unit,'(A30,ES25.13E3)') '       throttle[deg]       :', controls(4)
+      !   if (exam_answers) then 
+      !     write(io_unit,*) '---------------------- Exam Answers ----------------------'
+      !     write(io_unit,'(A30,ES25.13E3)') '       elevation_angle[deg]:', euler(2)
+      !     write(io_unit,'(A30,ES25.13E3)') '       bank_angle[deg]     :', euler(1)
+      !     write(io_unit,'(A30,ES25.13E3)') '       alpha[deg]          :', alpha
+      !     write(io_unit,'(A30,ES25.13E3)') '       beta[deg]           :', beta
+      !     write(io_unit,'(A30,ES25.13E3)') '       p[deg]              :', p
+      !     write(io_unit,'(A30,ES25.13E3)') '       q[deg]              :', q
+      !     write(io_unit,'(A30,ES25.13E3)') '       r[deg]              :', r
+      !     write(io_unit,'(A30,ES25.13E3)') '       aileron[deg]        :', controls(1)
+      !     write(io_unit,'(A30,ES25.13E3)') '       elevator[deg]       :', controls(2)
+      !     write(io_unit,'(A30,ES25.13E3)') '       rudder[deg]         :', controls(3)
+      !     write(io_unit,'(A30,ES25.13E3)') '       throttle[deg]       :', controls(4)
 
-        end if 
-      end function trim_algorithm
+      !   end if 
+      ! end function trim_algorithm
 
     !=========================
     ! Newton's Method Solver to find G (alpha, beta, delta_a, delta_e, delta_r, throttle)
-      subroutine newtons_method(V_mag, height, euler, angular_rates, G)
-        implicit none
-        real , allocatable :: res(:), delta_G(:)
-        real, intent(inout) :: G(6)
-        real :: R_pos(6), R_neg(6), step_size
-        real :: angular_rates(3), jac(6,6), euler(3), height, dummy_res(13), V_mag
-        integer :: k, i, j
+      ! subroutine newtons_method(V_mag, height, euler, angular_rates, G)
+      !   implicit none
+      !   real , allocatable :: res(:), delta_G(:)
+      !   real, intent(inout) :: G(6)
+      !   real :: R_pos(6), R_neg(6), step_size
+      !   real :: angular_rates(3), jac(6,6), euler(3), height, dummy_res(13), V_mag
+      !   integer :: k, i, j
 
-        allocate(res(6), delta_G(6))
+      !   allocate(res(6), delta_G(6))
 
-        ! CALCULATE JACOBIAN AND RESIDUAL
-        if (trim_verbose) then
-          write(io_unit,'(A)') 'Building Jacobian Matrix:'
-          write(io_unit,'(A)') ''
-        end if 
+      !   ! CALCULATE JACOBIAN AND RESIDUAL
+      !   if (trim_verbose) then
+      !     write(io_unit,'(A)') 'Building Jacobian Matrix:'
+      !     write(io_unit,'(A)') ''
+      !   end if 
 
-        ! USE CENTRAL DIFFERENCE METHOD TO FIND JACOBIAN
-        step_size = finite_difference_step_size
-        do j = 1,6        
-          G(j) = G(j) + step_size
-          R_pos = calc_r(V_mag, height, euler, angular_rates, G)
+      !   ! USE CENTRAL DIFFERENCE METHOD TO FIND JACOBIAN
+      !   step_size = finite_difference_step_size
+      !   do j = 1,6        
+      !     G(j) = G(j) + step_size
+      !     R_pos = calc_r(V_mag, height, euler, angular_rates, G)
           
-          if (trim_verbose) then
-            write(io_unit, '(A,I0,A)') 'Computing gradient relative to G[', j-1, ']'
-            write(io_unit, '(A)') '   Positive Finite-Difference Step '
-            write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
-            write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_pos(i), i=1,6)
-          end if 
+      !     if (trim_verbose) then
+      !       write(io_unit, '(A,I0,A)') 'Computing gradient relative to G[', j-1, ']'
+      !       write(io_unit, '(A)') '   Positive Finite-Difference Step '
+      !       write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
+      !       write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_pos(i), i=1,6)
+      !     end if 
           
-          G(j) = G(j) - 2 * step_size
-          R_neg = calc_r(V_mag, height, euler, angular_rates, G)
+      !     G(j) = G(j) - 2 * step_size
+      !     R_neg = calc_r(V_mag, height, euler, angular_rates, G)
           
-          if (trim_verbose) then
-            write(io_unit, '(A)') '   Negative Finite-Difference Step'
-            write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
-            write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_neg(i), i=1,6)
-            write(io_unit,'(A)') ''
-          end if
+      !     if (trim_verbose) then
+      !       write(io_unit, '(A)') '   Negative Finite-Difference Step'
+      !       write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
+      !       write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_neg(i), i=1,6)
+      !       write(io_unit,'(A)') ''
+      !     end if
 
-          do i = 1,6
-            jac(i, j) = (R_pos(i) - R_neg(i)) / (2*step_size)
+      !     do i = 1,6
+      !       jac(i, j) = (R_pos(i) - R_neg(i)) / (2*step_size)
 
-          end do 
-          G(j) = G(j) + step_size
-        end do 
+      !     end do 
+      !     G(j) = G(j) + step_size
+      !   end do 
 
-        if (trim_verbose) then
-          write(io_unit, '(A)') 'Jacobian Matrix ='
-          do i = 1, size(jac,1)
-              write(io_unit,'(*(1X,ES20.12))') (jac(i,j), j=1,size(jac,2))
-          end do
-        end if
-        res = calc_r(V_mag, height, euler, angular_rates, G)
-        res = -1* res
+      !   if (trim_verbose) then
+      !     write(io_unit, '(A)') 'Jacobian Matrix ='
+      !     do i = 1, size(jac,1)
+      !         write(io_unit,'(*(1X,ES20.12))') (jac(i,j), j=1,size(jac,2))
+      !     end do
+      !   end if
+      !   res = calc_r(V_mag, height, euler, angular_rates, G)
+      !   res = -1* res
 
-        ! CALCUALTE DELTA G AND ADD RELAXATION FACTOR
-        call lu_solve(6, jac, res, delta_G)
-        G = G + relaxation_factor * delta_G
+      !   ! CALCUALTE DELTA G AND ADD RELAXATION FACTOR
+      !   call lu_solve(6, jac, res, delta_G)
+      !   G = G + relaxation_factor * delta_G
 
-        if (trim_verbose) then
-          write(io_unit,*)
-          write(io_unit,'(A,6(1X,ES20.12))') 'Delta G =', (delta_G(k), k=1,6)
-        end if 
+      !   if (trim_verbose) then
+      !     write(io_unit,*)
+      !     write(io_unit,'(A,6(1X,ES20.12))') 'Delta G =', (delta_G(k), k=1,6)
+      !   end if 
 
-      end subroutine newtons_method
+      ! end subroutine newtons_method
 
     !=========================
     ! Calculate Residual
-      function calc_r(V_mag, height, euler, angular_rates, G) result(R)
-        implicit none
-        real, intent(in) :: V_mag, height, G(6), angular_rates(3)
-        real, intent(inout) :: euler(3)
-        real :: alpha, ca, cb, sa, sb
-        real :: R(6), dummy_R(13), temp_state(13)
+      ! function calc_r(V_mag, height, euler, angular_rates, G) result(R)
+      !   implicit none
+      !   real, intent(in) :: V_mag, height, G(6), angular_rates(3)
+      !   real, intent(inout) :: euler(3)
+      !   real :: alpha, ca, cb, sa, sb
+      !   real :: R(6), dummy_R(13), temp_state(13)
 
-        temp_state = 0.0
+      !   temp_state = 0.0
 
-        ! PULL OUT CONTROLS
-        controls(1:4) = G(3:6)
+      !   ! PULL OUT CONTROLS
+      !   controls(1:4) = G(3:6)
 
-        ! PULL OUT ALPHA
-        alpha = G(1)
-        ca = cos(alpha)
-        sa = sin(alpha)     
+      !   ! PULL OUT ALPHA
+      !   alpha = G(1)
+      !   ca = cos(alpha)
+      !   sa = sin(alpha)     
 
-        ! PULL OUT BETA
-        if (sideslip_angle0 /= -999.0) then 
-          cb = cos(sideslip_angle0)
-          sb = sin(sideslip_angle0)
-          euler(1) = G(2)
-        else 
-          cb = cos(G(2))
-          sb = sin(G(2))
-        end if
+      !   ! PULL OUT BETA
+      !   if (sideslip_angle0 /= -999.0) then 
+      !     cb = cos(sideslip_angle0)
+      !     sb = sin(sideslip_angle0)
+      !     euler(1) = G(2)
+      !   else 
+      !     cb = cos(G(2))
+      !     sb = sin(G(2))
+      !   end if
 
-        ! CALCUALTE INITIAL STATES
-        temp_state(1:3)   = V_mag * (/ca*cb, sb, sa*cb/) 
-        temp_state(4:6)   = angular_rates
-        temp_state(9)     = height
-        temp_state(7:8)   = 0
-        temp_state(10:13) = euler_to_quat(euler)
+      !   ! CALCUALTE INITIAL STATES
+      !   temp_state(1:3)   = V_mag * (/ca*cb, sb, sa*cb/) 
+      !   temp_state(4:6)   = angular_rates
+      !   temp_state(9)     = height
+      !   temp_state(7:8)   = 0
+      !   temp_state(10:13) = euler_to_quat(euler)
 
-        ! CALCULATE RESIDUAL
-        dummy_R = differential_equations(0.0, temp_state)
-        R = dummy_R(1:6)
+      !   ! CALCULATE RESIDUAL
+      !   dummy_R = differential_equations(0.0, temp_state)
+      !   R = dummy_R(1:6)
 
-      end function calc_r
+      ! end function calc_r
 
 end module vehicle_m

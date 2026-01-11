@@ -137,7 +137,7 @@ module sim_m
     ! Run Subroutine
         subroutine run()
             implicit none
-            real :: t, dt, tf, y_new(13), s(14) 
+            real :: time, dt, tf, y_new(13), s(14) 
             real :: cpu_start_time, cpu_end_time, actual_time, integrated_time, time_error
             real :: time_1, time_2, y_init(13)
             real :: controls_input(6)
@@ -147,7 +147,7 @@ module sim_m
             call jsonx_get(j_main, 'simulation.total_time[s]', tf)
 
             ! INITIALIZE TIME AND STATE
-            t = 0.0 
+            time = 0.0 
             integrated_time = 0.0
             y_init = initial_state
 
@@ -169,39 +169,24 @@ module sim_m
                 q[rad/s]            r[rad/s]            xf[ft]              &
                 yf[ft]              zf[ft]              e0                  &
                 ex                  ey                  ez"
-                write(io_unit,'(14ES20.12)') t,y_init(:)
+                write(io_unit,'(14ES20.12)') time,y_init(:)
             end if 
 
             ! SAVE THE TIMESTAMP WHEN THE SIMULATION BEGINS
             cpu_start_time = get_time()
 
             ! START THE SIMULATION
-            do while(t < tf)
-                ! CALCULATE THE NEW STATE
-                y_new = rk4(t, y_init, dt)
-
-                ! NORMALIZE THE QUATERNION
-                call quat_norm(y_new(10:13))
-                
-                if (save_states) then 
-                write(io_unit,'(14ES20.12)') t,y_init(:)
-                end if 
-
-                ! SEND GRAPHICS OVER CONNECTION 
-                s(1) = t 
-                s(2:14) = y_new(1:13)
-                call graphics%send(s)
-
-                ! RECEIVE USER CONTROLS OVER CONNECTION
-                controls_input = user_controls%recv()
-                controls_input(2:4) = controls_input(2:4) * pi / 180
-                controls = controls_input(2:5)
+            do while(time < tf)
+                ! CALCULATE THE NEW STATEs FOR EACH VEHICLE
+                do i=1,num_vehicles
+                    if(vehicles(i)%run_physics) call vehicle_tick_state(vehicles(i), time, dt)
+                end do 
 
                 ! UPDATE THE STATE AND TIME        
                 if(real_time) then
-                time_2 = get_time()
-                dt = time_2 - time_1
-                time_1 = time_2
+                    time_2 = get_time()
+                    dt = time_2 - time_1
+                    time_1 = time_2
                 end if 
 
                 y_init = y_new
