@@ -1,6 +1,13 @@
 module sim_m 
     use vehicle_m
     use jsonx_m 
+
+    implicit none 
+    integer :: io_unit
+    type(json_value), pointer :: j_main
+    type(vehicle_t), allocatable :: vehicles(:)
+    integer :: num_vehicles
+
     !=========================
     ! Init Subroutine
         subroutine init(filename)
@@ -10,87 +17,33 @@ module sim_m
             real :: alpha, beta, trim_state(6)
             character(100), intent(in) :: filename
             type(json_value), pointer :: j_connections, j_graphics, j_user_controls, j_test_controls
+            type(json_value), pointer :: j_vehicles, j_temp
             integer :: i
 
-            ! OPEN A FILE TO WRITE TO 
+            ! Open file to write to  
             open(newunit=io_unit, file='f16_output.txt', status='replace', action='write')
 
-            ! OPEN THE SPECIFIED JSON FILE
+            ! Begin simulation
+            write(*,*) 'Initializing Simulation...'            
             call jsonx_load(filename, j_main) 
 
-            ! DETERMINE IF RK4_VERBOSE
+            ! Debugging flags
             call jsonx_get(j_main, 'simulation.rk4_verbose', rk4_verbose, .false.)
-            call jsonx_get(j_main, 'simulation.print_states', print_states, .false.)
+            call jsonx_get(j_main, 'simulation.save_states', save_states, .false.)
 
-            ! DEFINE THRUST COEFFICIENTS FOR THRUST MODEL
-            call jsonx_get(j_main, 'vehicle.thrust.T0[lbf]', T0)
-            call jsonx_get(j_main, 'vehicle.thrust.Ta',      Ta)
+            ! Initialize vehicles
+            write(*,*) 'Initializing vehicles...'
+            call jsonx_get(j_main, 'vehicles', j_vehicles)
+            num_vehicles = json_value_count(j_vehicles)
+            allocate(vehicles(num_vehicles))
 
-            ! READ IN ALL AERODYNAMIC DATA
-            call jsonx_get(j_main, 'vehicle.aerodynamics.compressibility',                   compressibility, .false.)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.test_compressibility',              test_compressibility, .false.)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.sweep[deg]',                        sweep, 0.0)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.reference.area[ft^2]',              planform_area)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.reference.longitudinal_length[ft]', longitudinal_length)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.reference.lateral_length[ft]',      lateral_length)
+            do i = 1,num_vehicles
+                call json_value_get(j_vehicles, i, j_temp)
+                call vehicle_init(vehicles(i), j_temp)
+            end do 
 
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.stall_flag',  stall)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.test_stall', test_stall)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CL.lambda_b', CL_lambda_b)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CL.alpha_0',  CL_alpha_0)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CL.alpha_s',  CL_alpha_s)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CD.lambda_b', CD_lambda_b)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CD.alpha_0',  CD_alpha_0)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.CD.alpha_s',  CD_alpha_s)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.Cm.lambda_b', Cm_lambda_b)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.Cm.alpha_0',  Cm_alpha_0)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.Cm.alpha_s',  Cm_alpha_s)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.stall.Cm.min',      Cm_min)
-            print_stall = .false.
 
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.0',        CL0)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.alpha',    CL_alpha)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.alphahat', CL_alphahat)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.qbar',     CL_qbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CL.elevator', CL_elevator)
 
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.beta',       CS_beta)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.pbar',       CS_pbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.alpha_pbar', CS_alpha_pbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.rbar',       CS_rbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.aileron',    CS_aileron)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CS.rudder',     CS_rudder)
-
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.L0',                CD_L0)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.CL1',               CD_L1)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.CL1_CL1',           CD_L1_L1)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.CS_CS',             CD_CS_CS)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.qbar',              CD_qbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.alpha_qbar',        CD_alpha_qbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.elevator',          CD_elevator)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.alpha_elevator',    CD_alpha_elevator)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.CD.elevator_elevator', CD_elevator_elevator)
-
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.beta',       Cl_beta)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.pbar',       Cl_pbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.rbar',       Cl_rbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.alpha_rbar', Cl_alpha_rbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.aileron',    Cl_aileron)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cl.rudder',     Cl_rudder)
-
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cm.0',        Cm_0)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cm.alpha',    Cm_alpha)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cm.qbar',     Cm_qbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cm.alphahat', Cm_alphahat)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cm.elevator', Cm_elevator)
-
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.beta',          Cn_beta)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.pbar',          Cn_pbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.alpha_pbar',    Cn_alpha_pbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.rbar',          Cn_rbar)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.aileron',       Cn_aileron)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.alpha_aileron', Cn_alpha_aileron)
-            call jsonx_get(j_main, 'vehicle.aerodynamics.coefficients.Cn.rudder',        Cn_rudder)
 
             ! TRIM VARIABLES
             call jsonx_get(j_main, 'initial.type',                                    sim_type)
@@ -169,16 +122,6 @@ module sim_m
 
             call jsonx_get(j_main, 'initial.x_pos_ft', initial_state(7))
 
-            ! INITIALIZE CONNECTIONS
-            call jsonx_get(j_main, 'connections', j_connections)
-            call jsonx_get(j_connections, 'graphics', j_graphics)
-            write(*,*) 'call graphics%init(j_graphics)'
-            call graphics%init(j_graphics)
-
-            ! ADD CONTROLS
-            call jsonx_get(j_connections, 'user_controls', j_user_controls)
-            call user_controls%init(j_user_controls)
-
             ! TEST STALL IF SPECIFIED 
             if (test_stall) then 
                 call check_stall(initial_state)
@@ -220,7 +163,7 @@ module sim_m
             end if
 
             ! BUILD THE LOOP AND WRITE THE OUTPUT
-            if (print_states) then 
+            if (save_states) then 
                 write(io_unit,*) " time[s]             u[ft/s]             &
                 v[ft/s]             w[ft/s]             p[rad/s]            &
                 q[rad/s]            r[rad/s]            xf[ft]              &
@@ -240,7 +183,7 @@ module sim_m
                 ! NORMALIZE THE QUATERNION
                 call quat_norm(y_new(10:13))
                 
-                if (print_states) then 
+                if (save_states) then 
                 write(io_unit,'(14ES20.12)') t,y_init(:)
                 end if 
 
