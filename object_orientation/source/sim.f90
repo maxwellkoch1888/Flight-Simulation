@@ -51,7 +51,7 @@ module sim_m
             logical :: real_time = .false.
 
             call jsonx_get(j_main, 'simulation.time_step[s]',  dt, 0.0)
-            call jsonx_get(j_main, 'simulation.total_time[s]', tf)
+            call jsonx_get(j_main, 'simulation.end_time[s]', tf)
 
             ! INITIALIZE TIME AND STATE
             time = 0.0 
@@ -84,7 +84,6 @@ module sim_m
 
             ! SAVE THE TIMESTAMP WHEN THE SIMULATION BEGINS
             cpu_start_time = get_time()
-
             ! START THE SIMULATION
             do while(time < tf)
                 ! CALCULATE THE NEW STATEs FOR EACH VEHICLE

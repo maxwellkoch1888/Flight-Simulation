@@ -197,7 +197,7 @@
                 "latitude[deg]" : 0.0,
                 "longitude[deg]" : 0.0,
                 "Euler_angles[deg]" : [20.0, 80.0, 0.0],
-                "type" : "trim",
+                "type" : "state",
                 "state" : {
                     "angle_of_attack[deg]" : 8.439045225037,
                     "sideslip_angle[deg]" : 0.0,
