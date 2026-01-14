@@ -41,7 +41,7 @@
         },
         "arrow" : {
             "type" : "arrow",
-            "run_physics" : false,
+            "run_physics" : true,
             "mass" : {
                 "weight[lbf]" : 0.0697,
                 "Ixx[slug-ft^2]" : 0.0000194,
@@ -95,7 +95,7 @@
         },
         "F16" : {
             "type" : "aircraft",
-            "run_physics" : false,
+            "run_physics" : true,
             "mass" : {
                 "weight[lbf]" : 20500.0,
                 "Ixx[slug-ft^2]" : 9496.0,

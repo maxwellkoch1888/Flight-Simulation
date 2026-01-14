@@ -94,7 +94,7 @@ module vehicle_m
 
         if(t%run_physics) then 
           if(t%save_states) then 
-            t%states_filename = trim(t%name) // '_states.csv'
+            t%states_filename = 'output_files/' // trim(t%name) // '_states.csv'
             open(newunit=t%iunit_states, file=t%states_filename, status='REPLACE')
             write(t%iunit_states,*) " time[s]                    u[ft/s]                   &
             v[ft/s]                  w[ft/s]                    p[rad/s]                  &
@@ -107,7 +107,7 @@ module vehicle_m
           end if 
 
           if(t%rk4_verbose) then 
-            t%rk4_filename = trim(t%name)//'_RK4.txt'
+            t%rk4_filename = 'output_files/' // trim(t%name)//'_RK4.txt'
             open(newunit=t%iunit_rk4, file=t%rk4_filename, status='REPLACE')
             write(*,*) '- saving RK4 results to ', t%rk4_filename
           end if 
