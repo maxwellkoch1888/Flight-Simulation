@@ -16,23 +16,26 @@ module sim_m
             character(100), intent(in) :: filename
             type(json_value), pointer :: j_vehicles, j_temp
             integer :: i
-
-            ! Open file to write to  
-            open(newunit=io_unit, file='f16_output.txt', status='replace', action='write')
+            logical :: save_states, rk4_verbose
 
             ! Begin simulation
             write(*,*) 'Initializing Simulation...'            
-            call jsonx_load(filename, j_main) 
-
-            ! ! Debugging flags
-            ! call jsonx_get(j_main, 'simulation.rk4_verbose', rk4_verbose, .false.)
-            ! call jsonx_get(j_main, 'simulation.save_states', save_states, .false.)
+            call jsonx_load(filename, j_main)              
 
             ! Initialize vehicles
             write(*,*) 'Initializing vehicles...'
             call jsonx_get(j_main, 'vehicles', j_vehicles)
             num_vehicles = json_value_count(j_vehicles)
             allocate(vehicles(num_vehicles))
+
+            ! Write statement flags
+            call jsonx_get(j_main, 'simulation.rk4_verbose', rk4_verbose, .false.)
+            call jsonx_get(j_main, 'simulation.save_states', save_states, .false.)
+
+            do i=1,num_vehicles
+                vehicles(i)%save_states = save_states
+                vehicles(i)%rk4_verbose = rk4_verbose
+            end do    
 
             do i = 1,num_vehicles
                 call json_value_get(j_vehicles, i, j_temp)
@@ -48,7 +51,7 @@ module sim_m
             real :: cpu_start_time, cpu_end_time, actual_time, integrated_time, time_error
             real :: time_1, time_2
             integer :: i
-            logical :: real_time = .false.
+            logical :: real_time
 
             call jsonx_get(j_main, 'simulation.time_step[s]',  dt, 0.0)
             call jsonx_get(j_main, 'simulation.end_time[s]', tf)
@@ -86,12 +89,15 @@ module sim_m
             cpu_start_time = get_time()
             ! START THE SIMULATION
             do while(time < tf)
-                ! CALCULATE THE NEW STATEs FOR EACH VEHICLE
+                ! CALCULATE THE NEW STATES FOR EACH VEHICLE
                 do i=1,num_vehicles
-                    if(vehicles(i)%run_physics) call vehicle_tick_state(vehicles(i), time, dt)
+                    if(vehicles(i)%run_physics) then 
+                        if(vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
+                        call vehicle_tick_state(vehicles(i), time, dt)                        
+                    end if 
                 end do 
 
-                ! UPDATE THE STATE AND TIME        
+                ! UPDATE THE TIME        
                 if(real_time) then
                     time_2 = get_time()
                     dt = time_2 - time_1

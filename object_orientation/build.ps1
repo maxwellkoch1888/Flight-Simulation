@@ -13,4 +13,4 @@ gfortran -ffree-line-length-512 -fdefault-real-8 `
 
 
 # run with 
-
+# .\run.exe input_physics.json

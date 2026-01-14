@@ -43,10 +43,10 @@ module vehicle_m
       real, allocatable :: thrust_location(:), thrust_orientation(:)
 
       ! Debugging
-      logical :: compressibility, rk4_verbose, print_states, test_compressibility
+      logical :: compressibility = .false., rk4_verbose, print_states, test_compressibility
 
       ! Stall model 
-      logical :: stall, test_stall
+      logical :: stall = .false., test_stall
       real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
       
       ! Initialization constants
@@ -78,7 +78,7 @@ module vehicle_m
     ! VEHICLE INITIALIZATION
       subroutine vehicle_init(t, j_vehicle_input)
         implicit none 
-        type(vehicle_t) :: t
+        type(vehicle_t), intent(inout) :: t
         type(json_value), pointer :: j_vehicle_input
         character(len=:), allocatable :: init_type 
         real :: geopotential_altitude_ft,temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
@@ -94,13 +94,15 @@ module vehicle_m
 
         if(t%run_physics) then 
           if(t%save_states) then 
-            ! t%states_filename = trim(t%name) // '(_states.csv)'
-            ! open(newunit=t%iunit_states, file=t%states_filename, status='REPLACE')
-            ! write(io_unit,*) " time[s]             u[ft/s]             &
-            ! v[ft/s]             w[ft/s]             p[rad/s]            &
-            ! q[rad/s]            r[rad/s]            xf[ft]              &
-            ! yf[ft]              zf[ft]              e0                  &
-            ! ex                  ey                  ez"
+            t%states_filename = trim(t%name) // '_states.csv'
+            open(newunit=t%iunit_states, file=t%states_filename, status='REPLACE')
+            write(t%iunit_states,*) " time[s]                    u[ft/s]                   &
+            v[ft/s]                  w[ft/s]                    p[rad/s]                  &
+            q[rad/s]                  r[rad/s]                 xf[ft]                     &
+            yf[ft]                    zf[ft]                    e0                        &
+            ex                        ey                        ez                        &
+            aileron[deg]              elevator[deg]             rudder[deg]               &
+            throttle"
             write(*,*) '- saving states to ', t%states_filename
           end if 
 
@@ -118,9 +120,9 @@ module vehicle_m
           call jsonx_get(t%j_vehicle, 'mass.Ixx[slug-ft^2]',  t%inertia(1,1))
           call jsonx_get(t%j_vehicle, 'mass.Iyy[slug-ft^2]',  t%inertia(2,2))
           call jsonx_get(t%j_vehicle, 'mass.Izz[slug-ft^2]',  t%inertia(3,3))
-          call jsonx_get(t%j_vehicle, 'mass.Ixy[slug-ft^2]',  t%inertia(1,2))
-          call jsonx_get(t%j_vehicle, 'mass.Ixz[slug-ft^2]',  t%inertia(1,3))
-          call jsonx_get(t%j_vehicle, 'mass.Iyz[slug-ft^2]',  t%inertia(2,3))
+          call jsonx_get(t%j_vehicle, 'mass.Ixy[slug-ft^2]',  t%inertia(1,2), 0.0)
+          call jsonx_get(t%j_vehicle, 'mass.Ixz[slug-ft^2]',  t%inertia(1,3), 0.0)
+          call jsonx_get(t%j_vehicle, 'mass.Iyz[slug-ft^2]',  t%inertia(2,3), 0.0)
           call jsonx_get(t%j_vehicle, 'mass.h[slug-ft^2/s]',  t%h, 0.0, 3)
 
           ! READ IN ALL AERODYNAMIC DATA      
@@ -131,7 +133,7 @@ module vehicle_m
           call jsonx_get(t%j_vehicle, 'aerodynamics.reference.area[ft^2]',              t%planform_area)
           call jsonx_get(t%j_vehicle, 'aerodynamics.reference.longitudinal_length[ft]', t%longitudinal_length)
           call jsonx_get(t%j_vehicle, 'aerodynamics.reference.lateral_length[ft]',      t%lateral_length)
-          call jsonx_get(t%j_vehicle, 'aerodynamics.reference.location[ft]',            t%aero_ref_location)
+          call jsonx_get(t%j_vehicle, 'aerodynamics.reference.location[ft]',            t%aero_ref_location, 0.0)
 
           if(t%type == 'arrow') then 
             call jsonx_get(t%j_vehicle, 'aerodynamics.coefficients.CL.alpha',    t%CL_alpha)
@@ -215,8 +217,8 @@ module vehicle_m
 
           ! DEFINE THRUST COEFFICIENTS FOR THRUST MODEL
           write(*,*) '- thrust'
-          call jsonx_get(t%j_vehicle, 'thrust.T0[lbf]',          t%T0)
-          call jsonx_get(t%j_vehicle, 'thrust.Ta',               t%Ta)
+          call jsonx_get(t%j_vehicle, 'thrust.T0[lbf]',          t%T0, 0.0)
+          call jsonx_get(t%j_vehicle, 'thrust.Ta',               t%Ta, 0.0)
           call jsonx_get(t%j_vehicle, 'thrust.location[ft]',     t%thrust_location, 0.0, 3)
           call jsonx_get(t%j_vehicle, 'thrust.orientation[deg]', t%thrust_orientation, 0.0, 3)
           
@@ -262,6 +264,19 @@ module vehicle_m
         end if 
         write(*,*) 'Finished vehicle initialization.'
       end subroutine
+
+    !=========================
+    ! WRITE STATES TO A FILE
+      subroutine vehicle_write_state(t, time)
+        implicit none 
+        type(vehicle_t) :: t 
+        real, intent(in) :: time 
+
+        ! write(t%iunit_states,*) time, t%state, t%controls 
+        write(t%iunit_states,*) time, t%state
+
+      end subroutine 
+
     !=========================
     ! STATE INITIAL CONDITION
       subroutine init_to_state(t)
@@ -348,12 +363,38 @@ module vehicle_m
         real, intent(in) :: t0, delta_t, y1(13)
         real, dimension(13) :: state, k1, k2, k3, k4
 
+        if(t%rk4_verbose) then 
+          write(t%iunit_rk4,*) '  state of the vehicle at the beginning of this RK4 integration step:'
+          write(t%iunit_rk4,*) ' time[s]                    u[ft/s]                   &
+            v[ft/s]                  w[ft/s]                    p[rad/s]                  &
+            q[rad/s]                  r[rad/s]                 xf[ft]                     &
+            yf[ft]                    zf[ft]                    e0                        &
+            ex                        ey                        ez'
+          write(t%iunit_rk4,*) t%state
+
+          write(t%iunit_rk4,*) '  rk4 function called...'
+        end if 
+
         ! DEFINE THE K TERMS FOR RK4 METHOD
+        if (t%rk4_verbose) write(t%iunit_rk4,*)'    |           RK4 call number =             1'
         k1 = differential_equations(t, t0, y1)
+        if (t%rk4_verbose) write(t%iunit_rk4,*)'    |           RK4 call number =             2'
         k2 = differential_equations(t, t0 + delta_t*0.5, y1 + k1 * delta_t*0.5)
+        if (t%rk4_verbose) write(t%iunit_rk4,*)'    |           RK4 call number =             3'
         k3 = differential_equations(t, t0 + delta_t*0.5, y1 + k2 * delta_t*0.5)
+        if (t%rk4_verbose) write(t%iunit_rk4,*)'    |           RK4 call number =             4'
         k4 = differential_equations(t, t0 + delta_t, y1 + k3 * delta_t)
 
+        if (t%rk4_verbose) then 
+          write(t%iunit_rk4,*) '  state of the vehicle after running RK4:'
+          write(t%iunit_rk4,*) ' time[s]                    u[ft/s]                   &
+            v[ft/s]                  w[ft/s]                    p[rad/s]                  &
+            q[rad/s]                  r[rad/s]                 xf[ft]                     &
+            yf[ft]                    zf[ft]                    e0                        &
+            ex                        ey                        ez'
+          write(t%iunit_rk4,*) t%state
+          write(t%iunit_rk4,*) ' --------------------------- End of single RK4 integration step. ---------------------------'
+        end if 
         ! DEFINE THE RESULT FROM RK4
         state = y1 + (delta_t/6) * (k1 + 2*k2 + 2*k3 + k4)
       end function rk4
@@ -377,6 +418,11 @@ module vehicle_m
         real :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz 
         real :: hxb, hyb, hzb        
         real, pointer :: u, v, w, p, q, r, e0, ex, ey, ez
+
+        if (t%rk4_verbose) then 
+          write(t%iunit_rk4,*) '    |                  time [s] = ', time 
+          write(t%iunit_rk4,*) '    |    state vector coming in = ', t%state 
+        end if 
         
         ! UNPACK STATES
         u  => state(1)
@@ -512,6 +558,11 @@ module vehicle_m
         dstate_dt(4:6)  = angular_accelerations
         dstate_dt(7:9)  = velocity
         dstate_dt(10:13) = quat_change
+
+        if (t%rk4_verbose) then 
+          write(t%iunit_rk4,*) '    | pseudo aerodynamics (F,M) = ', FM
+          write(t%iunit_rk4,*) '    |           diff_eq results = ', dstate_dt
+        end if 
       end function differential_equations
   ! 
   ! AERODYNAMICS AND FORCES
