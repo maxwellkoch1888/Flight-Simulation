@@ -49,9 +49,9 @@ module sim_m
             implicit none
             real :: time, dt, tf
             real :: cpu_start_time, cpu_end_time, actual_time, integrated_time, time_error
-            real :: time_1, time_2
+            real :: time_1 = 0.0, time_2 = 0.0 
             integer :: i
-            logical :: real_time
+            logical :: real_time = .false. 
 
             call jsonx_get(j_main, 'simulation.time_step[s]',  dt, 0.0)
             call jsonx_get(j_main, 'simulation.end_time[s]', tf)

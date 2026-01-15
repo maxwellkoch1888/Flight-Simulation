@@ -341,17 +341,12 @@ module vehicle_m
         ! NORMALIZE THE QUATERNION 
         call quat_norm(y1(10:13)) 
 
-        ! UPDATE AND WRITE THE STATES
-        t%state = y1 
-        ! if(t%save_states) then 
-        !   call vehicle_write_state(t, time+dt, y1) 
-        ! end if 
+        ! CHECK FOR HIGH ROTATION RATES 
+        if (sqrt(y1(4)**2 + y1(5)**2 + y1(6)**2)/2.0/pi/dt > 0.1 ) write(*,*) 'Warning: High vehicle rotation rate relative to timestep.'
 
-        ! if (t%rk4_verbose) then 
-        !   write(t%iunit_rk4,*)
-        !   write(t%iunit_rk4,*) 'make statements for rk4 verbose'
-        !   write(t%iunit_rk4,*)
-        ! end if 
+        ! UPDATE STATES
+        t%state = y1 
+
       end subroutine
   ! 
   ! INTEGRATOR AND EQN OF MOTION
@@ -413,7 +408,7 @@ module vehicle_m
         real :: inertia_effects(3), wind_velocity(3), gyroscopic_effects(3,3) 
         real :: quat_matrix(4,3) 
         real :: hxb_dot, hyb_dot, hzb_dot
-        real :: Vxw, Vyw, Vzw, gravity_ft_per_sec2 
+        real :: Vxw, Vyw, Vzw, gravity_ft_per_sec2, ac
         real :: angular_inertia(3,3), angular_inertia_inv(3,3)
         real :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz 
         real :: hxb, hyb, hzb        
@@ -530,11 +525,6 @@ module vehicle_m
         quat_matrix(4,3) =  e0            
 
         ! BUILD THE DIFFERENTIAL EQUATIONS
-        ! ACCELERATION IN BODY FRAME
-        acceleration(1) = FM(1)/t%mass + gravity_ft_per_sec2*orientation_effect(1) + angular_v_effect(1)
-        acceleration(2) = FM(2)/t%mass + gravity_ft_per_sec2*orientation_effect(2) + angular_v_effect(2)
-        acceleration(3) = FM(3)/t%mass + gravity_ft_per_sec2*orientation_effect(3) + angular_v_effect(3)
-
         ! ROLL, PITCH, YAW ACCELERATIONS
         rhs(1) = FM(4) + gyroscopic_effects(1,1)*p + gyroscopic_effects(1,2)*q + gyroscopic_effects(1,3)*r + inertia_effects(1) - gyroscopic_change(1)
         rhs(2) = FM(5) + gyroscopic_effects(2,1)*p + gyroscopic_effects(2,2)*q + gyroscopic_effects(2,3)*r + inertia_effects(2) - gyroscopic_change(2)
@@ -546,6 +536,14 @@ module vehicle_m
 
         ! VELOCITY IN THE INERITAL FRAME
         velocity = quat_base_to_dependent(state(1:3), state(10:13)) + wind_velocity
+
+        ! ADD GRAVITY RELIEF FOR EARTH'S CURVATURE
+        ac = (velocity(1)**2 + velocity(2)**2) / (6366707.01949371/0.3048 - state(9))
+
+        ! ACCELERATION IN BODY FRAME
+        acceleration(1) = FM(1)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(1) + angular_v_effect(1)
+        acceleration(2) = FM(2)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(2) + angular_v_effect(2)
+        acceleration(3) = FM(3)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(3) + angular_v_effect(3)
 
         ! AIRCRAFT ORIENTATION RATE OF CHANGE
         quat_change(1) = 0.5 * (quat_matrix(1,1)*p + quat_matrix(1,2)*q + quat_matrix(1,3)*r)
