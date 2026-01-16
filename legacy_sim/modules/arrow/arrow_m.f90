@@ -170,9 +170,9 @@ module arrow_m
                           dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
       real             :: V, Uc(3)
       real, parameter  :: CL_alpha = 4.929, CD0 = 5.096, CD2 = 48.138
-      real, parameter  :: Cm_alpha = -2.605, Cm_qbar = -9.06, Cl_pitch_pbar = -5.378
-      real             :: Cl_pitch0, alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
-      real             :: CL, CD, CS, L, D, S, Cl_pitch, Cm, Cn
+      real, parameter  :: Cm_alpha = -2.605, Cm_qbar = -9.06, Cl_roll_pbar = -5.378
+      real             :: Cl_roll0, alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
+      real             :: CL, CD, CS, L, D, S, Cl_roll, Cm, Cn
       real             :: ca, cb, sa, sb
         
       ! BUILD THE ATMOSPHERE 
@@ -234,16 +234,16 @@ module arrow_m
 
       ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
       if (straight) then
-        Cl_pitch0 = 0.0
+        Cl_roll0 = 0.0
       else 
-        Cl_pitch0 = 3.223
+        Cl_roll0 = 3.223
       end if
 
-      Cl_pitch = Cl_pitch0 + Cl_pitch_pbar * pbar  ! roll moment
+      Cl_roll = Cl_roll0 + Cl_roll_pbar * pbar  ! roll moment
       Cm =       Cm_alpha * alpha + Cm_qbar * qbar ! pitch moment
       Cn =      -Cm_alpha * beta_f + Cm_qbar * rbar ! yaw moment
 
-      FM(4) = Cl_pitch * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * length)
+      FM(4) = Cl_roll * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * length)
       FM(5) = Cm       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * length)
       FM(6) = Cn       * (0.5 * density_slugs_per_ft3 * V **2 * planform_area * length)
     end subroutine pseudo_aero

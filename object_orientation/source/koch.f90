@@ -44,12 +44,10 @@ module koch_m
         vec_quat = (/0.0, base_vec(1), base_vec(2), base_vec(3)/)
         quat_conj = (/quat(1), -quat(2), -quat(3), -quat(4)/)
 
-        ! FIRST ROTATION FROM 1.5.4
-        temp_quat = quat_mult(vec_quat, quat)
+        temp_quat = quat_mult(quat, vec_quat)
+        quat_sol  = quat_mult(temp_quat, quat_conj)
 
-        ! SECOND ROTATION FROM 1.5.4
-        quat_sol = quat_mult(quat_conj, temp_quat)
-        dependent_vec = (/quat_sol(2), quat_sol(3), quat_sol(4)/)
+        dependent_vec = quat_sol(2:4)
 
     end function quat_base_to_dependent
 !=========================

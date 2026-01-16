@@ -371,14 +371,17 @@ module vehicle_m
         end if 
 
         ! DEFINE THE K TERMS FOR RK4 METHOD
-        if (t%rk4_verbose) write(t%iunit_rk4,*)'    |           RK4 call number =             1'
+        if (t%rk4_verbose) write(t%iunit_rk4,'(A,X,ES19.12,1X)')'    |           RK4 call number =             1'
         k1 = differential_equations(t, t0, y1)
-        if (t%rk4_verbose) write(t%iunit_rk4,*)'    |           RK4 call number =             2'
+        if (t%rk4_verbose) write(t%iunit_rk4,'(A,X,ES19.12,1X)')'    |           RK4 call number =             2'
         k2 = differential_equations(t, t0 + delta_t*0.5, y1 + k1 * delta_t*0.5)
-        if (t%rk4_verbose) write(t%iunit_rk4,*)'    |           RK4 call number =             3'
+        if (t%rk4_verbose) write(t%iunit_rk4,'(A,X,ES19.12,1X)')'    |           RK4 call number =             3'
         k3 = differential_equations(t, t0 + delta_t*0.5, y1 + k2 * delta_t*0.5)
-        if (t%rk4_verbose) write(t%iunit_rk4,*)'    |           RK4 call number =             4'
+        if (t%rk4_verbose) write(t%iunit_rk4,'(A,X,ES19.12,1X)')'    |           RK4 call number =             4'
         k4 = differential_equations(t, t0 + delta_t, y1 + k3 * delta_t)
+
+        ! DEFINE THE RESULT FROM RK4
+        state = y1 + (delta_t/6) * (k1 + 2*k2 + 2*k3 + k4)
 
         if (t%rk4_verbose) then 
           write(t%iunit_rk4,*) '  state of the vehicle after running RK4:'
@@ -387,18 +390,17 @@ module vehicle_m
             q[rad/s]                  r[rad/s]                 xf[ft]                     &
             yf[ft]                    zf[ft]                    e0                        &
             ex                        ey                        ez'
-          write(t%iunit_rk4,*) t%state
+          write(t%iunit_rk4,*) t0+delta_t, state
           write(t%iunit_rk4,*) ' --------------------------- End of single RK4 integration step. ---------------------------'
         end if 
-        ! DEFINE THE RESULT FROM RK4
-        state = y1 + (delta_t/6) * (k1 + 2*k2 + 2*k3 + k4)
+
       end function rk4
     
     !=========================
     ! Equations of Motion: (/u,v,w, p,q,r, x,y,z, e0,ex,ey,ez/)
       function differential_equations(t, time, state) result(dstate_dt)
         implicit none 
-        type(vehicle_t) :: t
+        type(vehicle_t), intent(inout) :: t
         real :: time
         real, target :: state(13) 
         real :: dstate_dt(13) 
@@ -415,8 +417,8 @@ module vehicle_m
         real, pointer :: u, v, w, p, q, r, e0, ex, ey, ez
 
         if (t%rk4_verbose) then 
-          write(t%iunit_rk4,*) '    |                  time [s] = ', time 
-          write(t%iunit_rk4,*) '    |    state vector coming in = ', t%state 
+          write(t%iunit_rk4,'(A,X,ES19.12,1X)') '    |                  time [s] = ', time 
+          write(t%iunit_rk4,'(A,X,13(ES19.12,1X))') '    |    state vector coming in = ', state 
         end if 
         
         ! UNPACK STATES
@@ -558,8 +560,8 @@ module vehicle_m
         dstate_dt(10:13) = quat_change
 
         if (t%rk4_verbose) then 
-          write(t%iunit_rk4,*) '    | pseudo aerodynamics (F,M) = ', FM
-          write(t%iunit_rk4,*) '    |           diff_eq results = ', dstate_dt
+          write(t%iunit_rk4,'(A,X,6(ES19.12,1X))') '    | pseudo aerodynamics (F,M) = ', FM
+          write(t%iunit_rk4,'(A,X,13(ES19.12,1X))') '    |           diff_eq results = ', dstate_dt
         end if 
       end function differential_equations
   ! 
@@ -575,7 +577,7 @@ module vehicle_m
         real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
         real :: V, dyn_pressure
         real :: alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
-        real :: CL, CL1, CD, CS, L, D, S, Cl_pitch, Cm, Cn
+        real :: CL, CL1, CD, CS, L, D, S, Cl_roll, Cm, Cn
         real :: CM1, CM2, mach_num
         real :: ca, cb, sa, sb
         real :: alpha_hat, beta_hat
@@ -589,7 +591,7 @@ module vehicle_m
         real :: pg_factor, kt_factor
         real :: m_high, m_low, m_trans_start
         real :: sqrt_term
-        real :: max_CL_factor, max_CD_factor, max_Cl_pitch_factor
+        real :: max_CL_factor, max_CD_factor, max_Cl_roll_factor
         
         ! BUILD THE ATMOSPHERE 
         geometric_altitude_ft = -state(9)
@@ -642,7 +644,7 @@ module vehicle_m
                 * delta_e + t%CD_elevator_elevator * delta_e ** 2
 
           ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
-          Cl_pitch = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar &
+          Cl_roll = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar &
                      + t%Cl_aileron * delta_a + t%Cl_rudder * delta_r  ! roll moment
           Cm    = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar + t%Cm_alphahat * alpha_hat + t%Cm_elevator * delta_e ! pitch moment
           Cn       = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar &
@@ -653,14 +655,14 @@ module vehicle_m
           CS = -t%CL_alpha * beta_f 
           CD = t%CD_L0 + t%CD_L1_L1*CL**2 + t%CD_L1_L1*CS**2 
           
-          Cl_pitch = t%Cl_l0 + t%Cl_pbar*pbar
-          Cm       = t%Cm_alpha*alpha + t%CL_qbar*qbar 
+          Cl_roll  = t%Cl_l0 + t%Cl_pbar*pbar
+          Cm       = t%Cm_alpha*alpha + t%Cm_qbar*qbar 
           Cn       = -t%Cm_alpha*beta_f + t%Cm_qbar*rbar
 
         else if (t%type == 'sphere') then 
           CL       = 0.0 
           CS       = 0.0 
-          Cl_pitch = 0.0 
+          Cl_roll = 0.0 
           Cm       = 0.0 
           Cn       = 0.0
           
@@ -732,21 +734,21 @@ module vehicle_m
           ! APPLY THE FACTORS
           max_CL_factor = 6.5
           max_CD_factor = 4
-          max_Cl_pitch_factor = 2.5
+          max_Cl_roll_factor = 2.5
 
           if (mach_num < 0.92) then ! accurate range
             CL = CL * lift_factor
             CS = CS * lift_factor
-            Cl_pitch = Cl_pitch * moment_factor
+            Cl_roll = Cl_roll * moment_factor
             Cm       = Cm * moment_factor
             Cn       = Cn * moment_factor
             CD       = CD * drag_factor
           else
             CL       = CL * min(lift_factor, max_CL_factor)
             CS       = CS * min(lift_factor, max_CL_factor)
-            Cl_pitch = Cl_pitch * min(moment_factor, max_Cl_pitch_factor)
-            Cm       = Cm * min(moment_factor, max_Cl_pitch_factor)
-            Cn       = Cn * min(moment_factor, max_Cl_pitch_factor)
+            Cl_roll  = Cl_roll * min(moment_factor, max_Cl_roll_factor)
+            Cm       = Cm * min(moment_factor, max_Cl_roll_factor)
+            Cn       = Cn * min(moment_factor, max_Cl_roll_factor)
           end if
 
           ! apply drag multiplier
@@ -760,9 +762,9 @@ module vehicle_m
         ! TABLE 3.4.4
         FM(1) = - (ca*(D*cb + S*sb) - L*sa)
         FM(2) = (S*cb - D*sb)
-        FM(3) = - (sa*(D*cb + S*sb) + L*ca) * (-1.0)
+        FM(3) = - (sa*(D*cb + S*sb) + L*ca)
 
-        FM(4) = Cl_pitch * dyn_pressure * t%lateral_length
+        FM(4) = Cl_roll * dyn_pressure * t%lateral_length
         FM(5) = Cm       * dyn_pressure * t%longitudinal_length
         FM(6) = Cn       * dyn_pressure * t%lateral_length
 

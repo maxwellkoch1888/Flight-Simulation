@@ -8,7 +8,7 @@
     "vehicles" : {
         "ping-pong-ball" : {
             "type" : "sphere",
-            "run_physics" : true,
+            "run_physics" : false,
             "mass" : {
                 "weight[lbf]" : 0.006,
                 "Ixx[slug-ft^2]" : 5.215657263284e-7,
@@ -95,7 +95,7 @@
         },
         "F16" : {
             "type" : "aircraft",
-            "run_physics" : true,
+            "run_physics" : false,
             "mass" : {
                 "weight[lbf]" : 20500.0,
                 "Ixx[slug-ft^2]" : 9496.0,

@@ -242,8 +242,8 @@ module f16_m
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
         real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
         real :: V, dyn_pressure
-        real :: Cl_pitch0, alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
-        real :: CL, CL1, CD, CS, L, D, S, Cl_pitch, Cm, Cn
+        real :: Cl_roll0, alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
+        real :: CL, CL1, CD, CS, L, D, S, Cl_roll, Cm, Cn
         real :: CM1, CM2, mach_num, gamma, R
         real :: ca, cb, sa, sb
         real :: alpha_hat, beta_hat
@@ -257,7 +257,7 @@ module f16_m
         real :: pg_factor, kt_factor
         real :: m_high, m_low, m_trans_start, m_trans_end
         real :: k, var, sqrt_term
-        real :: tran, max_CL_factor, max_CD_factor, max_Cl_pitch_factor, transonic_blend
+        real :: tran, max_CL_factor, max_CD_factor, max_Cl_roll_factor, transonic_blend
           
         ! BUILD THE ATMOSPHERE 
         geometric_altitude_ft = -state(9)
@@ -311,7 +311,7 @@ module f16_m
               * delta_e + CD_elevator_elevator * delta_e ** 2
 
         ! CALCULATE THE ROLL, PITCH, AND YAW COEFFICIENTS
-        Cl_pitch = Cl_beta * beta + Cl_pbar * pbar + (Cl_rbar + Cl_alpha_rbar * alpha) * rbar &
+        Cl_roll = Cl_beta * beta + Cl_pbar * pbar + (Cl_rbar + Cl_alpha_rbar * alpha) * rbar &
                   + Cl_aileron * delta_a + Cl_rudder * delta_r  ! roll moment
         Cm_ss =    Cm_0 + Cm_alpha * alpha + Cm_qbar * qbar + Cm_alphahat * alpha_hat + Cm_elevator * delta_e ! pitch moment
         Cn =       Cn_beta * beta + (Cn_pbar + Cn_alpha_pbar * alpha) * pbar + Cn_rbar * rbar &
@@ -369,21 +369,21 @@ module f16_m
           ! APPLY THE FACTORS
           max_CL_factor = 6.5
           max_CD_factor = 4
-          max_Cl_pitch_factor = 2.5
+          max_Cl_roll_factor = 2.5
 
           if (mach_num < 0.92) then ! accurate range
             CL = CL * lift_factor
             CS = CS * lift_factor
-            Cl_pitch = Cl_pitch * moment_factor
+            Cl_roll = Cl_roll * moment_factor
             Cm       = Cm * moment_factor
             Cn       = Cn * moment_factor
             CD       = CD * drag_factor
           else
             CL       = CL * min(lift_factor, max_CL_factor)
             CS       = CS * min(lift_factor, max_CL_factor)
-            Cl_pitch = Cl_pitch * min(moment_factor, max_Cl_pitch_factor)
-            Cm       = Cm * min(moment_factor, max_Cl_pitch_factor)
-            Cn       = Cn * min(moment_factor, max_Cl_pitch_factor)
+            Cl_roll = Cl_roll * min(moment_factor, max_Cl_roll_factor)
+            Cm       = Cm * min(moment_factor, max_Cl_roll_factor)
+            Cn       = Cn * min(moment_factor, max_Cl_roll_factor)
           end if
 
           ! apply drag multiplier
@@ -399,7 +399,7 @@ module f16_m
         FM(2) = (S*cb - D*sb)
         FM(3) = - (sa*(D*cb + S*sb) + L*ca) * (-1.0)
 
-        FM(4) = Cl_pitch * dyn_pressure * lateral_length
+        FM(4) = Cl_roll * dyn_pressure * lateral_length
         FM(5) = Cm       * dyn_pressure * longitudinal_length
         FM(6) = Cn       * dyn_pressure * lateral_length
 
