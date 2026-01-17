@@ -78,7 +78,7 @@ module koch_m
         real :: quat_mag
 
         ! FIND QUATERNION MAGNITUDE
-        quat_mag = (quat(1)**2 + quat(2)**2 + quat(3)**2 + quat(4)**2)**0.5
+        quat_mag = sqrt(sum(quat**2))
 
         ! NORMALIZE EACH COMPONENT OF THE QUATERNION
         quat(1) = quat(1) / quat_mag

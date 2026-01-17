@@ -88,12 +88,11 @@ module sim_m
             ! SAVE THE TIMESTAMP WHEN THE SIMULATION BEGINS
             cpu_start_time = get_time()
             ! START THE SIMULATION
-            do while(time < tf)
+            do while (time < tf - tol)
                 ! CALCULATE THE NEW STATES FOR EACH VEHICLE
                 do i=1,num_vehicles
                     if(vehicles(i)%run_physics) then 
-                        if(vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
-                        call vehicle_tick_state(vehicles(i), time, dt)                        
+                        call vehicle_tick_state(vehicles(i), time, dt)     
                     end if 
                 end do 
 
@@ -107,6 +106,12 @@ module sim_m
                 time = time + dt
                 integrated_time = integrated_time + dt
                 write(*,*) time, dt
+                
+                do i=1,num_vehicles
+                    if(vehicles(i)%run_physics) then 
+                        if(vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
+                    end if 
+                end do                 
                 
             end do 
 

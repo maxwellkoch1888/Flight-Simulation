@@ -1,7 +1,7 @@
 {
     "simulation" : {
         "time_step[s]" : 0.01,
-        "end_time[s]" : 10.0,
+        "end_time[s]" : 60.0,
         "rk4_verbose" : true,
         "save_states" : true
     },
@@ -41,7 +41,7 @@
         },
         "arrow" : {
             "type" : "arrow",
-            "run_physics" : true,
+            "run_physics" : false,
             "mass" : {
                 "weight[lbf]" : 0.0697,
                 "Ixx[slug-ft^2]" : 0.0000194,
@@ -67,8 +67,8 @@
                         "CL1_CL1" : 48.138
                     },
                     "Cl" : {
-                        "0" : 0.0,
-                        "1" : 3.223,
+                        "_0" : 0.0,
+                        "0" : 3.223,
                         "pbar" : -5.378
                     },
                     "Cm" : {
@@ -95,7 +95,7 @@
         },
         "F16" : {
             "type" : "aircraft",
-            "run_physics" : false,
+            "run_physics" : true,
             "mass" : {
                 "weight[lbf]" : 20500.0,
                 "Ixx[slug-ft^2]" : 9496.0,
@@ -192,22 +192,22 @@
                 }
             },
             "initial" : {
-                "airspeed[ft/s]" : 550.0,
-                "altitude[ft]" : 0.0,
+                "airspeed[ft/s]" : 330.0,
+                "altitude[ft]" : 1000.0,
                 "latitude[deg]" : 0.0,
                 "longitude[deg]" : 0.0,
-                "Euler_angles[deg]" : [20.0, 80.0, 0.0],
+                "Euler_angles[deg]" : [45.0, 8.042590225317, 0.0],
                 "type" : "state",
                 "state" : {
-                    "angle_of_attack[deg]" : 8.439045225037,
-                    "sideslip_angle[deg]" : 0.0,
-                    "p[deg/s]" : 0.0,
-                    "q[deg/s]" : 0.0,
-                    "r[deg/s]" : 0.0,
-                    "aileron[deg]" : 0.0,
-                    "elevator[deg]" : -9.438041040744,
-                    "rudder[deg]" : 0.0,
-                    "throttle" : 0.073998565634
+                    "angle_of_attack[deg]" : 11.278107537468,
+                    "sideslip_angle[deg]" : 0.022727214169,
+                    "p[deg/s]" : -0.766207504385,
+                    "q[deg/s]" : 3.834356702909,
+                    "r[deg/s]" : 3.834356702909,
+                    "aileron[deg]" : 0.123007387668,
+                    "elevator[deg]" : -11.389397552606,
+                    "rudder[deg]" : -0.871269845919,
+                    "throttle" : 0.129524457808
                 },
                 "trim" : {
                     "type" : "sct",

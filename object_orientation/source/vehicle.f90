@@ -96,13 +96,12 @@ module vehicle_m
           if(t%save_states) then 
             t%states_filename = 'output_files/' // trim(t%name) // '_states.csv'
             open(newunit=t%iunit_states, file=t%states_filename, status='REPLACE')
-            write(t%iunit_states,*) " time[s]                    u[ft/s]                   &
-            v[ft/s]                  w[ft/s]                    p[rad/s]                  &
-            q[rad/s]                  r[rad/s]                 xf[ft]                     &
-            yf[ft]                    zf[ft]                    e0                        &
-            ex                        ey                        ez                        &
-            aileron[deg]              elevator[deg]             rudder[deg]               &
-            throttle"
+            write(t%iunit_states,*) " time[s]             u[ft/s]              &
+            v[ft/s]              w[ft/s]              p[rad/s]             &
+            q[rad/s]             r[rad/s]             xf[ft]               &
+            yf[ft]               zf[ft]               e0                   &
+            ex                   ey                   ez                        &
+            aileron[deg]              elevator[deg]             rudder[deg]               throttle"
             write(*,*) '- saving states to ', t%states_filename
           end if 
 
@@ -191,10 +190,10 @@ module vehicle_m
             call jsonx_get(t%j_vehicle, 'aerodynamics.coefficients.Cn.rudder',        t%Cn_rudder)
           end if 
 
+          ! STALL CONDITIONS
           if(t%type == 'arrow' .or. t%type == 'aircraft') then 
             call jsonx_get(t%j_vehicle, 'aerodynamics.stall.include_stall', t%stall)
             if(t%stall) then 
-              call jsonx_get(t%j_vehicle, 'aerodynamics.stall.test_stall',       t%test_stall)
               call jsonx_get(t%j_vehicle, 'aerodynamics.stall.CL.lambda_b',      t%CL_lambda_b)
               call jsonx_get(t%j_vehicle, 'aerodynamics.stall.CL.alpha_0[deg]',  t%CL_alpha_0)
               call jsonx_get(t%j_vehicle, 'aerodynamics.stall.CL.alpha_s[deg]',  t%CL_alpha_s)
@@ -254,13 +253,11 @@ module vehicle_m
           else 
             call init_to_trim(t) 
           end if 
-
+          write(*,*) 'init euler:'
+          write(*,*) t%init_eul * 180.0 / pi 
           t%init_state(10:13) = euler_to_quat(t%init_eul) 
           t%state = t%init_state 
 
-          ! if(t%save_states) then 
-          !   call vehicle_write_state(t, 0.0,t%state)
-          ! end if 
         end if 
         write(*,*) 'Finished vehicle initialization.'
       end subroutine
@@ -273,7 +270,7 @@ module vehicle_m
         real, intent(in) :: time 
 
         ! write(t%iunit_states,*) time, t%state, t%controls 
-        write(t%iunit_states,*) time, t%state
+        write(t%iunit_states,'(14(ES20.13,1X))') time, t%state
 
       end subroutine 
 
@@ -297,7 +294,7 @@ module vehicle_m
 
         ! Calculate initial velocities
         t%init_state(1) = t%init_airspeed * cos(alpha) * cos(beta)
-        t%init_state(2) = t%init_airspeed * sin(alpha)
+        t%init_state(2) = t%init_airspeed * sin(beta)
         t%init_state(3) = t%init_airspeed * sin(alpha) * cos(beta)
 
         ! Calculate initial angular velocities 
@@ -342,7 +339,7 @@ module vehicle_m
         call quat_norm(y1(10:13)) 
 
         ! CHECK FOR HIGH ROTATION RATES 
-        if (sqrt(y1(4)**2 + y1(5)**2 + y1(6)**2)/2.0/pi/dt > 0.1 ) write(*,*) 'Warning: High vehicle rotation rate relative to timestep.'
+        ! if (sqrt(y1(4)**2 + y1(5)**2 + y1(6)**2)/2.0/pi/dt > 0.1 ) write(*,*) 'Warning: High vehicle rotation rate relative to timestep.'
 
         ! UPDATE STATES
         t%state = y1 
@@ -360,12 +357,13 @@ module vehicle_m
 
         if(t%rk4_verbose) then 
           write(t%iunit_rk4,*) '  state of the vehicle at the beginning of this RK4 integration step:'
-          write(t%iunit_rk4,*) ' time[s]                    u[ft/s]                   &
-            v[ft/s]                  w[ft/s]                    p[rad/s]                  &
-            q[rad/s]                  r[rad/s]                 xf[ft]                     &
-            yf[ft]                    zf[ft]                    e0                        &
-            ex                        ey                        ez'
-          write(t%iunit_rk4,*) t%state
+          write(t%iunit_rk4,*) "time[s]             u[ft/s]              &
+            v[ft/s]              w[ft/s]              p[rad/s]             &
+            q[rad/s]             r[rad/s]             xf[ft]               &
+            yf[ft]               zf[ft]               e0                   &
+            ex                   ey                   ez"
+
+          write(t%iunit_rk4,'(X,14(ES19.12,1X))') t0, t%state
 
           write(t%iunit_rk4,*) '  rk4 function called...'
         end if 
@@ -385,12 +383,12 @@ module vehicle_m
 
         if (t%rk4_verbose) then 
           write(t%iunit_rk4,*) '  state of the vehicle after running RK4:'
-          write(t%iunit_rk4,*) ' time[s]                    u[ft/s]                   &
-            v[ft/s]                  w[ft/s]                    p[rad/s]                  &
-            q[rad/s]                  r[rad/s]                 xf[ft]                     &
-            yf[ft]                    zf[ft]                    e0                        &
-            ex                        ey                        ez'
-          write(t%iunit_rk4,*) t0+delta_t, state
+          write(t%iunit_rk4,*) 'time[s]             u[ft/s]              &
+            v[ft/s]              w[ft/s]              p[rad/s]             &
+            q[rad/s]             r[rad/s]             xf[ft]               &
+            yf[ft]               zf[ft]               e0                   &
+            ex                   ey                   ez'
+          write(t%iunit_rk4,'(X,14(ES19.12,1X))') t0+delta_t, state
           write(t%iunit_rk4,*) ' --------------------------- End of single RK4 integration step. ---------------------------'
         end if 
 
@@ -468,15 +466,15 @@ module vehicle_m
         angular_v_effect(3) = q*u - p*v
 
         gyroscopic_effects(1,1) =  0.0
-        gyroscopic_effects(1,2) =  hzb
-        gyroscopic_effects(1,3) = -hyb
+        gyroscopic_effects(1,2) = -hzb
+        gyroscopic_effects(1,3) =  hyb
 
-        gyroscopic_effects(2,1) = -hzb
+        gyroscopic_effects(2,1) =  hzb
         gyroscopic_effects(2,2) =  0.0
-        gyroscopic_effects(2,3) =  hxb
+        gyroscopic_effects(2,3) = -hxb
 
-        gyroscopic_effects(3,1) =  hyb
-        gyroscopic_effects(3,2) = -hxb
+        gyroscopic_effects(3,1) = -hyb
+        gyroscopic_effects(3,2) =  hxb
         gyroscopic_effects(3,3) =  0.0
 
         angular_inertia(1,1) =  Ixx
@@ -511,20 +509,20 @@ module vehicle_m
         quat_inv(4) = -ez
 
         quat_matrix(1,1) = -ex
-        quat_matrix(1,2) =  e0
-        quat_matrix(1,3) =  ez
+        quat_matrix(1,2) = -ey
+        quat_matrix(1,3) = -ez
 
-        quat_matrix(2,1) = -ey
+        quat_matrix(2,1) =  e0
         quat_matrix(2,2) = -ez
-        quat_matrix(2,3) =  e0
+        quat_matrix(2,3) =  ey
 
-        quat_matrix(3,1) = -ez
-        quat_matrix(3,2) =  ey
+        quat_matrix(3,1) =  ez
+        quat_matrix(3,2) =  e0
         quat_matrix(3,3) = -ex
 
         quat_matrix(4,1) = -ey
         quat_matrix(4,2) =  ex
-        quat_matrix(4,3) =  e0            
+        quat_matrix(4,3) =  e0           
 
         ! BUILD THE DIFFERENTIAL EQUATIONS
         ! ROLL, PITCH, YAW ACCELERATIONS
@@ -784,64 +782,6 @@ module vehicle_m
         FM(4:6) = FM(4:6) + cross_product(t%aero_ref_location, FM(1:3))
 
       end subroutine pseudo_aero
-
-    !=========================
-    ! Check stall blending funtion
-      ! subroutine check_stall(t, state) 
-      !   implicit none 
-      !   type(vehicle_t) :: t
-      !   integer :: i 
-      !   real :: state(13)
-      !   real :: alpha, beta, states(13), N, Y, A
-      !   real :: ca, cb, sa, sb
-      !   real :: CL, CD, Cm
-      !   real :: const, geometric_altitude_ft, geopotential_altitude_ft, temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
-
-      !   geometric_altitude_ft = -t%initial_state(9)
-      !   call std_atm_English(&
-      !     geometric_altitude_ft, geopotential_altitude_ft,     & 
-      !     temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, & 
-      !     dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
-
-      !   const = (0.5 * density_slugs_per_ft3 * t%init_airspeed**2 * t%planform_area)
-      !   ! write(io_unit,*) 'altitude', geometric_altitude_ft
-      !   ! write(io_unit,*) 'rho', density_slugs_per_ft3 
-      !   ! write(io_unit,*) 'airspeed', init_airspeed 
-      !   ! write(io_unit,*) 'planform area', planform_area
-
-      !   t%controls = 0.0 
-      !   states = 0.0 
-
-      !   ! write(io_unit,*) '  alpha[deg]                CL                        CD                        Cm'  
-      !   do i=-180, 180, 1 
-      !     alpha = real(i) * pi / 180.0
-      !     beta = 0.0
-
-      !     ca = cos(alpha) 
-      !     cb = cos(beta) 
-      !     sa = sin(alpha) 
-      !     sb = sin(beta) 
-
-      !     states(1) = t%init_airspeed *ca * cb 
-      !     states(2) = t%init_airspeed * sb 
-      !     states(3) = t%init_airspeed * sa * cb 
-      !     states(9) = t%initial_state(9)
-
-      !     call pseudo_aero(t, states) 
-      !     A = -FM(1) 
-      !     Y =  FM(2)
-      !     N = -FM(3) 
-          
-      !     CL = N * ca - A* sa
-      !     CD = A * ca * cb - Y * sb + N * sa * cb 
-      !     Cm = FM(5) 
-
-      !     CL = CL / const 
-      !     CD = CD / const 
-      !     Cm = Cm / const / t%longitudinal_length
-      !     ! write(io_unit,*) alpha*180.0/pi, CL, CD, Cm
-      !   end do 
-      ! end subroutine
 
     !=========================
     ! Check Compressiblity model
