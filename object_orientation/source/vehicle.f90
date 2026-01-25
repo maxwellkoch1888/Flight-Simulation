@@ -341,10 +341,9 @@ module vehicle_m
         integer, parameter :: n_vars = 9
         integer :: n_free, iter, i, j, k 
         real :: x(n_vars) 
-        logical :: found, converged
         real, allocatable :: res(:), R_pos(:), R_neg(:), jac(:,:), delta_x(:) 
         integer, allocatable, dimension(:) :: idx_free 
-        real :: nL, error
+        real :: error
         real :: sa, sb, ca, cb
 
         allocate(t%trim%free_vars(n_vars))
@@ -417,47 +416,67 @@ module vehicle_m
 
         iter = 0
 
+        if(t%trim%solver%verbose) then 
+          write(t%iunit_trim,*)
+          write(t%iunit_trim,*) 'Initial Guess: '
+        end if 
+
         ! Calculate residual and initial error
         res = calc_r(t, x) 
         error = maxval(abs(res))
+
+        if(t%trim%solver%verbose) then 
+          write(t%iunit_trim,*)
+          write(t%iunit_trim,*) 'Beginning Solution Process...'
+        end if 
 
         ! BEGIN NEWTONS METHOD
         ! Use central difference method to find jacobian
         do while(error > t%trim%solver%tolerance)
           iter = iter + 1
 
+          if(t%trim%solver%verbose) then 
+            write(t%iunit_trim,*)
+            write(t%iunit_trim,*) '------------------------------ '
+            write(t%iunit_trim,*) 'Beginning iteration ', iter 
+            write(t%iunit_trim,*) '------------------------------ '
+            write(t%iunit_trim,*) 
+            write(t%iunit_trim,*) 'Building Jacobian'
+            write(t%iunit_trim,*)
+          end if           
+
           do i = 1,n_free      
             k = idx_free(i) 
             x(k) = x(k) + t%trim%solver%step_size
             R_pos = calc_r(t, x)
             
-            ! if (trim_verbose) then
-            !   write(io_unit, '(A,I0,A)') 'Computing gradient relative to G[', j-1, ']'
-            !   write(io_unit, '(A)') '   Positive Finite-Difference Step '
-            !   write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
-            !   write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_pos(i), i=1,6)
-            ! end if 
+            if(t%trim%solver%verbose) then 
+              write(t%iunit_trim, '(A,I0,A)') 'Computing gradient relative to x[', k, ']'
+              write(t%iunit_trim, '(A)') '   Positive Finite-Difference Step '
+              write(t%iunit_trim, '(A,6(1X,ES20.12))') '      x =', (x(j), j=1,6)
+              write(t%iunit_trim, '(A,6(1X,ES20.12))') '      R =', (R_pos(j), j=1,6)
+            end if 
             
             x(k) = x(k) - 2.0 * t%trim%solver%step_size
             R_neg = calc_r(t, x)
             
-            ! if (trim_verbose) then
-            !   write(io_unit, '(A)') '   Negative Finite-Difference Step'
-            !   write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
-            !   write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_neg(i), i=1,6)
-            !   write(io_unit,'(A)') ''
-            ! end if
+            if(t%trim%solver%verbose) then 
+              write(t%iunit_trim, '(A)') '   Negative Finite-Difference Step'
+              write(t%iunit_trim, '(A,6(1X,ES20.12))') '      x =', (x(j), j=1,6)
+              write(t%iunit_trim, '(A,6(1X,ES20.12))') '      R =', (R_neg(j), j=1,6)
+              write(t%iunit_trim,'(A)') ''
+            end if
 
             x(k) = x(k) + t%trim%solver%step_size
             jac(:,i) = (R_pos - R_neg) / 2.0 / t%trim%solver%step_size
           end do 
 
-          ! if (trim_verbose) then
-          !   write(io_unit, '(A)') 'Jacobian Matrix ='
-          !   do i = 1, size(jac,1)
-          !       write(io_unit,'(*(1X,ES20.12))') (jac(i,j), j=1,size(jac,2))
-          !   end do
-          ! end if
+          if (t%trim%solver%verbose) then
+            write(t%iunit_trim, '(A)') 'Jacobian Matrix ='
+            do i = 1, size(jac,1)
+                write(t%iunit_trim,'(*(1X,G25.17))') (jac(i,j), j=1,size(jac,2))
+            end do
+          end if
 
           res = calc_r(t, x)
 
@@ -465,12 +484,17 @@ module vehicle_m
           call lu_solve(6, jac, -res, delta_x)
           x = x + t%trim%solver%relaxation_factor * delta_x
 
-          ! if (trim_verbose) then
-          !   write(io_unit,*)
-          !   write(io_unit,'(A,6(1X,ES20.12))') 'Delta G =', (delta_G(k), k=1,6)
-          ! end if 
-
+          res = calc_r(t,x) 
           error = maxval(abs(res))
+
+          if (t%trim%solver%verbose) then
+            write(t%iunit_trim,*)
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' Delta X =', (delta_x(k), k=1,6)
+            write(t%iunit_trim, '(A,*(1X,G25.17))') '   New X = ', x(:)
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'Residual = ', res(:)
+            write(t%iunit_trim, '(A,*(1X,G25.17))') '   Error = ', error 
+          end if 
+
         end do 
 
         sa = sin(x(1))
