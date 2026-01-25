@@ -6,13 +6,30 @@ module vehicle_m
 
     implicit none
 
-  ! VEHICLE TYPE DEFINITION
+    ! Trim solver type
+    type trim_solver_t
+      real :: step_size, relaxation_factor, tolerance, max_iterations
+      logical :: verbose 
+    end type trim_solver_t
+
+    ! Trim solver type
+    type trim_settings_t
+      character(len=:), allocatable :: type 
+
+      logical, allocatable :: free_vars(:) 
+      real :: climb_angle, sideslip_angle
+      real :: load_factor
+
+      type(trim_solver_t) :: solver 
+    end type trim_settings_t
+
+    ! Vehicle type
     type vehicle_t
       type(json_value), pointer :: j_vehicle
           
       character(len=:), allocatable :: name
       character(len=:), allocatable :: type
-      character(100) :: states_filename, rk4_filename
+      character(100) :: states_filename, rk4_filename, trim_filename
 
       logical :: run_physics
       logical :: save_states
@@ -57,7 +74,7 @@ module vehicle_m
       real :: initial_state(13), state(13)
       real :: controls(4)
 
-      ! type(trim_settings_t) :: trim
+      type(trim_settings_t) :: trim
     end type vehicle_t
 
     ! BUILD GLOBAL VARIABLES FOR THE MODULE
@@ -97,11 +114,11 @@ module vehicle_m
             t%states_filename = 'output_files/' // trim(t%name) // '_states.csv'
             open(newunit=t%iunit_states, file=t%states_filename, status='REPLACE')
             write(t%iunit_states,*) " time[s]             u[ft/s]              &
-            v[ft/s]              w[ft/s]              p[rad/s]             &
-            q[rad/s]             r[rad/s]             xf[ft]               &
-            yf[ft]               zf[ft]               e0                   &
-            ex                   ey                   ez                        &
-            aileron[deg]              elevator[deg]             rudder[deg]               throttle"
+            &v[ft/s]              w[ft/s]              p[rad/s]             &
+            &q[rad/s]             r[rad/s]             xf[ft]               &
+            &yf[ft]               zf[ft]               e0                   &
+            &ex                   ey                   ez                        &
+            &aileron[deg]              elevator[deg]             rudder[deg]               throttle"
             write(*,*) '- saving states to ', t%states_filename
           end if 
 
@@ -249,8 +266,10 @@ module vehicle_m
           call jsonx_get(t%j_vehicle, 'initial.type', init_type)
 
           if(init_type == 'state') then 
+            write(*,*) 'initializing state...'
             call init_to_state(t)
           else 
+            write(*,*) 'initializing trim state...'
             call init_to_trim(t) 
           end if 
           write(*,*) 'init euler:'
@@ -318,11 +337,147 @@ module vehicle_m
       subroutine init_to_trim(t) 
         implicit none 
         type(vehicle_t) :: t
-        real :: states(13)
-        ! type(json_value), pointer :: j_initial, j_state 
+        type(json_value), pointer :: j_initial, j_trim, j_solver 
+        integer, parameter :: n_vars = 9
+        integer :: n_free, iter, i, j, k 
+        real :: x(n_vars) 
+        logical :: found, converged
+        real, allocatable :: res(:), R_pos(:), R_neg(:), jac(:,:), delta_x(:) 
+        integer, allocatable, dimension(:) :: idx_free 
+        real :: nL, error
+        real :: sa, sb, ca, cb
 
-        states = t%state 
+        allocate(t%trim%free_vars(n_vars))
 
+        write(*,*) '  -trimming'
+        ! Get json objects 
+        call jsonx_get(t%j_vehicle, 'initial', j_initial) 
+        call jsonx_get(j_initial, 'trim',      j_trim)
+        call jsonx_get(j_trim, 'solver',       j_solver)
+        call jsonx_get(j_trim, 'type',         t%trim%type) 
+
+        write(*,*)
+        write(*,*) '    Trimming vehicle for ', t%trim%type 
+
+        call jsonx_get(j_solver, 'finite_difference_step_size', t%trim%solver%step_size)
+        call jsonx_get(j_solver, 'relaxation_factor',           t%trim%solver%relaxation_factor)
+        call jsonx_get(j_solver, 'tolerance',                   t%trim%solver%tolerance)
+        call jsonx_get(j_solver, 'max_iterations',              t%trim%solver%max_iterations)
+        call jsonx_get(j_solver, 'verbose',                     t%trim%solver%verbose)
+
+        if(t%trim%solver%verbose) then 
+          t%trim_filename = 'output_files/' // trim(t%name)//'_trim.txt'
+          open(newunit=t%iunit_trim, file=t%trim_filename, status='REPLACE')
+          write(t%iunit_trim, *) 
+          write(t%iunit_trim, *) 'Newton Solver Settings: '
+          write(t%iunit_trim, *) 'Finite Difference Step Size = ', t%trim%solver%step_size
+          write(t%iunit_trim, *) '          Relaxation Factor = ', t%trim%solver%relaxation_factor 
+          write(t%iunit_trim, *) '                  Tolerance = ', t%trim%solver%tolerance
+        end if 
+
+        write(*,*) 
+        write(*,*) 'Newton Solver Settings: '
+        write(*,*) 'Finite Difference Step Size = ', t%trim%solver%step_size
+        write(*,*) '          Relaxation Factor = ', t%trim%solver%relaxation_factor 
+        write(*,*) '                  Tolerance = ', t%trim%solver%tolerance
+
+        ! t%trim%solve_fixed_climb_angle =    .false. 
+        ! t%trim%solve_relative_climb_angle = .false. 
+        ! t%trim%solve_load_factor =          .false. 
+
+        x = 0.0 
+        x(7:9) = t%init_eul 
+        t%trim%free_vars(:) =   .true. 
+        t%trim%free_vars(7:9) = .false. 
+        t%trim%climb_angle =    0.0
+        t%trim%load_factor =    1.0
+
+        n_free = count(t%trim%free_vars)
+
+        allocate(res(n_free))
+        allocate(R_pos(n_free))
+        allocate(R_neg(n_free))
+        allocate(jac(n_free, n_free))
+
+        idx_free = pack([(i,i=1,n_vars)], t%trim%free_vars) ! yields an array of indices of all free variables
+
+        if(t%trim%solver%verbose) then 
+          write(t%iunit_trim, *)
+          write(t%iunit_trim, *) 'n_vars = ', n_vars 
+          write(t%iunit_trim, *) 'n_free = ', n_free 
+          write(t%iunit_trim, *) 'free_vars = ', t%trim%free_vars
+          write(t%iunit_trim, *) 'idx_free = ', idx_free(:)
+        end if 
+        write(*,*) 'n_vars = ', n_vars 
+        write(*,*) 'n_free = ', n_free 
+        write(*,*) 'free_vars = ', t%trim%free_vars
+        write(*,*) 'idx_free = ', idx_free(:)
+        write(*,*) 
+        write(*,*) 'iteration Res alphs deg beta deg' 
+
+        iter = 0
+
+        ! Calculate residual and initial error
+        res = calc_r(t, x) 
+        error = maxval(abs(res))
+
+        ! BEGIN NEWTONS METHOD
+        ! Use central difference method to find jacobian
+        do while(error > t%trim%solver%tolerance)
+          iter = iter + 1
+
+          do i = 1,n_free      
+            k = idx_free(i) 
+            x(k) = x(k) + t%trim%solver%step_size
+            R_pos = calc_r(t, x)
+            
+            ! if (trim_verbose) then
+            !   write(io_unit, '(A,I0,A)') 'Computing gradient relative to G[', j-1, ']'
+            !   write(io_unit, '(A)') '   Positive Finite-Difference Step '
+            !   write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
+            !   write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_pos(i), i=1,6)
+            ! end if 
+            
+            x(k) = x(k) - 2.0 * t%trim%solver%step_size
+            R_neg = calc_r(t, x)
+            
+            ! if (trim_verbose) then
+            !   write(io_unit, '(A)') '   Negative Finite-Difference Step'
+            !   write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
+            !   write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_neg(i), i=1,6)
+            !   write(io_unit,'(A)') ''
+            ! end if
+
+            x(k) = x(k) + t%trim%solver%step_size
+            jac(:,i) = (R_pos - R_neg) / 2.0 / t%trim%solver%step_size
+          end do 
+
+          ! if (trim_verbose) then
+          !   write(io_unit, '(A)') 'Jacobian Matrix ='
+          !   do i = 1, size(jac,1)
+          !       write(io_unit,'(*(1X,ES20.12))') (jac(i,j), j=1,size(jac,2))
+          !   end do
+          ! end if
+
+          res = calc_r(t, x)
+
+          ! Calculate delta x and add relaxation factor
+          call lu_solve(6, jac, -res, delta_x)
+          x = x + t%trim%solver%relaxation_factor * delta_x
+
+          ! if (trim_verbose) then
+          !   write(io_unit,*)
+          !   write(io_unit,'(A,6(1X,ES20.12))') 'Delta G =', (delta_G(k), k=1,6)
+          ! end if 
+
+          error = maxval(abs(res))
+        end do 
+
+        sa = sin(x(1))
+        ca = cos(x(1))
+        sb = sin(x(2))
+        cb = cos(x(2)) 
+      
       end subroutine
     !=========================
     ! TICK A VEHICLE FORWARD IN TIME 
@@ -330,19 +485,19 @@ module vehicle_m
         implicit none 
         type(vehicle_t) :: t 
         real, intent(in) :: time, dt 
-        real :: y(13), y1(13) 
+        real :: x(13) 
 
         ! STEP VEHICLE FORWARD IN TIME 
-        y1 = rk4(t, time, t%state, dt) 
+        x = rk4(t, time, t%state, dt) 
 
         ! NORMALIZE THE QUATERNION 
-        call quat_norm(y1(10:13)) 
+        call quat_norm(x(10:13)) 
 
         ! CHECK FOR HIGH ROTATION RATES 
         ! if (sqrt(y1(4)**2 + y1(5)**2 + y1(6)**2)/2.0/pi/dt > 0.1 ) write(*,*) 'Warning: High vehicle rotation rate relative to timestep.'
 
         ! UPDATE STATES
-        t%state = y1 
+        t%state = x 
 
       end subroutine
   ! 
@@ -358,10 +513,10 @@ module vehicle_m
         if(t%rk4_verbose) then 
           write(t%iunit_rk4,*) '  state of the vehicle at the beginning of this RK4 integration step:'
           write(t%iunit_rk4,*) "time[s]             u[ft/s]              &
-            v[ft/s]              w[ft/s]              p[rad/s]             &
-            q[rad/s]             r[rad/s]             xf[ft]               &
-            yf[ft]               zf[ft]               e0                   &
-            ex                   ey                   ez"
+            &v[ft/s]              w[ft/s]              p[rad/s]             &
+            &q[rad/s]             r[rad/s]             xf[ft]               &
+            &yf[ft]               zf[ft]               e0                   &
+            &ex                   ey                   ez"
 
           write(t%iunit_rk4,'(X,14(ES19.12,1X))') t0, t%state
 
@@ -370,13 +525,13 @@ module vehicle_m
 
         ! DEFINE THE K TERMS FOR RK4 METHOD
         if (t%rk4_verbose) write(t%iunit_rk4,'(A,X,ES19.12,1X)')'    |           RK4 call number =             1'
-        k1 = differential_equations(t, t0, y1)
+        k1 = diff_eq(t, t0, y1)
         if (t%rk4_verbose) write(t%iunit_rk4,'(A,X,ES19.12,1X)')'    |           RK4 call number =             2'
-        k2 = differential_equations(t, t0 + delta_t*0.5, y1 + k1 * delta_t*0.5)
+        k2 = diff_eq(t, t0 + delta_t*0.5, y1 + k1 * delta_t*0.5)
         if (t%rk4_verbose) write(t%iunit_rk4,'(A,X,ES19.12,1X)')'    |           RK4 call number =             3'
-        k3 = differential_equations(t, t0 + delta_t*0.5, y1 + k2 * delta_t*0.5)
+        k3 = diff_eq(t, t0 + delta_t*0.5, y1 + k2 * delta_t*0.5)
         if (t%rk4_verbose) write(t%iunit_rk4,'(A,X,ES19.12,1X)')'    |           RK4 call number =             4'
-        k4 = differential_equations(t, t0 + delta_t, y1 + k3 * delta_t)
+        k4 = diff_eq(t, t0 + delta_t, y1 + k3 * delta_t)
 
         ! DEFINE THE RESULT FROM RK4
         state = y1 + (delta_t/6) * (k1 + 2*k2 + 2*k3 + k4)
@@ -384,10 +539,10 @@ module vehicle_m
         if (t%rk4_verbose) then 
           write(t%iunit_rk4,*) '  state of the vehicle after running RK4:'
           write(t%iunit_rk4,*) 'time[s]             u[ft/s]              &
-            v[ft/s]              w[ft/s]              p[rad/s]             &
-            q[rad/s]             r[rad/s]             xf[ft]               &
-            yf[ft]               zf[ft]               e0                   &
-            ex                   ey                   ez'
+            &v[ft/s]              w[ft/s]              p[rad/s]             &
+            &q[rad/s]             r[rad/s]             xf[ft]               &
+            &yf[ft]               zf[ft]               e0                   &
+            &ex                   ey                   ez'
           write(t%iunit_rk4,'(X,14(ES19.12,1X))') t0+delta_t, state
           write(t%iunit_rk4,*) ' --------------------------- End of single RK4 integration step. ---------------------------'
         end if 
@@ -396,7 +551,7 @@ module vehicle_m
     
     !=========================
     ! Equations of Motion: (/u,v,w, p,q,r, x,y,z, e0,ex,ey,ez/)
-      function differential_equations(t, time, state) result(dstate_dt)
+      function diff_eq(t, time, state) result(dstate_dt)
         implicit none 
         type(vehicle_t), intent(inout) :: t
         real :: time
@@ -561,7 +716,7 @@ module vehicle_m
           write(t%iunit_rk4,'(A,X,6(ES19.12,1X))') '    | pseudo aerodynamics (F,M) = ', FM
           write(t%iunit_rk4,'(A,X,13(ES19.12,1X))') '    |           diff_eq results = ', dstate_dt
         end if 
-      end function differential_equations
+      end function diff_eq
   ! 
   ! AERODYNAMICS AND FORCES
     !=========================
@@ -767,14 +922,6 @@ module vehicle_m
         FM(6) = Cn       * dyn_pressure * t%lateral_length
 
         ! ADD THE ENGINE THRUST
-        if (throttle < 0.0) then
-            throttle = 0.0
-          else if (throttle > 1.0) then
-            throttle = 1.0
-          else 
-            throttle = throttle 
-        end if 
-
         thrust = throttle * t%T0 * (density_slugs_per_ft3/t%rho0) ** t%Ta
         FM(1) = FM(1) + thrust
 
@@ -900,7 +1047,7 @@ module vehicle_m
   ! 
   ! CALCULATE TRIM STATE
     !=========================
-    ! Trim Algorithm
+    ! Old Trim Algorithm
       ! function trim_algorithm(V_mag, height, euler, tolerance, trim_type) result(G)
       !   implicit none 
       !   real :: V_mag, height, tolerance
@@ -1222,114 +1369,40 @@ module vehicle_m
       !   end if 
       ! end function trim_algorithm
 
-    !=========================
-    ! Newton's Method Solver to find G (alpha, beta, delta_a, delta_e, delta_r, throttle)
-      ! subroutine newtons_method(V_mag, height, euler, angular_rates, G)
-      !   implicit none
-      !   real , allocatable :: res(:), delta_G(:)
-      !   real, intent(inout) :: G(6)
-      !   real :: R_pos(6), R_neg(6), step_size
-      !   real :: angular_rates(3), jac(6,6), euler(3), height, dummy_res(13), V_mag
-      !   integer :: k, i, j
-
-      !   allocate(res(6), delta_G(6))
-
-      !   ! CALCULATE JACOBIAN AND RESIDUAL
-      !   if (trim_verbose) then
-      !     write(io_unit,'(A)') 'Building Jacobian Matrix:'
-      !     write(io_unit,'(A)') ''
-      !   end if 
-
-      !   ! USE CENTRAL DIFFERENCE METHOD TO FIND JACOBIAN
-      !   step_size = finite_difference_step_size
-      !   do j = 1,6        
-      !     G(j) = G(j) + step_size
-      !     R_pos = calc_r(V_mag, height, euler, angular_rates, G)
-          
-      !     if (trim_verbose) then
-      !       write(io_unit, '(A,I0,A)') 'Computing gradient relative to G[', j-1, ']'
-      !       write(io_unit, '(A)') '   Positive Finite-Difference Step '
-      !       write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
-      !       write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_pos(i), i=1,6)
-      !     end if 
-          
-      !     G(j) = G(j) - 2 * step_size
-      !     R_neg = calc_r(V_mag, height, euler, angular_rates, G)
-          
-      !     if (trim_verbose) then
-      !       write(io_unit, '(A)') '   Negative Finite-Difference Step'
-      !       write(io_unit, '(A,6(1X,ES20.12))') '      G =', (G(i), i=1,6)
-      !       write(io_unit, '(A,6(1X,ES20.12))') '      R =', (R_neg(i), i=1,6)
-      !       write(io_unit,'(A)') ''
-      !     end if
-
-      !     do i = 1,6
-      !       jac(i, j) = (R_pos(i) - R_neg(i)) / (2*step_size)
-
-      !     end do 
-      !     G(j) = G(j) + step_size
-      !   end do 
-
-      !   if (trim_verbose) then
-      !     write(io_unit, '(A)') 'Jacobian Matrix ='
-      !     do i = 1, size(jac,1)
-      !         write(io_unit,'(*(1X,ES20.12))') (jac(i,j), j=1,size(jac,2))
-      !     end do
-      !   end if
-      !   res = calc_r(V_mag, height, euler, angular_rates, G)
-      !   res = -1* res
-
-      !   ! CALCUALTE DELTA G AND ADD RELAXATION FACTOR
-      !   call lu_solve(6, jac, res, delta_G)
-      !   G = G + relaxation_factor * delta_G
-
-      !   if (trim_verbose) then
-      !     write(io_unit,*)
-      !     write(io_unit,'(A,6(1X,ES20.12))') 'Delta G =', (delta_G(k), k=1,6)
-      !   end if 
-
-      ! end subroutine newtons_method
+    
 
     !=========================
     ! Calculate Residual
-      ! function calc_r(V_mag, height, euler, angular_rates, G) result(R)
-      !   implicit none
-      !   real, intent(in) :: V_mag, height, G(6), angular_rates(3)
-      !   real, intent(inout) :: euler(3)
-      !   real :: alpha, ca, cb, sa, sb
-      !   real :: R(6), dummy_R(13), temp_state(13)
+      function calc_r(t, G) result(R)
+        implicit none
+        type(vehicle_t) :: t
+        real, intent(in) :: G(6)
+        real :: ca, cb, sa, sb
+        real :: R(6), temp_state(13), dummy_res(13)
 
-      !   temp_state = 0.0
+        ! Pull out controls
+        t%controls(1:4) = G(3:6)
 
-      !   ! PULL OUT CONTROLS
-      !   controls(1:4) = G(3:6)
+        ! Pull out alpha and beta
+        ca = cos(G(1))
+        sa = sin(G(1))     
+        cb = cos(G(2))
+        sb = sin(G(2))
 
-      !   ! PULL OUT ALPHA
-      !   alpha = G(1)
-      !   ca = cos(alpha)
-      !   sa = sin(alpha)     
+        ! Set states
+        temp_state(1:3)   = t%init_airspeed * (/ca*cb, sb, sa*cb/) 
+        temp_state(4:6)   = 0.0
+        temp_state(9)     = -t%init_alt
+        temp_state(7:8)   = 0.0
+        temp_state(10:13) = euler_to_quat(t%init_eul)
 
-      !   ! PULL OUT BETA
-      !   if (sideslip_angle0 /= -999.0) then 
-      !     cb = cos(sideslip_angle0)
-      !     sb = sin(sideslip_angle0)
-      !     euler(1) = G(2)
-      !   else 
-      !     cb = cos(G(2))
-      !     sb = sin(G(2))
-      !   end if
+        ! Set controls 
+        t%controls = G(3:6) 
 
-      !   ! CALCUALTE INITIAL STATES
-      !   temp_state(1:3)   = V_mag * (/ca*cb, sb, sa*cb/) 
-      !   temp_state(4:6)   = angular_rates
-      !   temp_state(9)     = height
-      !   temp_state(7:8)   = 0
-      !   temp_state(10:13) = euler_to_quat(euler)
+        ! Calculate residual
+        dummy_res = diff_eq(t, 0.0, temp_state)
+        R = dummy_res(1:6)
 
-      !   ! CALCULATE RESIDUAL
-      !   dummy_R = differential_equations(0.0, temp_state)
-      !   R = dummy_R(1:6)
-
-      ! end function calc_r
+      end function calc_r
 
 end module vehicle_m

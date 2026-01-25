@@ -1,0 +1,10 @@
+
+ Newton Solver Settings: 
+ Finite Difference Step Size =    1.0000000000000000E-002
+           Relaxation Factor =   0.90000000000000002     
+                   Tolerance =    1.0000000000000000E-013
+
+ n_vars =            9
+ n_free =            6
+ free_vars =  T T T T T T F F F
+ idx_free =            1           2           3           4           5           6
