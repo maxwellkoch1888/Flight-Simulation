@@ -1400,36 +1400,45 @@ module vehicle_m
       function calc_r(t, x) result(R)
         implicit none
         type(vehicle_t) :: t
-        real, intent(in) :: x(6)
+        real, intent(in) :: x(9)
         real :: g, ac, xyzdot(3)
         real :: ca, cb, sa, sb, cp, sp, ct, st
-        real :: u, v, w 
+        real :: u, v, w, euler(3)
         real :: angular_rates(3)
         real :: R(6), temp_state(13), dummy_res(13)
         integer :: j
 
-        ! Calculate gravity and gravity relief
-        g = gravity_English(-t%init_alt)
-        xyzdot = quat_dependent_to_base(t%init_state(1:3), t%init_state(10:13))
-        ac = (xyzdot(1)**2 + xyzdot(2)**2) / (6366707.01949371/0.3048 - t%init_state(9))
-
         ! Pull out controls
         t%controls(1:4) = x(3:6)
+        
+        ! Pull out euler angles 
+        euler = x(7:9)
 
         ! Pull out alpha, beta, phi, and theta
         ca = cos(x(1))
         sa = sin(x(1))     
         cb = cos(x(2))
         sb = sin(x(2))
-        cp = cos(t%init_eul(1))
-        sp = sin(t%init_eul(1))
-        ct = cos(t%init_eul(2))
-        st = sin(t%init_eul(2))
+        cp = cos(x(7))
+        sp = sin(x(7))
+        ct = cos(x(8))
+        st = sin(x(8))
 
         ! Pull out velocities
         u = t%init_airspeed * ca * cb
         v = t%init_airspeed * sb 
         w = t%init_airspeed * sa * cb 
+        
+        ! Set init_states of vehicle based on passed in values
+        t%init_state(1)  = u
+        t%init_state(2)  = v
+        t%init_state(3)  = w
+        t%init_state(10:13) = euler_to_quat(euler)
+
+        ! Calculate gravity and gravity relief
+        g = gravity_English(t%init_alt)
+        xyzdot = quat_dependent_to_base(t%init_state(1:3), t%init_state(10:13))
+        ac = (xyzdot(1)**2 + xyzdot(2)**2) / (6366707.01949371/0.3048 - t%init_state(9))
 
         ! Caculate angular rates
         angular_rates = 0.0 
@@ -1452,11 +1461,11 @@ module vehicle_m
         R = dummy_res(1:6)
 
         if (t%trim%solver%verbose) then 
-          write(t%iunit_trim, '(A,*(1X,G25.17))') '       x =', (x(j), j=1,6)
+          write(t%iunit_trim, '(A,*(1X,G25.17))') '       x =', x
           write(t%iunit_trim, *) '         p[deg/s] = ', angular_rates(1) * 180.0 / pi 
           write(t%iunit_trim, *) '         q[deg/s] = ', angular_rates(2) * 180.0 / pi 
           write(t%iunit_trim, *) '         r[deg/s] = ', angular_rates(3) * 180.0 / pi 
-          write(t%iunit_trim, '(A,*(1X,G25.17))') '       R =', (R(j), j=1,6)
+          write(t%iunit_trim, '(A,*(1X,G25.17))') '       R =', R
         end if         
 
       end function calc_r
