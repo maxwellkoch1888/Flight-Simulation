@@ -407,22 +407,22 @@ module vehicle_m
           write(t%iunit_trim, *) 'free_vars = ', t%trim%free_vars
           write(t%iunit_trim, *) 'idx_free = ', idx_free(:)
         end if 
-        write(*,*) 'n_vars = ', n_vars 
-        write(*,*) 'n_free = ', n_free 
-        write(*,*) 'free_vars = ', t%trim%free_vars
-        write(*,*) 'idx_free = ', idx_free(:)
-        write(*,*) 
-        write(*,*) 'iteration Res alphs deg beta deg' 
+        write(*,*) '    n_vars = ', n_vars 
+        write(*,*) '    n_free = ', n_free 
+        write(*,*) '    free_vars = ', t%trim%free_vars
+        write(*,*) '    idx_free = ', idx_free(:)
+        write(*,*)    
+        write(*,*) '    iteration Res alphs deg beta deg' 
 
         iter = 0
 
+        ! Set initial error
         if(t%trim%solver%verbose) then 
           write(t%iunit_trim,*)
-          write(t%iunit_trim,*) 'Initial Guess: '
-        end if 
+          write(t%iunit_trim,*) 'Initial Guess'
+        end if         
 
-        ! Calculate residual and initial error
-        res = calc_r(t, x) 
+        res = calc_r(t, x)
         error = maxval(abs(res))
 
         if(t%trim%solver%verbose) then 
@@ -447,24 +447,24 @@ module vehicle_m
 
           do i = 1,n_free      
             k = idx_free(i) 
-            x(k) = x(k) + t%trim%solver%step_size
-            R_pos = calc_r(t, x)
-            
+
             if(t%trim%solver%verbose) then 
               write(t%iunit_trim, '(A,I0,A)') 'Computing gradient relative to x[', k, ']'
               write(t%iunit_trim, '(A)') '   Positive Finite-Difference Step '
-              write(t%iunit_trim, '(A,6(1X,ES20.12))') '      x =', (x(j), j=1,6)
-              write(t%iunit_trim, '(A,6(1X,ES20.12))') '      R =', (R_pos(j), j=1,6)
             end if 
+
+            x(k) = x(k) + t%trim%solver%step_size
+            R_pos = calc_r(t, x)
             
+            if (t%trim%solver%verbose) then 
+              write(t%iunit_trim, '(A)') '   Negative Finite-Difference Step'
+            end if 
+                          
             x(k) = x(k) - 2.0 * t%trim%solver%step_size
             R_neg = calc_r(t, x)
             
             if(t%trim%solver%verbose) then 
-              write(t%iunit_trim, '(A)') '   Negative Finite-Difference Step'
-              write(t%iunit_trim, '(A,6(1X,ES20.12))') '      x =', (x(j), j=1,6)
-              write(t%iunit_trim, '(A,6(1X,ES20.12))') '      R =', (R_neg(j), j=1,6)
-              write(t%iunit_trim,'(A)') ''
+              write(t%iunit_trim,*) 
             end if
 
             x(k) = x(k) + t%trim%solver%step_size
@@ -1397,35 +1397,67 @@ module vehicle_m
 
     !=========================
     ! Calculate Residual
-      function calc_r(t, G) result(R)
+      function calc_r(t, x) result(R)
         implicit none
         type(vehicle_t) :: t
-        real, intent(in) :: G(6)
-        real :: ca, cb, sa, sb
+        real, intent(in) :: x(6)
+        real :: g, ac, xyzdot(3)
+        real :: ca, cb, sa, sb, cp, sp, ct, st
+        real :: u, v, w 
+        real :: angular_rates(3)
         real :: R(6), temp_state(13), dummy_res(13)
+        integer :: j
+
+        ! Calculate gravity and gravity relief
+        g = gravity_English(-t%init_alt)
+        xyzdot = quat_dependent_to_base(t%init_state(1:3), t%init_state(10:13))
+        ac = (xyzdot(1)**2 + xyzdot(2)**2) / (6366707.01949371/0.3048 - t%init_state(9))
 
         ! Pull out controls
-        t%controls(1:4) = G(3:6)
+        t%controls(1:4) = x(3:6)
 
-        ! Pull out alpha and beta
-        ca = cos(G(1))
-        sa = sin(G(1))     
-        cb = cos(G(2))
-        sb = sin(G(2))
+        ! Pull out alpha, beta, phi, and theta
+        ca = cos(x(1))
+        sa = sin(x(1))     
+        cb = cos(x(2))
+        sb = sin(x(2))
+        cp = cos(t%init_eul(1))
+        sp = sin(t%init_eul(1))
+        ct = cos(t%init_eul(2))
+        st = sin(t%init_eul(2))
+
+        ! Pull out velocities
+        u = t%init_airspeed * ca * cb
+        v = t%init_airspeed * sb 
+        w = t%init_airspeed * sa * cb 
+
+        ! Caculate angular rates
+        angular_rates = 0.0 
+        if (t%trim%type == 'sct') then 
+          angular_rates = (g-ac)*sp*ct / (u*ct*cp + w*st) * (/-st, sp*ct, cp*ct/)
+        end if 
 
         ! Set states
         temp_state(1:3)   = t%init_airspeed * (/ca*cb, sb, sa*cb/) 
-        temp_state(4:6)   = 0.0
+        temp_state(4:6)   = angular_rates
         temp_state(9)     = -t%init_alt
         temp_state(7:8)   = 0.0
         temp_state(10:13) = euler_to_quat(t%init_eul)
 
         ! Set controls 
-        t%controls = G(3:6) 
+        t%controls = x(3:6) 
 
         ! Calculate residual
         dummy_res = diff_eq(t, 0.0, temp_state)
         R = dummy_res(1:6)
+
+        if (t%trim%solver%verbose) then 
+          write(t%iunit_trim, '(A,*(1X,G25.17))') '       x =', (x(j), j=1,6)
+          write(t%iunit_trim, *) '         p[deg/s] = ', angular_rates(1) * 180.0 / pi 
+          write(t%iunit_trim, *) '         q[deg/s] = ', angular_rates(2) * 180.0 / pi 
+          write(t%iunit_trim, *) '         r[deg/s] = ', angular_rates(3) * 180.0 / pi 
+          write(t%iunit_trim, '(A,*(1X,G25.17))') '       R =', (R(j), j=1,6)
+        end if         
 
       end function calc_r
 
