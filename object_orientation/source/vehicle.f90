@@ -9,7 +9,6 @@ module vehicle_m
     ! Trim solver type
     type trim_solver_t
       real :: step_size, relaxation_factor, tolerance, max_iterations
-      logical :: verbose 
     end type trim_solver_t
 
     ! Trim solver type
@@ -19,6 +18,7 @@ module vehicle_m
       logical, allocatable :: free_vars(:) 
       real :: climb_angle, sideslip_angle
       real :: load_factor
+      logical :: verbose 
 
       type(trim_solver_t) :: solver 
     end type trim_settings_t
@@ -353,18 +353,18 @@ module vehicle_m
         call jsonx_get(t%j_vehicle, 'initial', j_initial) 
         call jsonx_get(j_initial, 'trim',      j_trim)
         call jsonx_get(j_trim, 'solver',       j_solver)
-        call jsonx_get(j_trim, 'type',         t%trim%type) 
+        call jsonx_get(j_trim, 'type',         t%trim%type)
+        call jsonx_get(j_trim, 'sideslip_angle[deg]', t%trim%sideslip_angle, -999.0) 
 
-        write(*,*)
-        write(*,*) '    Trimming vehicle for ', t%trim%type 
+        write(*,*) '   -trimming vehicle for ', t%trim%type 
 
         call jsonx_get(j_solver, 'finite_difference_step_size', t%trim%solver%step_size)
         call jsonx_get(j_solver, 'relaxation_factor',           t%trim%solver%relaxation_factor)
         call jsonx_get(j_solver, 'tolerance',                   t%trim%solver%tolerance)
         call jsonx_get(j_solver, 'max_iterations',              t%trim%solver%max_iterations)
-        call jsonx_get(j_solver, 'verbose',                     t%trim%solver%verbose)
+        call jsonx_get(j_solver, 'verbose',                     t%trim%verbose)
 
-        if(t%trim%solver%verbose) then 
+        if(t%trim%verbose) then 
           t%trim_filename = 'output_files/' // trim(t%name)//'_trim.txt'
           open(newunit=t%iunit_trim, file=t%trim_filename, status='REPLACE')
           write(t%iunit_trim, *) 
@@ -391,6 +391,12 @@ module vehicle_m
         t%trim%climb_angle =    0.0
         t%trim%load_factor =    1.0
 
+        if(t%trim%type == 'shss' .and. t%trim%sideslip_angle /= -999.0) then 
+          x(2) = x(2) * pi / 180.0
+          t%trim%free_vars(2) = .false. 
+          t%trim%free_vars(7) = .true.
+        end if 
+
         n_free = count(t%trim%free_vars)
 
         allocate(res(n_free))
@@ -400,8 +406,9 @@ module vehicle_m
 
         idx_free = pack([(i,i=1,n_vars)], t%trim%free_vars) ! yields an array of indices of all free variables
 
-        if(t%trim%solver%verbose) then 
+        if(t%trim%verbose) then 
           write(t%iunit_trim, *)
+          write(t%iunit_trim, *) ' x array defined as [alpha, beta, aileron, elevator, rudder, throttle, phi, theta, psi]'
           write(t%iunit_trim, *) 'n_vars = ', n_vars 
           write(t%iunit_trim, *) 'n_free = ', n_free 
           write(t%iunit_trim, *) 'free_vars = ', t%trim%free_vars
@@ -417,7 +424,7 @@ module vehicle_m
         iter = 0
 
         ! Set initial error
-        if(t%trim%solver%verbose) then 
+        if(t%trim%verbose) then 
           write(t%iunit_trim,*)
           write(t%iunit_trim,*) 'Initial Guess'
         end if         
@@ -425,7 +432,7 @@ module vehicle_m
         res = calc_r(t, x)
         error = maxval(abs(res))
 
-        if(t%trim%solver%verbose) then 
+        if(t%trim%verbose) then 
           write(t%iunit_trim,*)
           write(t%iunit_trim,*) 'Beginning Solution Process...'
         end if 
@@ -435,7 +442,7 @@ module vehicle_m
         do while(error > t%trim%solver%tolerance)
           iter = iter + 1
 
-          if(t%trim%solver%verbose) then 
+          if(t%trim%verbose) then 
             write(t%iunit_trim,*)
             write(t%iunit_trim,*) '------------------------------ '
             write(t%iunit_trim,*) 'Beginning iteration ', iter 
@@ -448,7 +455,7 @@ module vehicle_m
           do i = 1,n_free      
             k = idx_free(i) 
 
-            if(t%trim%solver%verbose) then 
+            if(t%trim%verbose) then 
               write(t%iunit_trim, '(A,I0,A)') 'Computing gradient relative to x[', k, ']'
               write(t%iunit_trim, '(A)') '   Positive Finite-Difference Step '
             end if 
@@ -456,14 +463,14 @@ module vehicle_m
             x(k) = x(k) + t%trim%solver%step_size
             R_pos = calc_r(t, x)
             
-            if (t%trim%solver%verbose) then 
+            if (t%trim%verbose) then 
               write(t%iunit_trim, '(A)') '   Negative Finite-Difference Step'
             end if 
                           
             x(k) = x(k) - 2.0 * t%trim%solver%step_size
             R_neg = calc_r(t, x)
             
-            if(t%trim%solver%verbose) then 
+            if(t%trim%verbose) then 
               write(t%iunit_trim,*) 
             end if
 
@@ -471,7 +478,7 @@ module vehicle_m
             jac(:,i) = (R_pos - R_neg) / 2.0 / t%trim%solver%step_size
           end do 
 
-          if (t%trim%solver%verbose) then
+          if (t%trim%verbose) then
             write(t%iunit_trim, '(A)') 'Jacobian Matrix ='
             do i = 1, size(jac,1)
                 write(t%iunit_trim,'(*(1X,G25.17))') (jac(i,j), j=1,size(jac,2))
@@ -487,7 +494,7 @@ module vehicle_m
           res = calc_r(t,x) 
           error = maxval(abs(res))
 
-          if (t%trim%solver%verbose) then
+          if (t%trim%verbose) then
             write(t%iunit_trim,*)
             write(t%iunit_trim, '(A,*(1X,G25.17))') ' Delta X =', (delta_x(k), k=1,6)
             write(t%iunit_trim, '(A,*(1X,G25.17))') '   New X = ', x(:)
@@ -1444,6 +1451,8 @@ module vehicle_m
         angular_rates = 0.0 
         if (t%trim%type == 'sct') then 
           angular_rates = (g-ac)*sp*ct / (u*ct*cp + w*st) * (/-st, sp*ct, cp*ct/)
+        else if (t%trim%type == 'shss') then 
+          angular_rates = 0.0
         end if 
 
         ! Set states
@@ -1460,7 +1469,7 @@ module vehicle_m
         dummy_res = diff_eq(t, 0.0, temp_state)
         R = dummy_res(1:6)
 
-        if (t%trim%solver%verbose) then 
+        if (t%trim%verbose) then 
           write(t%iunit_trim, '(A,*(1X,G25.17))') '       x =', x
           write(t%iunit_trim, *) '         p[deg/s] = ', angular_rates(1) * 180.0 / pi 
           write(t%iunit_trim, *) '         q[deg/s] = ', angular_rates(2) * 180.0 / pi 

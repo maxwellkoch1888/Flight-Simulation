@@ -192,11 +192,11 @@
                 }
             },
             "initial" : {
-                "airspeed[ft/s]" : 400.0,
-                "altitude[ft]" : 3000.0,
+                "airspeed[ft/s]" : 520.0,
+                "altitude[ft]" : 2000.0,
                 "latitude[deg]" : 0.0,
                 "longitude[deg]" : 0.0,
-                "Euler_angles[deg]" : [20.0, 6.084391247322, 0.0],
+                "Euler_angles[deg]" : [0.0, 3.546530549415, 0.0],
                 "type" : "trim",
                 "state" : {
                     "angle_of_attack[deg]" : 11.278107537468,
@@ -210,9 +210,9 @@
                     "throttle" : 0.129524457808
                 },
                 "trim" : {
-                    "type" : "sct",
+                    "type" : "shss",
                     "ref_climb_angle[deg]" : 90.0,
-                    "_sideslip_angle[deg]" : -10.0,
+                    "sideslip_angle[deg]" : 0.0,
                     "_load_factor" : 1.0,
                     "solver" : {
                         "finite_difference_step_size" : 0.01,
