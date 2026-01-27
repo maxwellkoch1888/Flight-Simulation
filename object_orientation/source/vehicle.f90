@@ -385,13 +385,14 @@ module vehicle_m
         ! t%trim%solve_load_factor =          .false. 
 
         x = 0.0 
-        x(7:9) = t%init_eul 
+        x(7:9) = t%init_eul(:) 
         t%trim%free_vars(:) =   .true. 
         t%trim%free_vars(7:9) = .false. 
         t%trim%climb_angle =    0.0
         t%trim%load_factor =    1.0
 
-        if(t%trim%type == 'shss' .and. t%trim%sideslip_angle /= -999.0) then 
+        if(t%trim%type == 'shss' .and. abs(t%trim%sideslip_angle+999.0) > tol) then 
+          x(2) = t%trim%sideslip_angle
           x(2) = x(2) * pi / 180.0
           t%trim%free_vars(2) = .false. 
           t%trim%free_vars(7) = .true.
@@ -489,7 +490,12 @@ module vehicle_m
 
           ! Calculate delta x and add relaxation factor
           call lu_solve(6, jac, -res, delta_x)
-          x = x + t%trim%solver%relaxation_factor * delta_x
+
+          i = 1
+          do i=1,n_free 
+            k = idx_free(i) 
+            x(k) = x(k) + t%trim%solver%relaxation_factor * delta_x(i)
+          end do 
 
           res = calc_r(t,x) 
           error = maxval(abs(res))
@@ -604,7 +610,6 @@ module vehicle_m
           write(t%iunit_rk4,'(A,X,ES19.12,1X)') '    |                  time [s] = ', time 
           write(t%iunit_rk4,'(A,X,13(ES19.12,1X))') '    |    state vector coming in = ', state 
         end if 
-        
         ! UNPACK STATES
         u  => state(1)
         v  => state(2)
@@ -1451,17 +1456,16 @@ module vehicle_m
         angular_rates = 0.0 
         if (t%trim%type == 'sct') then 
           angular_rates = (g-ac)*sp*ct / (u*ct*cp + w*st) * (/-st, sp*ct, cp*ct/)
-        else if (t%trim%type == 'shss') then 
-          angular_rates = 0.0
         end if 
 
         ! Set states
         temp_state(1:3)   = t%init_airspeed * (/ca*cb, sb, sa*cb/) 
-        temp_state(4:6)   = angular_rates
+        temp_state(4:6)   = angular_rates(:)
         temp_state(9)     = -t%init_alt
         temp_state(7:8)   = 0.0
-        temp_state(10:13) = euler_to_quat(t%init_eul)
-
+        temp_state(10:13) = euler_to_quat(euler)
+        write(*,*) 'temp state quat', temp_state(10:13)
+        
         ! Set controls 
         t%controls = x(3:6) 
 
@@ -1471,10 +1475,12 @@ module vehicle_m
 
         if (t%trim%verbose) then 
           write(t%iunit_trim, '(A,*(1X,G25.17))') '       x =', x
-          write(t%iunit_trim, *) '         p[deg/s] = ', angular_rates(1) * 180.0 / pi 
-          write(t%iunit_trim, *) '         q[deg/s] = ', angular_rates(2) * 180.0 / pi 
-          write(t%iunit_trim, *) '         r[deg/s] = ', angular_rates(3) * 180.0 / pi 
-          write(t%iunit_trim, '(A,*(1X,G25.17))') '       R =', R
+          if(t%type == 'sct') then 
+            write(t%iunit_trim, *) '         p[deg/s] = ', angular_rates(1) * 180.0 / pi 
+            write(t%iunit_trim, *) '         q[deg/s] = ', angular_rates(2) * 180.0 / pi 
+            write(t%iunit_trim, *) '         r[deg/s] = ', angular_rates(3) * 180.0 / pi 
+          end if 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') '       R =', R
         end if         
 
       end function calc_r
