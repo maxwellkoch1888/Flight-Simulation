@@ -1464,7 +1464,6 @@ module vehicle_m
         temp_state(9)     = -t%init_alt
         temp_state(7:8)   = 0.0
         temp_state(10:13) = euler_to_quat(euler)
-        write(*,*) 'temp state quat', temp_state(10:13)
         
         ! Set controls 
         t%controls = x(3:6) 
