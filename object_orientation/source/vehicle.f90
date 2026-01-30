@@ -78,7 +78,6 @@ module vehicle_m
     end type vehicle_t
 
     ! BUILD GLOBAL VARIABLES FOR THE MODULE
-    real :: FM(6)
     real :: rho0
 
     ! ! ADD VARIABLES FOR TRIM ALGORITHM
@@ -1502,7 +1501,7 @@ module vehicle_m
         if(t%trim%solve_load_factor) then 
           last = last + 1
           FM = pseudo_aero(t, t%init_state) 
-          ans(last) = t%trim%load_factor - (FM(1)*sa - FM(3)*ca) / (t%mass*(g-ac))
+          ans(last) = t%trim%load_factor - (FM(1)*sa - FM(3)*ca) / t%mass/(g-ac)
         end if 
 
         if (t%trim%verbose) then 
