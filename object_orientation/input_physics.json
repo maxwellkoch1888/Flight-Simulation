@@ -211,9 +211,9 @@
                 },
                 "trim" : {
                     "type" : "sct",
-                    "ref_climb_angle[deg]" : 10.0,
+                    "ref_climb_angle[deg]" : 0.0,
                     "_sideslip_angle[deg]" : 5.0,
-                    "load_factor" : 1.0,
+                    "load_factor" : 5.0,
                     "solver" : {
                         "finite_difference_step_size" : 0.01,
                         "relaxation_factor" : 0.9,
