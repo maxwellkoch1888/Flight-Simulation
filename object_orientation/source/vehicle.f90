@@ -1495,21 +1495,12 @@ module vehicle_m
 
         if(t%trim%solve_relative_climb_angle) then
           last = last + 1
-          ans(last) = t%trim%climb_angle - calc_relative_climb_angle(t%init_state)
+          ans(last) = t%trim%climb_angle - calc_relative_climb_angle(temp_state)
         end if 
 
         if(t%trim%solve_load_factor) then 
           last = last + 1
-          FM = pseudo_aero(t, t%init_state) 
-          write(t%iunit_trim,*)'       load factor = ', t%trim%load_factor
-          write(t%iunit_trim,*)'approx load factor = ', ((FM(1)*sa - FM(3)*ca) / (t%mass*(g-ac)))
-          write(t%iunit_trim,*)'                FM = ', FM
-          write(t%iunit_trim,*)'            ca, sa = ', ca, sa 
-          write(t%iunit_trim,*)'             g, ac = ', g, ac 
-          write(t%iunit_trim,*)'              mass = ', t%mass
-          write(t%iunit_trim,*)'        init_state = ', t%init_state
-          write(t%iunit_trim,*)' euler angles[deg] = ', quat_to_euler(t%init_state(10:13)) * 180.0 / pi 
-          
+          FM = pseudo_aero(t, temp_state)           
           ans(last) = t%trim%load_factor - ((FM(1)*sa - FM(3)*ca) / (t%mass*(g-ac)))
         end if 
 
