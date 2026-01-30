@@ -18,7 +18,7 @@ module vehicle_m
       logical, allocatable :: free_vars(:) 
       real :: climb_angle, sideslip_angle
       real :: load_factor
-      logical :: verbose 
+      logical :: verbose, solve_relative_climb_angle, solve_load_factor
 
       type(trim_solver_t) :: solver 
     end type trim_settings_t
@@ -354,7 +354,10 @@ module vehicle_m
         call jsonx_get(j_initial, 'trim',      j_trim)
         call jsonx_get(j_trim, 'solver',       j_solver)
         call jsonx_get(j_trim, 'type',         t%trim%type)
-        call jsonx_get(j_trim, 'sideslip_angle[deg]', t%trim%sideslip_angle, -999.0) 
+
+        call jsonx_get(j_trim, 'sideslip_angle[deg]',  t%trim%sideslip_angle, -999.0) 
+        call jsonx_get(j_trim, 'ref_climb_angle[deg]', t%trim%climb_angle, -999.0) 
+        call jsonx_get(j_trim, 'load_factor',          t%trim%load_factor, -999.0) 
 
         write(*,*) '   -trimming vehicle for ', t%trim%type 
 
@@ -367,6 +370,7 @@ module vehicle_m
         if(t%trim%verbose) then 
           t%trim_filename = 'output_files/' // trim(t%name)//'_trim.txt'
           open(newunit=t%iunit_trim, file=t%trim_filename, status='REPLACE')
+          write(t%iunit_trim, *) 'Trimming for type: ', t%trim%type
           write(t%iunit_trim, *) 
           write(t%iunit_trim, *) 'Newton Solver Settings: '
           write(t%iunit_trim, *) 'Finite Difference Step Size = ', t%trim%solver%step_size
@@ -388,14 +392,29 @@ module vehicle_m
         x(7:9) = t%init_eul(:) 
         t%trim%free_vars(:) =   .true. 
         t%trim%free_vars(7:9) = .false. 
-        t%trim%climb_angle =    0.0
-        t%trim%load_factor =    1.0
 
         if(t%trim%type == 'shss' .and. abs(t%trim%sideslip_angle+999.0) > tol) then 
           x(2) = t%trim%sideslip_angle
           x(2) = x(2) * pi / 180.0
           t%trim%free_vars(2) = .false. 
           t%trim%free_vars(7) = .true.
+        end if 
+
+        if(abs(t%trim%climb_angle+999.0) > tol) then 
+          t%trim%climb_angle = t%trim%climb_angle * pi / 180.0
+          x(8) = t%trim%climb_angle
+          write(*,*) ' Reference Climb Angle[deg] = ', t%trim%climb_angle * 180.0 / pi 
+          write(t%iunit_trim,*) ' Reference Climb Angle[deg] = ', t%trim%climb_angle * 180.0 / pi 
+          t%trim%free_vars(8) = .true. 
+          t%trim%solve_relative_climb_angle = .true. 
+        end if 
+
+        if(t%trim%type == 'sct' .and. abs(t%trim%load_factor+999.0) > tol) then 
+          t%trim%solve_load_factor = .true. 
+          x(7) = acos(cos(x(8))/t%trim%load_factor) ! load factor approximation
+          t%trim%free_vars(7) = .true. 
+          write(*,*) '                Load Factor =', t%trim%load_factor
+          write(t%iunit_trim,*) '                Load Factor =', t%trim%load_factor
         end if 
 
         n_free = count(t%trim%free_vars)
@@ -419,8 +438,6 @@ module vehicle_m
         write(*,*) '    n_free = ', n_free 
         write(*,*) '    free_vars = ', t%trim%free_vars
         write(*,*) '    idx_free = ', idx_free(:)
-        write(*,*)    
-        write(*,*) '    iteration Res alphs deg beta deg' 
 
         iter = 0
 
@@ -430,7 +447,7 @@ module vehicle_m
           write(t%iunit_trim,*) 'Initial Guess'
         end if         
 
-        res = calc_r(t, x)
+        res = calc_r(t, x, n_free)
         error = maxval(abs(res))
 
         if(t%trim%verbose) then 
@@ -462,14 +479,14 @@ module vehicle_m
             end if 
 
             x(k) = x(k) + t%trim%solver%step_size
-            R_pos = calc_r(t, x)
+            R_pos = calc_r(t, x, n_free)
             
             if (t%trim%verbose) then 
               write(t%iunit_trim, '(A)') '   Negative Finite-Difference Step'
             end if 
                           
             x(k) = x(k) - 2.0 * t%trim%solver%step_size
-            R_neg = calc_r(t, x)
+            R_neg = calc_r(t, x, n_free)
             
             if(t%trim%verbose) then 
               write(t%iunit_trim,*) 
@@ -486,10 +503,10 @@ module vehicle_m
             end do
           end if
 
-          res = calc_r(t, x)
+          res = calc_r(t, x, n_free)
 
           ! Calculate delta x and add relaxation factor
-          call lu_solve(6, jac, -res, delta_x)
+          call lu_solve(n_free, jac, -res, delta_x)
 
           i = 1
           do i=1,n_free 
@@ -497,12 +514,12 @@ module vehicle_m
             x(k) = x(k) + t%trim%solver%relaxation_factor * delta_x(i)
           end do 
 
-          res = calc_r(t,x) 
+          res = calc_r(t,x, n_free) 
           error = maxval(abs(res))
 
           if (t%trim%verbose) then
             write(t%iunit_trim,*)
-            write(t%iunit_trim, '(A,*(1X,G25.17))') ' Delta X =', (delta_x(k), k=1,6)
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' Delta X =', (delta_x(k), k=1,n_free)
             write(t%iunit_trim, '(A,*(1X,G25.17))') '   New X = ', x(:)
             write(t%iunit_trim, '(A,*(1X,G25.17))') 'Residual = ', res(:)
             write(t%iunit_trim, '(A,*(1X,G25.17))') '   Error = ', error 
@@ -593,6 +610,7 @@ module vehicle_m
         type(vehicle_t), intent(inout) :: t
         real :: time
         real, target :: state(13) 
+        real :: FM(6) 
         real :: dstate_dt(13) 
         real :: acceleration(3), angular_accelerations(3), rhs(3), velocity(3), quat_change(4) 
         real :: quat_inv(4) 
@@ -631,7 +649,7 @@ module vehicle_m
         Iyz = t%inertia(2,3)
       
         ! CALCULATE FORCES AND MOMENTS
-        call pseudo_aero(t, state)
+        FM = pseudo_aero(t, state)
         gravity_ft_per_sec2 = gravity_English(-state(9))
 
         ! SET GYROSCOPIC EFFECTS
@@ -757,10 +775,11 @@ module vehicle_m
   ! AERODYNAMICS AND FORCES
     !=========================
     ! Aerodynamic Forces and Moments for f16
-      subroutine pseudo_aero(t, state)
+      function pseudo_aero(t, state) result(FM)
         implicit none
         type(vehicle_t) :: t
         real, intent(in) :: state(13)
+        real :: FM(6) 
         real :: Re, geometric_altitude_ft, geopotential_altitude_ft
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
         real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
@@ -964,7 +983,7 @@ module vehicle_m
         ! SHIFT CG LOCATION
         FM(4:6) = FM(4:6) + cross_product(t%aero_ref_location, FM(1:3))
 
-      end subroutine pseudo_aero
+      end function pseudo_aero
 
     !=========================
     ! Check Compressiblity model
@@ -1409,16 +1428,18 @@ module vehicle_m
 
     !=========================
     ! Calculate Residual
-      function calc_r(t, x) result(R)
+      function calc_r(t, x, n_free) result(ans)
         implicit none
         type(vehicle_t) :: t
         real, intent(in) :: x(9)
+        integer, intent(in) :: n_free
+        integer :: last
+        real :: FM(6) 
         real :: g, ac, xyzdot(3)
         real :: ca, cb, sa, sb, cp, sp, ct, st
         real :: u, v, w, euler(3)
         real :: angular_rates(3)
-        real :: R(6), temp_state(13), dummy_res(13)
-        integer :: j
+        real :: ans(n_free), temp_state(13), dummy_res(13)
 
         ! Pull out controls
         t%controls(1:4) = x(3:6)
@@ -1470,18 +1491,40 @@ module vehicle_m
 
         ! Calculate residual
         dummy_res = diff_eq(t, 0.0, temp_state)
-        R = dummy_res(1:6)
+        ans = dummy_res(1:6)
+        last = 6
+
+        if(t%trim%solve_relative_climb_angle) then
+          last = last + 1
+          ans(last) = t%trim%climb_angle - calc_relative_climb_angle(t%init_state)
+        end if 
+
+        if(t%trim%solve_load_factor) then 
+          last = last + 1
+          FM = pseudo_aero(t, t%init_state) 
+          ans(last) = t%trim%load_factor - (FM(1)*sa - FM(3)*ca) / (t%mass*(g-ac))
+        end if 
 
         if (t%trim%verbose) then 
           write(t%iunit_trim, '(A,*(1X,G25.17))') '       x =', x
-          if(t%type == 'sct') then 
+          if(t%trim%type == 'sct') then 
             write(t%iunit_trim, *) '         p[deg/s] = ', angular_rates(1) * 180.0 / pi 
             write(t%iunit_trim, *) '         q[deg/s] = ', angular_rates(2) * 180.0 / pi 
             write(t%iunit_trim, *) '         r[deg/s] = ', angular_rates(3) * 180.0 / pi 
           end if 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') '       R =', R
+            write(t%iunit_trim, '(A,*(1X,G25.17))') '       R =', ans
         end if         
 
       end function calc_r
+
+      function calc_relative_climb_angle(y) result(ans)
+        implicit none 
+        real :: y(13), ans 
+        real :: xyzdot(3), Vmag 
+
+        xyzdot = quat_dependent_to_base(y(1:3), y(10:13))
+        Vmag = sqrt(y(1)**2 + y(2)**2 + y(3)**2)
+        ans = asin(-xyzdot(3) / Vmag) 
+      end function
 
 end module vehicle_m
