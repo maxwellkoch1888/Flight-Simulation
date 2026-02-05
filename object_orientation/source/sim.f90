@@ -9,7 +9,7 @@ module sim_m
     integer :: num_vehicles
 
     contains 
-    !=========================
+    !----------------------------------------
     ! Init Subroutine
         subroutine init(filename)
             implicit none 
@@ -29,9 +29,17 @@ module sim_m
             allocate(vehicles(num_vehicles))
 
             ! Write statement flags
-            call jsonx_get(j_main, 'simulation.rk4_verbose', rk4_verbose, .false.)
-            call jsonx_get(j_main, 'simulation.save_states', save_states, .false.)
+            call jsonx_get(j_main, 'simulation.rk4_verbose',   rk4_verbose, .false.)
+            call jsonx_get(j_main, 'simulation.save_states',   save_states, .false.)
+            call jsonx_get(j_main, 'simulation.save_lat_long', save_lat_long, .false.)
 
+            ! Geographic model
+            call jsonx_get(j_main, 'simulation.geographic_model', geographic_model, 'none')
+            geographic_model_ID = 0 ! flat earth default
+            if (geographic_model == 'sphere') geographic_model_ID = 1
+            if (geographic_model == 'ellipse') geographic_model_ID = 2
+
+            ! Initialize vehicles
             do i=1,num_vehicles
                 vehicles(i)%save_states = save_states
                 vehicles(i)%rk4_verbose = rk4_verbose
@@ -43,7 +51,7 @@ module sim_m
             end do 
         end subroutine init
 
-    !=========================
+    !----------------------------------------
     ! Run Subroutine
         subroutine run()
             implicit none
@@ -75,16 +83,6 @@ module sim_m
                 end do 
             end if
 
-            ! BUILD THE LOOP AND WRITE THE OUTPUT
-            ! if (save_states) then 
-            !     write(io_unit,*) " time[s]             u[ft/s]             &
-            !     v[ft/s]             w[ft/s]             p[rad/s]            &
-            !     q[rad/s]            r[rad/s]            xf[ft]              &
-            !     yf[ft]              zf[ft]              e0                  &
-            !     ex                  ey                  ez"
-            !     write(io_unit,'(14ES20.12)') time,y_init(:)
-            ! end if 
-
             ! SAVE THE TIMESTAMP WHEN THE SIMULATION BEGINS
             cpu_start_time = get_time()
             ! START THE SIMULATION
@@ -110,6 +108,7 @@ module sim_m
                 do i=1,num_vehicles
                     if(vehicles(i)%run_physics) then 
                         if(vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
+                        if(save_lat_long) call vehicle_write_lat_long(vehicles(i), time)
                     end if 
                 end do                 
                 
@@ -129,17 +128,7 @@ module sim_m
 
         end subroutine run
 
-    !=========================
-    ! CONVERT DEG TO RAD IF NEEDED
-      function to_radians_if_valid(angle) result(new_angle)
-        implicit none
-        real, intent(in) :: angle
-        real :: new_angle
-        if (angle == -999.0) then
-          new_angle = angle
-        else
-          new_angle = angle * pi / 180.0
-        end if
-      end function to_radians_if_valid  
+    !----------------------------------------
+
 
 end module sim_m 

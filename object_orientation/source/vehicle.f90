@@ -6,6 +6,10 @@ module vehicle_m
 
     implicit none
     real :: rho0    
+    integer :: geographic_model_ID
+    character(len=:), allocatable :: geographic_model 
+    logical :: save_lat_long
+
     !==================================================
     ! TYPE DECLARATIONS
     !==================================================
@@ -33,14 +37,14 @@ module vehicle_m
             
         character(len=:), allocatable :: name
         character(len=:), allocatable :: type
-        character(100) :: states_filename, rk4_filename, trim_filename
+        character(100) :: states_filename, rk4_filename, trim_filename, latlong_filename
 
         logical :: run_physics
         logical :: save_states
-        integer :: iunit_states, iunit_rk4, iunit_trim
+        integer :: iunit_states, iunit_rk4, iunit_trim, iunit_latlong
 
         ! Location 
-        real :: lat, long 
+        real :: latitude, longitude
 
         ! Mass
         real :: mass
@@ -120,6 +124,14 @@ module vehicle_m
               t%rk4_filename = 'output_files/' // trim(t%name)//'_RK4.txt'
               open(newunit=t%iunit_rk4, file=t%rk4_filename, status='REPLACE')
               write(*,*) '- saving RK4 results to ', t%rk4_filename
+            end if 
+
+            if(save_lat_long) then 
+              t%latlong_filename = 'output_files/' // trim(t%name)//'_latlong.txt'
+              open(newunit=t%iunit_latlong, file=t%latlong_filename, status='REPLACE')
+              write(t%iunit_latlong,*) "time[s]              longitude[deg]       &
+              &latitude[deg]        azimuth[deg]"              
+              write(*,*) '- saving RK4 results to ', t%latlong_filename
             end if 
 
             write(*,*) '- mass' 
@@ -249,10 +261,10 @@ module vehicle_m
             call jsonx_get(t%j_vehicle, 'initial.airspeed[ft/s]', t%init_airspeed)
             call jsonx_get(t%j_vehicle, 'initial.altitude[ft]',   t%init_alt)
             t%init_state(9) = -t%init_alt 
-            call jsonx_get(t%j_vehicle, 'initial.latitude[deg]',  t%lat)
-            call jsonx_get(t%j_vehicle, 'initial.longitude[deg]', t%long)
-            t%lat  = t%lat  * pi / 180.0
-            t%long = t%long * pi / 180.0
+            call jsonx_get(t%j_vehicle, 'initial.latitude[deg]',  t%latitude)
+            call jsonx_get(t%j_vehicle, 'initial.longitude[deg]', t%longitude)
+            t%latitude  = t%latitude  * pi / 180.0
+            t%longitude = t%longitude * pi / 180.0
 
             call jsonx_get(t%j_vehicle, 'initial.Euler_angles[deg]', t%init_eul, 0.0, 3)
             t%init_eul = t%init_eul * pi / 180.0 
@@ -286,7 +298,18 @@ module vehicle_m
           write(t%iunit_states,'(14(ES20.13,1X))') time, t%state
 
         end subroutine 
+      !----------------------------------------
+      ! Write lat/long to a file
+        subroutine vehicle_write_lat_long(t, time)
+          implicit none 
+          type(vehicle_t) :: t 
+          real, intent(in) :: time 
+          real :: eul(3)
 
+          eul = quat_to_euler(t%state(10:13))
+          write(t%iunit_latlong,'(14(ES20.13,1X))') time, t%latitude * 180.0 / pi , t%longitude * 180.0 / pi, eul(3) * 180.0 / pi 
+
+        end subroutine         
       !----------------------------------------
       ! State initial condition
         subroutine init_to_state(t)
@@ -634,62 +657,94 @@ module vehicle_m
           implicit none 
           type(vehicle_t) :: t 
           real, intent(in) :: time, dt 
-          real :: x(13) 
+          real :: x1(13), x(13)
+
+          x = t%state
 
           ! Step vehicle forward in time
-          x = rk4(t, time, t%state, dt) 
+          x1 = rk4(t, time, t%state, dt) 
+
+          ! Call geographic model 
+          if(geographic_model_ID > 0) call spherical_earth(t, x, x1)
 
           ! Normalize quaternion
-          call quat_norm(x(10:13)) 
+          call quat_norm(x1(10:13)) 
 
           ! Update states
-          t%state = x 
+          t%state = x1 
 
         end subroutine
 
       !----------------------------------------   
       ! Spherical Earth model 
-        subroutine spherical_earth(coordinate, lat, long, alt)
-          real, intent(in) :: coordinate(3), lat, long, alt 
+        subroutine spherical_earth(t, y1, y2)
+          type(vehicle_t) :: t 
+          real, intent(in) :: y1(13), y2(13) 
           real :: d, dxf, dyf, dzf 
           real :: phi1, phi2, psi1, psi2 
           real :: dpsi_g, psi_g1 
-          real :: theta, Re, H1, H2
+          real :: theta, Re, H1
           real :: xhat, yhat, zhat, xhat_prime, yhat_prime, zhat_prime
           real :: rhat, Chat, Shat
+          real :: cphi1, sphi1, ct, st, cg1, sg1
+          real :: cg, sg, quat(4)
 
           ! Pull out lat and long 
-          phi1 = lat 
-          psi1 = long
-          H1 = alt
+          phi1 = t%latitude
+          psi1 = t%longitude
+          H1   = -y1(9)
 
           ! Pull out change in coordinate
-          dxf = coordinate(1)
-          dyf = coordinate(2)
-          dzf = coordinate(3)
+          dxf = y2(7) - y1(7)
+          dyf = y2(8) - y1(8)
+          dzf = y2(9) - y1(9)
+
+          cphi1 = cos(phi1)
+          sphi1 = sin(phi1) 
 
           d = sqrt(dxf**2 + dyf**2)
           if (d < tol) then 
-            phi2 = phi1 
-            psi2 = psi1 
+            phi2    = phi1 
+            psi2    = psi1 
             dpsi_g  = 0 
           else 
             theta = d/ (Re + H1 - dzf/2) 
+            ct    = cos(theta) 
+            st    = sin(theta) 
+            
             psi_g1 = atan2(dyf,dxf)
-            xhat = cos(phi1)*cos(theta) - sin(phi1)*sin(theta)*cos(psi_g1)
-            yhat = sin(theta)*sin(psi_g1)
-            zhat = sin(phi1) * cos(theta) + cos(theta)*sin(theta) * cos(psi_g1) 
-            xhat_prime = -cos(phi1) *sin(theta) - sin(phi1) * cos(psi_g1) 
-            yhat_prime = cos(theta) * sin(psi_g1) 
-            zhat_prime = -sin(phi1) * sin(theta) + cos(phi1) * cos(theta) * cos(psi_g1) 
-            rhat = sqrt(xhat**2 + yhat**2) 
-            phi2 = atan2(zhat, rhat) 
-            psi2 = psi1 + atan2(yhat, xhat) 
-            Chat = xhat**2 * zhat_prime 
-            Shat = (xhat*yhat_prime - yhat * xhat_prime)*(cos(phi2))**2 * (cos(psi2 - psi1))**2 
+            cg1    = cos(psi_g1)
+            sg1    = sin(psi_g1)
+
+            xhat = cphi1*ct - sphi1*st*cg1
+            yhat = st*sg1
+            zhat = sphi1 * ct + ct*st * cg1
+
+            xhat_prime = -cphi1 *st - sphi1 * cg1
+            yhat_prime = ct * sg1
+            zhat_prime = -sphi1 * st + cphi1 * ct * cg1
+            rhat       = sqrt(xhat**2 + yhat**2) 
+
+            t%latitude  = atan2(zhat, rhat) 
+            t%longitude = psi1 + atan2(yhat, xhat) 
+
+            Chat   = xhat**2 * zhat_prime 
+            Shat   = (xhat*yhat_prime - yhat * xhat_prime)*(cos(t%latitude))**2 * (cos(t%longitude - psi1))**2 
             dpsi_g = atan2(Shat, Chat) - psi_g1 
           end if 
-          H2 = H1 - dzf 
+
+          ! Limit  geographic coordinates
+          if(t%longitude < pi) t%longitude = t%longitude - 2.0*pi 
+          if(t%latitude < pi)  t%latitude  = t%latitude  + 2.0*pi 
+
+          ! Rotate flat earth quat according to delta bearing (7.5.17)
+          cg = cos(0.5 * dpsi_g)
+          sg = sin(0.5 * dpsi_g)
+          quat(1) = -t%state(13)
+          quat(2) = -t%state(12)
+          quat(3) =  t%state(11)
+          quat(4) =  t%state(10)
+          t%state(10:13) = cg * t%state(10:13) + sg*quat          
         end subroutine 
 
       !----------------------------------------         
