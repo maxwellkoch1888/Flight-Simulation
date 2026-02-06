@@ -5,7 +5,8 @@ module vehicle_m
     use linalg_mod
 
     implicit none
-    real :: rho0    
+    real :: rho0
+    real, parameter :: earth_radius_ft = 6366707.01949371/0.3048
     integer :: geographic_model_ID
     character(len=:), allocatable :: geographic_model 
     logical :: save_lat_long
@@ -361,7 +362,6 @@ module vehicle_m
           real, allocatable :: res(:), R_pos(:), R_neg(:), jac(:,:), delta_x(:) 
           integer, allocatable, dimension(:) :: idx_free 
           real :: error
-          real :: sa, sb, ca, cb
 
           allocate(t%trim%free_vars(n_vars))
 
@@ -440,7 +440,7 @@ module vehicle_m
           allocate(R_pos(n_free))
           allocate(R_neg(n_free))
           allocate(jac(n_free, n_free))
-
+          
           idx_free = pack([(i,i=1,n_vars)], t%trim%free_vars) ! yields an array of indices of all free variables
 
           if(t%trim%verbose) then 
@@ -474,7 +474,7 @@ module vehicle_m
 
           ! BEGIN NEWTONS METHOD
           ! Use central difference method to find jacobian
-          do while(error > t%trim%solver%tolerance)
+          do while(abs(error) > t%trim%solver%tolerance)
             iter = iter + 1
 
             if(t%trim%verbose) then 
@@ -533,7 +533,7 @@ module vehicle_m
 
             res = calc_r(t,x, n_free) 
             error = maxval(abs(res))
-
+            
             if (t%trim%verbose) then
               write(t%iunit_trim,*)
               write(t%iunit_trim, '(A,*(1X,G25.17))') ' Delta X =', (delta_x(k), k=1,n_free)
@@ -544,10 +544,25 @@ module vehicle_m
 
           end do 
 
-          sa = sin(x(1))
-          ca = cos(x(1))
-          sb = sin(x(2))
-          cb = cos(x(2)) 
+          if (t%trim%verbose) then
+            write(t%iunit_trim,*)
+            write(t%iunit_trim,*)
+            write(t%iunit_trim,*) 'Trim Solution:'
+            write(t%iunit_trim,*) '--------------------------'
+            write(t%iunit_trim,*) 'max error = ', error 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'elevation angle[deg] = ', x(8) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'bank angle[deg]      = ', x(7) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'angle of attack[deg] = ', x(1) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'sideslip angle[deg]  = ', x(2) * 180 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'p[deg/sec]  = ', t%state(4) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'q[deg/sec]  = ', t%state(5) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'r[deg/sec]  = ', t%state(6) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'aileron deflection[deg]  = ', x(3) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'elevator deflection[deg] = ', x(4) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'rudder deflection[deg]   = ', x(5) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') 'throttle[none]           = ', x(6)
+
+          end if           
         
         end subroutine
 
@@ -596,7 +611,7 @@ module vehicle_m
           ! Calculate gravity and gravity relief
           g = gravity_English(t%init_alt)
           xyzdot = quat_dependent_to_base(t%init_state(1:3), t%init_state(10:13))
-          ac = (xyzdot(1)**2 + xyzdot(2)**2) / (6366707.01949371/0.3048 - t%init_state(9))
+          ac = (xyzdot(1)**2 + xyzdot(2)**2) / (earth_radius_ft - t%init_state(9))
 
           ! Caculate angular rates
           angular_rates = 0.0 
@@ -678,37 +693,36 @@ module vehicle_m
       !----------------------------------------   
       ! Spherical Earth model 
         subroutine spherical_earth(t, y1, y2)
+          implicit none 
           type(vehicle_t) :: t 
           real, intent(in) :: y1(13), y2(13) 
           real :: d, dxf, dyf, dzf 
-          real :: phi1, phi2, psi1, psi2 
+          real :: phi1, psi1 
           real :: dpsi_g, psi_g1 
-          real :: theta, Re, H1
+          real :: theta, H1
           real :: xhat, yhat, zhat, xhat_prime, yhat_prime, zhat_prime
           real :: rhat, Chat, Shat
           real :: cphi1, sphi1, ct, st, cg1, sg1
           real :: cg, sg, quat(4)
-
-          ! Pull out lat and long 
-          phi1 = t%latitude
-          psi1 = t%longitude
-          H1   = -y1(9)
 
           ! Pull out change in coordinate
           dxf = y2(7) - y1(7)
           dyf = y2(8) - y1(8)
           dzf = y2(9) - y1(9)
 
-          cphi1 = cos(phi1)
-          sphi1 = sin(phi1) 
-
           d = sqrt(dxf**2 + dyf**2)
           if (d < tol) then 
-            phi2    = phi1 
-            psi2    = psi1 
-            dpsi_g  = 0 
+            ! nothing 
           else 
-            theta = d/ (Re + H1 - dzf/2) 
+            ! Pull out lat and long 
+            H1   = -y1(9)
+            phi1 = t%latitude
+            psi1 = t%longitude
+            
+            cphi1 = cos(phi1)
+            sphi1 = sin(phi1) 
+
+            theta = d/ (earth_radius_ft + H1 - dzf*0.5) 
             ct    = cos(theta) 
             st    = sin(theta) 
             
@@ -718,9 +732,9 @@ module vehicle_m
 
             xhat = cphi1*ct - sphi1*st*cg1
             yhat = st*sg1
-            zhat = sphi1 * ct + ct*st * cg1
+            zhat = sphi1*ct + cphi1*st*cg1
 
-            xhat_prime = -cphi1 *st - sphi1 * cg1
+            xhat_prime = -cphi1*st - sphi1*ct*cg1
             yhat_prime = ct * sg1
             zhat_prime = -sphi1 * st + cphi1 * ct * cg1
             rhat       = sqrt(xhat**2 + yhat**2) 
@@ -729,13 +743,13 @@ module vehicle_m
             t%longitude = psi1 + atan2(yhat, xhat) 
 
             Chat   = xhat**2 * zhat_prime 
-            Shat   = (xhat*yhat_prime - yhat * xhat_prime)*(cos(t%latitude))**2 * (cos(t%longitude - psi1))**2 
+            Shat   = (xhat*yhat_prime - yhat * xhat_prime) * (cos(t%latitude))**2 * (cos(t%longitude-psi1))**2 
             dpsi_g = atan2(Shat, Chat) - psi_g1 
           end if 
 
           ! Limit  geographic coordinates
-          if(t%longitude < pi) t%longitude = t%longitude - 2.0*pi 
-          if(t%latitude < pi)  t%latitude  = t%latitude  + 2.0*pi 
+          if(t%longitude >  pi) t%longitude = t%longitude - 2.0*pi 
+          if(t%longitude < -pi) t%longitude = t%longitude + 2.0*pi 
 
           ! Rotate flat earth quat according to delta bearing (7.5.17)
           cg = cos(0.5 * dpsi_g)
@@ -744,7 +758,7 @@ module vehicle_m
           quat(2) = -t%state(12)
           quat(3) =  t%state(11)
           quat(4) =  t%state(10)
-          t%state(10:13) = cg * t%state(10:13) + sg*quat          
+          t%state(10:13) = cg * t%state(10:13) + sg*quat(:)    
         end subroutine 
 
       !----------------------------------------         
@@ -942,7 +956,7 @@ module vehicle_m
           velocity = quat_base_to_dependent(state(1:3), state(10:13)) + wind_velocity
 
           ! Gravity relief
-          ac = (velocity(1)**2 + velocity(2)**2) / (6366707.01949371/0.3048 - state(9))
+          ac = (velocity(1)**2 + velocity(2)**2) / (earth_radius_ft - state(9))
 
           ! Aacceleration in body
           acceleration(1) = FM(1)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(1) + angular_v_effect(1)
@@ -1196,30 +1210,6 @@ module vehicle_m
           sigma = (1.0 + neg + pos) / ((1.0 + neg)*(1.0 + pos))
 
         end function calc_sigma
-
-      !----------------------------------------
-      ! Mass and Inertia
-        subroutine mass_inertia(t)
-          implicit none
-          type(vehicle_t) :: t
-          real :: weight
-          real :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz
-
-          ! Define inertia matrix
-          t%inertia(1,1) = Ixx
-          t%inertia(1,2) = Ixy
-          t%inertia(1,3) = Ixz
-          t%inertia(2,1) = Ixy
-          t%inertia(2,2) = Iyy
-          t%inertia(2,3) = Iyz
-          t%inertia(3,1) = Ixz
-          t%inertia(3,2) = Iyz
-          t%inertia(3,3) = Izz
-
-          ! Calculate mass and inertia
-          t%mass = weight / 32.17404855643
-          t%inertia_inv = matrix_inv(t%inertia)
-        end subroutine mass_inertia
 
       !----------------------------------------
 
