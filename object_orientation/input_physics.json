@@ -219,7 +219,7 @@
                     "solver" : {
                         "finite_difference_step_size" : 0.01,
                         "relaxation_factor" : 0.9,
-                        "tolerance" : 1.0e-15,
+                        "tolerance" : 1.0e-14,
                         "max_iterations" : 1000,
                         "verbose" : true
                     }

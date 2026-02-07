@@ -1,6 +1,6 @@
 $root = $PSScriptRoot
 
-gfortran -ffree-line-length-512 -fdefault-real-16 `
+gfortran -ffree-line-length-512 -fdefault-real-8 `
 "$root\source\helper\json.f90" `
 "$root\source\helper\jsonx.f90" `
 "$root\source\helper\linalg_mod.f90" `

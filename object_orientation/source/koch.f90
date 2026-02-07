@@ -1,7 +1,7 @@
 module koch_m
     implicit none
     REAL, PARAMETER :: PI = 3.14159265358979323846264338327950288419716939937510
-    real, parameter :: tol = 1.0e-15
+    real, parameter :: tol = 1.0e-12
 
     contains
 !=========================
