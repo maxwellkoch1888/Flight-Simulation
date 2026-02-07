@@ -33,58 +33,58 @@ module vehicle_m
         end type trim_settings_t
       !----------------------------------------
       ! Vehicle type
-      type vehicle_t
-        type(json_value), pointer :: j_vehicle
-            
-        character(len=:), allocatable :: name
-        character(len=:), allocatable :: type
-        character(100) :: states_filename, rk4_filename, trim_filename, latlong_filename
+        type vehicle_t
+          type(json_value), pointer :: j_vehicle
+              
+          character(len=:), allocatable :: name
+          character(len=:), allocatable :: type
+          character(100) :: states_filename, rk4_filename, trim_filename, latlong_filename
 
-        logical :: run_physics
-        logical :: save_states
-        integer :: iunit_states, iunit_rk4, iunit_trim, iunit_latlong
+          logical :: run_physics
+          logical :: save_states
+          integer :: iunit_states, iunit_rk4, iunit_trim, iunit_latlong
 
-        ! Location 
-        real :: latitude, longitude
+          ! Location 
+          real :: latitude, longitude
 
-        ! Mass
-        real :: mass
-        real :: inertia(3,3)
-        real :: inertia_inv(3,3)
-        real, allocatable :: h(:)
+          ! Mass
+          real :: mass
+          real :: inertia(3,3)
+          real :: inertia_inv(3,3)
+          real, allocatable :: h(:)
 
-        ! Aerodynamics
-        real, allocatable :: aero_ref_location(:)
-        real :: planform_area, longitudinal_length, lateral_length, sweep
-        real :: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
-        real :: CS_beta, CS_pbar, CS_alpha_pbar, CS_rbar, CS_aileron, CS_rudder
-        real :: CD_L0, CD_L1, CD_L1_L1, CD_CS_CS, CD_qbar, CD_alpha_qbar, CD_elevator, CD_alpha_elevator, CD_elevator_elevator
-        real :: Cl_l0, Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
-        real :: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
-        real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
-        real :: Cm_alpha_0, Cm_alpha_s, Cm_min
+          ! Aerodynamics
+          real, allocatable :: aero_ref_location(:)
+          real :: planform_area, longitudinal_length, lateral_length, sweep
+          real :: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
+          real :: CS_beta, CS_pbar, CS_alpha_pbar, CS_rbar, CS_aileron, CS_rudder
+          real :: CD_L0, CD_L1, CD_L1_L1, CD_CS_CS, CD_qbar, CD_alpha_qbar, CD_elevator, CD_alpha_elevator, CD_elevator_elevator
+          real :: Cl_l0, Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
+          real :: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
+          real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
+          real :: Cm_alpha_0, Cm_alpha_s, Cm_min
 
-        ! Thrust 
-        real :: T0, Ta, thrust_quat(4), rho0
-        real, allocatable :: thrust_location(:), thrust_orientation(:)
+          ! Thrust 
+          real :: T0, Ta, thrust_quat(4), rho0
+          real, allocatable :: thrust_location(:), thrust_orientation(:)
 
-        ! Debugging
-        logical :: compressibility = .false., rk4_verbose, print_states, test_compressibility
+          ! Debugging
+          logical :: compressibility = .false., rk4_verbose, print_states, test_compressibility
 
-        ! Stall model 
-        logical :: stall = .false., test_stall
-        real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
-        
-        ! Initialization constants
-        real :: init_airspeed, init_alt, init_state(13)
-        real, allocatable :: init_eul(:) ! has to be allocatable because will be read from json object
+          ! Stall model 
+          logical :: stall = .false., test_stall
+          real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
+          
+          ! Initialization constants
+          real :: init_airspeed, init_alt, init_state(13)
+          real, allocatable :: init_eul(:) ! has to be allocatable because will be read from json object
 
-        ! States/controls
-        real :: initial_state(13), state(13)
-        real :: controls(4)
+          ! States/controls
+          real :: initial_state(13), state(13)
+          real :: controls(4)
 
-        type(trim_settings_t) :: trim
-      end type vehicle_t
+          type(trim_settings_t) :: trim
+        end type vehicle_t
       !----------------------------------------
     contains
     !==================================================
@@ -744,21 +744,22 @@ module vehicle_m
 
             Chat   = xhat**2 * zhat_prime 
             Shat   = (xhat*yhat_prime - yhat * xhat_prime) * (cos(t%latitude))**2 * (cos(t%longitude-psi1))**2 
-            dpsi_g = atan2(Shat, Chat) - psi_g1 
+            dpsi_g = atan2(Shat, Chat) - psi_g1
+            
+            ! Limit  geographic coordinates
+            if(t%longitude >  pi) t%longitude = t%longitude - 2.0*pi 
+            if(t%longitude < -pi) t%longitude = t%longitude + 2.0*pi 
+
+            ! Rotate flat earth quat according to delta bearing (7.5.17)
+            cg = cos(0.5 * dpsi_g)
+            sg = sin(0.5 * dpsi_g)
+            quat(1) = -t%state(13)
+            quat(2) = -t%state(12)
+            quat(3) =  t%state(11)
+            quat(4) =  t%state(10)
+            t%state(10:13) = cg * t%state(10:13) + sg*quat(:)              
           end if 
-
-          ! Limit  geographic coordinates
-          if(t%longitude >  pi) t%longitude = t%longitude - 2.0*pi 
-          if(t%longitude < -pi) t%longitude = t%longitude + 2.0*pi 
-
-          ! Rotate flat earth quat according to delta bearing (7.5.17)
-          cg = cos(0.5 * dpsi_g)
-          sg = sin(0.5 * dpsi_g)
-          quat(1) = -t%state(13)
-          quat(2) = -t%state(12)
-          quat(3) =  t%state(11)
-          quat(4) =  t%state(10)
-          t%state(10:13) = cg * t%state(10:13) + sg*quat(:)    
+  
         end subroutine 
 
       !----------------------------------------         

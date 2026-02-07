@@ -1,11 +1,11 @@
 {
     "simulation" : {
-        "time_step[s]" : 0.01,
-        "end_time[s]" : 65850.0,
+        "time_step[s]" : 0.0015,
+        "end_time[s]" : 20000.0,
         "rk4_verbose" : false,
-        "save_states" : false,
+        "save_states" : true,
         "save_lat_long" : true, 
-        "geographic_model" : "sphere"
+        "geographic_model" : "sphere"  
     },
     "vehicles" : {
         "ping-pong-ball" : {
@@ -194,8 +194,8 @@
                 }
             },
             "initial" : {
-                "airspeed[ft/s]" : 1000,
-                "altitude[ft]" : 56644.1214783759,
+                "airspeed[ft/s]" : 6582.91440687328,
+                "altitude[ft]" : 60000.0,
                 "latitude[deg]" : 0.0,
                 "longitude[deg]" : 0.0,
                 "Euler_angles[deg]" : [0.0, 0.0, 45.0],

@@ -112,7 +112,7 @@ module sim_m
                 !     end if 
                 ! end do                 
                 
-                if (abs(time - 100.0*anint(time/100.0)) < tol) then
+                if (abs(time - 100.0*anint(time/100.0)) < 1e-2) then
                     do i = 1, num_vehicles
                         if (vehicles(i)%run_physics) then 
                             if (vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
