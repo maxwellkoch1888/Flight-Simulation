@@ -85,7 +85,15 @@ module sim_m
 
             ! SAVE THE TIMESTAMP WHEN THE SIMULATION BEGINS
             cpu_start_time = get_time()
+
             ! START THE SIMULATION
+            do i=1,num_vehicles
+                if(vehicles(i)%run_physics) then 
+                    if(vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
+                    if(save_lat_long) call vehicle_write_lat_long(vehicles(i), time)
+                end if 
+            end do     
+                    
             do while (time < tf - tol)
                 ! CALCULATE THE NEW STATES FOR EACH VEHICLE
                 do i=1,num_vehicles

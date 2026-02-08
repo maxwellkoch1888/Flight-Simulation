@@ -1,11 +1,11 @@
 {
     "simulation" : {
-        "time_step[s]" : 0.0015,
-        "end_time[s]" : 100.0,
-        "rk4_verbose" : true,
-        "save_states" : true,
+        "time_step[s]" : 0.01,
+        "end_time[s]" : 60.0,
+        "rk4_verbose" : false,
+        "save_states" : false,
         "save_lat_long" : true, 
-        "geographic_model" : "sphere"  
+        "geographic_model" : "sphere"
     },
     "vehicles" : {
         "ping-pong-ball" : {
@@ -194,10 +194,10 @@
                 }
             },
             "initial" : {
-                "airspeed[ft/s]" : 6582.91440687328,
-                "altitude[ft]" : 60000.0,
-                "latitude[deg]" : 0.0,
-                "longitude[deg]" : 0.0,
+                "airspeed[ft/s]" : 550.0,
+                "altitude[ft]" : 30000.0,
+                "latitude[deg]" : 80.0,
+                "longitude[deg]" : 90.0,
                 "Euler_angles[deg]" : [0.0, 0.0, 45.0],
                 "type" : "trim",
                 "state" : {
@@ -212,10 +212,10 @@
                     "throttle" : 0.129524457808
                 },
                 "trim" : {
-                    "type" : "shss",
+                    "type" : "sct",
                     "ref_climb_angle[deg]" : 0.0,
                     "_sideslip_angle[deg]" : 5.0,
-                    "load_factor" : 1.0,
+                    "load_factor" : 1.2,
                     "solver" : {
                         "finite_difference_step_size" : 0.01,
                         "relaxation_factor" : 0.9,

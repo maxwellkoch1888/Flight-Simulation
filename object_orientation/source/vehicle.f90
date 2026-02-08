@@ -132,7 +132,7 @@ module vehicle_m
               open(newunit=t%iunit_latlong, file=t%latlong_filename, status='REPLACE')
               write(t%iunit_latlong,*) "time[s]              longitude[deg]       &
               &latitude[deg]        azimuth[deg]"              
-              write(*,*) '- saving RK4 results to ', t%latlong_filename
+              write(*,*) '- saving latlong results to ', t%latlong_filename
             end if 
 
             write(*,*) '- mass' 
@@ -286,6 +286,7 @@ module vehicle_m
 
           end if 
           write(*,*) 'Finished vehicle initialization.'
+          
         end subroutine
 
       !----------------------------------------
@@ -550,17 +551,21 @@ module vehicle_m
             write(t%iunit_trim,*) 'Trim Solution:'
             write(t%iunit_trim,*) '--------------------------'
             write(t%iunit_trim,*) 'max error = ', error 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'elevation angle[deg] = ', x(8) * 180.0 / pi 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'bank angle[deg]      = ', x(7) * 180.0 / pi 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'angle of attack[deg] = ', x(1) * 180.0 / pi 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'sideslip angle[deg]  = ', x(2) * 180 / pi 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'p[deg/sec]  = ', t%state(4) * 180.0 / pi 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'q[deg/sec]  = ', t%state(5) * 180.0 / pi 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'r[deg/sec]  = ', t%state(6) * 180.0 / pi 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'aileron deflection[deg]  = ', x(3) * 180.0 / pi 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'elevator deflection[deg] = ', x(4) * 180.0 / pi 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'rudder deflection[deg]   = ', x(5) * 180.0 / pi 
-            write(t%iunit_trim, '(A,*(1X,G25.17))') 'throttle[none]           = ', x(6)
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' angle of attack[deg]     = ', x(1) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' sideslip angle[deg]      = ', x(2) * 180 / pi      
+            write(t%iunit_trim,*)
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' bank angle[deg]          = ', x(7) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' elevation angle[deg]     = ', x(8) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' azimuth   angle[deg]     = ', x(9) * 180.0 / pi 
+            write(t%iunit_trim,*)          
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' aileron deflection[deg]  = ', x(3) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' elevator deflection[deg] = ', x(4) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' rudder deflection[deg]   = ', x(5) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' throttle[none]           = ', x(6)      
+            write(t%iunit_trim,*)
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' Latitude[deg]            = ', t%latitude  * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' Longitude[deg]           = ', t%longitude * 180.0 / pi 
+
 
           end if        
           
