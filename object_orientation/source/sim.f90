@@ -105,21 +105,21 @@ module sim_m
                 integrated_time = integrated_time + dt
                 write(*,*) time, dt
                 
-                ! do i=1,num_vehicles
-                !     if(vehicles(i)%run_physics) then 
-                !         if(vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
-                !         if(save_lat_long) call vehicle_write_lat_long(vehicles(i), time)
-                !     end if 
-                ! end do                 
+                do i=1,num_vehicles
+                    if(vehicles(i)%run_physics) then 
+                        if(vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
+                        if(save_lat_long) call vehicle_write_lat_long(vehicles(i), time)
+                    end if 
+                end do                 
                 
-                if (abs(time - 100.0*anint(time/100.0)) < 1e-2) then
-                    do i = 1, num_vehicles
-                        if (vehicles(i)%run_physics) then 
-                            if (vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
-                            if (save_lat_long) call vehicle_write_lat_long(vehicles(i), time)
-                        end if
-                    end do
-                end if
+                ! if (abs(time - 100.0*anint(time/100.0)) < 1e-2) then
+                !     do i = 1, num_vehicles
+                !         if (vehicles(i)%run_physics) then 
+                !             if (vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
+                !             if (save_lat_long) call vehicle_write_lat_long(vehicles(i), time)
+                !         end if
+                !     end do
+                ! end if
                 
             end do 
 

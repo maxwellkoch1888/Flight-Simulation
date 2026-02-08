@@ -1,8 +1,8 @@
 {
     "simulation" : {
         "time_step[s]" : 0.0015,
-        "end_time[s]" : 20000.0,
-        "rk4_verbose" : false,
+        "end_time[s]" : 100.0,
+        "rk4_verbose" : true,
         "save_states" : true,
         "save_lat_long" : true, 
         "geographic_model" : "sphere"  

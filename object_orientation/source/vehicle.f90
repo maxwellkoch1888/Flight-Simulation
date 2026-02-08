@@ -562,7 +562,12 @@ module vehicle_m
             write(t%iunit_trim, '(A,*(1X,G25.17))') 'rudder deflection[deg]   = ', x(5) * 180.0 / pi 
             write(t%iunit_trim, '(A,*(1X,G25.17))') 'throttle[none]           = ', x(6)
 
-          end if           
+          end if        
+          
+          t%init_eul(:) = x(7:9)
+          t%controls = x(3:6)
+          write(*,*) x(7:9)* 180.0 / pi 
+
         
         end subroutine
 
@@ -678,16 +683,14 @@ module vehicle_m
 
           ! Step vehicle forward in time
           x1 = rk4(t, time, t%state, dt) 
+          t%state = x1 
 
           ! Call geographic model 
           if(geographic_model_ID > 0) call spherical_earth(t, x, x1)
 
           ! Normalize quaternion
-          call quat_norm(x1(10:13)) 
-
-          ! Update states
-          t%state = x1 
-
+          call quat_norm(t%state(10:13)) 
+          
         end subroutine
 
       !----------------------------------------   
@@ -695,7 +698,8 @@ module vehicle_m
         subroutine spherical_earth(t, y1, y2)
           implicit none 
           type(vehicle_t) :: t 
-          real, intent(in) :: y1(13), y2(13) 
+          real, intent(in) :: y1(13)
+          real, intent(inout) :: y2(13) 
           real :: d, dxf, dyf, dzf 
           real :: phi1, psi1 
           real :: dpsi_g, psi_g1 
@@ -703,7 +707,7 @@ module vehicle_m
           real :: xhat, yhat, zhat, xhat_prime, yhat_prime, zhat_prime
           real :: rhat, Chat, Shat
           real :: cphi1, sphi1, ct, st, cg1, sg1
-          real :: cg, sg, quat(4)
+          real :: cg, sg, quat(4)        
 
           ! Pull out change in coordinate
           dxf = y2(7) - y1(7)
@@ -722,7 +726,8 @@ module vehicle_m
             cphi1 = cos(phi1)
             sphi1 = sin(phi1) 
 
-            theta = d/ (earth_radius_ft + H1 - dzf*0.5) 
+            theta = d / (earth_radius_ft + H1 - dzf*0.5) 
+
             ct    = cos(theta) 
             st    = sin(theta) 
             
@@ -759,7 +764,7 @@ module vehicle_m
             quat(4) =  t%state(10)
             t%state(10:13) = cg * t%state(10:13) + sg*quat(:)              
           end if 
-  
+
         end subroutine 
 
       !----------------------------------------         
