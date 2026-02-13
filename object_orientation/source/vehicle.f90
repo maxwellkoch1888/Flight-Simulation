@@ -1071,54 +1071,54 @@ module vehicle_m
           dstate_dt(10:13) = quat_change
 
           ! Actuator dynamics
-          do i = 1,4
-            ! Read in state and limit magnitude 
-            delta = state(13 + i)
-            d_delta = state(17 + i) 
-            delta = max(min(delta, t%controls(i)%mag_limit(2)),  t%controls(i)%mag_limit(1))
+            do i = 1,4
+              ! Read in state and limit magnitude 
+              delta = state(13 + i)
+              d_delta = state(17 + i) 
+              delta = max(min(delta, t%controls(i)%mag_limit(2)),  t%controls(i)%mag_limit(1))
 
-            ! Compute dynamics
-            select case (t%controls(i)%dynamics_order)
+              ! Compute dynamics
+              select case (t%controls(i)%dynamics_order)
 
-            case(0) ! No dynamics
-              d_delta = 0.0 
-              dd_delta = 0.0 
+              case(0) ! No dynamics
+                d_delta = 0.0 
+                dd_delta = 0.0 
 
-            case(1) ! First order dynamics             
-              d_delta = (t%controls(i)%commanded_value - delta) / t%controls(i)%time_constant
-              d_delta = max(min(d_delta, t%controls(i)%rate_limit(2)),  t%controls(i)%rate_limit(1))
+              case(1) ! First order dynamics             
+                d_delta = (t%controls(i)%commanded_value - delta) / t%controls(i)%time_constant
+                d_delta = max(min(d_delta, t%controls(i)%rate_limit(2)),  t%controls(i)%rate_limit(1))
 
-              ! Position limit 
-              if (delta <= t%controls(i)%mag_limit(1) + tol .and. d_delta < 0.0) d_delta = 0.0 
-              if (delta >= t%controls(i)%mag_limit(2) - tol .and. d_delta > 0.0) d_delta = 0.0 
+                ! Position limit 
+                if (delta <= t%controls(i)%mag_limit(1) + tol .and. d_delta < 0.0) d_delta = 0.0 
+                if (delta >= t%controls(i)%mag_limit(2) - tol .and. d_delta > 0.0) d_delta = 0.0 
 
-              dd_delta = 0.0 
-            
-            case(2) ! Second order dynamics 
-              wn = t%controls(i)%natural_frequency 
-              zeta = t%controls(i)%damping_ratio
-              d_delta = max(min(d_delta, t%controls(i)%rate_limit(2)),  t%controls(i)%rate_limit(1))
-
-              if (delta <= t%controls(i)%mag_limit(1) + tol .and. d_delta < 0.0) d_delta = 0.0 
-              if (delta >= t%controls(i)%mag_limit(2) - tol .and. d_delta > 0.0) d_delta = 0.0 
-
-              dd_delta = wn**2 * (t%controls(i)%commanded_value - delta) - 2.0*zeta*wn*d_delta
-              dd_delta = max(min(dd_delta, t%controls(i)%accel_limit(2)),  t%controls(i)%accel_limit(1))
+                dd_delta = 0.0 
               
-              ! Rate limit 
-              if (d_delta <= t%controls(i)%rate_limit(1) + tol .and. dd_delta < 0.0) dd_delta = 0.0 
-              if (d_delta >= t%controls(i)%rate_limit(2) - tol .and. dd_delta > 0.0) dd_delta = 0.0 
+              case(2) ! Second order dynamics 
+                wn = t%controls(i)%natural_frequency 
+                zeta = t%controls(i)%damping_ratio
+                d_delta = max(min(d_delta, t%controls(i)%rate_limit(2)),  t%controls(i)%rate_limit(1))
 
-              ! Position limit
-              if (delta <= t%controls(i)%mag_limit(1) + tol .and. t%controls(i)%commanded_value <= t%controls(i)%mag_limit(1) + tol) dd_delta = 0.0 
-              if (delta >= t%controls(i)%mag_limit(2) - tol .and. t%controls(i)%commanded_value >= t%controls(i)%mag_limit(2) - tol) dd_delta = 0.0 
-            
-            end select 
+                if (delta <= t%controls(i)%mag_limit(1) + tol .and. d_delta < 0.0) d_delta = 0.0 
+                if (delta >= t%controls(i)%mag_limit(2) - tol .and. d_delta > 0.0) d_delta = 0.0 
 
-            dstate_dt(13+i) = d_delta 
-            dstate_dt(17+i) = dd_delta 
+                dd_delta = wn**2 * (t%controls(i)%commanded_value - delta) - 2.0*zeta*wn*d_delta
+                dd_delta = max(min(dd_delta, t%controls(i)%accel_limit(2)),  t%controls(i)%accel_limit(1))
+                
+                ! Rate limit 
+                if (d_delta <= t%controls(i)%rate_limit(1) + tol .and. dd_delta < 0.0) dd_delta = 0.0 
+                if (d_delta >= t%controls(i)%rate_limit(2) - tol .and. dd_delta > 0.0) dd_delta = 0.0 
 
-          end do 
+                ! Position limit
+                if (delta <= t%controls(i)%mag_limit(1) + tol .and. t%controls(i)%commanded_value <= t%controls(i)%mag_limit(1) + tol) dd_delta = 0.0 
+                if (delta >= t%controls(i)%mag_limit(2) - tol .and. t%controls(i)%commanded_value >= t%controls(i)%mag_limit(2) - tol) dd_delta = 0.0 
+              
+              end select 
+
+              dstate_dt(13+i) = d_delta 
+              dstate_dt(17+i) = dd_delta 
+
+            end do 
 
           if (t%rk4_verbose) then 
             write(t%iunit_rk4,'(A,X,6(ES19.12,1X))') '    | pseudo aerodynamics (F,M) = ', FM

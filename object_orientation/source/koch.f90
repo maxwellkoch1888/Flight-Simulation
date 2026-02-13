@@ -149,6 +149,8 @@ module koch_m
             bank_angle = ATAN2(2.0*(e0*ex + ey*ez), (e0**2 + ez**2 - ex**2 - ey**2))
             pitch_angle = ASIN(2.0*(e0*ey - ex*ez))
             azimuth_angle = ATAN2(2.0*(e0*ez + ex*ey), (e0**2 + ex**2 - ey**2 - ez**2))
+            if (azimuth_angle < 0.0) azimuth_angle = azimuth_angle + 2*pi  
+
         end if
 
         ! RETURN THE EULER ANGLE
