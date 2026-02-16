@@ -628,21 +628,24 @@ module vehicle_m
             write(t%iunit_trim,*)
             write(t%iunit_trim, '(A,*(1X,G25.17))') ' Latitude[deg]            = ', t%latitude  * 180.0 / pi 
             write(t%iunit_trim, '(A,*(1X,G25.17))') ' Longitude[deg]           = ', t%longitude * 180.0 / pi 
-
+            write(t%iunit_trim,*)
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' p[deg/sec]               = ', t%init_state(4) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' q[deg/sec]               = ', t%init_state(5) * 180.0 / pi 
+            write(t%iunit_trim, '(A,*(1X,G25.17))') ' r[deg/sec]               = ', t%init_state(6) * 180.0 / pi 
           end if        
           
           t%init_eul(:) = x(7:9)
           t%init_state(14:17) = x(3:6)
 
-          ! t%controls(1)%commanded_value = t%state(14)
-          ! t%controls(2)%commanded_value = t%state(15)
-          ! t%controls(3)%commanded_value = t%state(16)
-          ! t%controls(4)%commanded_value = t%state(17)
+          t%controls(1)%commanded_value = t%state(14)
+          t%controls(2)%commanded_value = t%state(15)
+          t%controls(3)%commanded_value = t%state(16)
+          t%controls(4)%commanded_value = t%state(17)
 
-          t%controls(1)%commanded_value = 0.0
-          t%controls(2)%commanded_value = 0.0
-          t%controls(3)%commanded_value = 0.0
-          t%controls(4)%commanded_value = 0.0
+          ! t%controls(1)%commanded_value = 0.0
+          ! t%controls(2)%commanded_value = 0.0
+          ! t%controls(3)%commanded_value = 0.0
+          ! t%controls(4)%commanded_value = 0.0
 
           t%limit_controls = .true. 
 
@@ -736,7 +739,8 @@ module vehicle_m
               write(t%iunit_trim, *) '         r[deg/s] = ', angular_rates(3) * 180.0 / pi 
             end if 
               write(t%iunit_trim, '(A,*(1X,G25.17))') '       R =', ans
-          end if         
+          end if    
+          t%init_state(4:6) = temp_state(4:6)     
 
         end function calc_r
 
@@ -865,6 +869,7 @@ module vehicle_m
           real, dimension(21) :: state, k1, k2, k3, k4
 
           if(t%rk4_verbose) then 
+            write(t%iunit_rk4,*)
             write(t%iunit_rk4,*) '  state of the vehicle at the beginning of this RK4 integration step:'
             write(t%iunit_rk4,*) "time[s]             u[ft/s]              &
               &v[ft/s]              w[ft/s]              p[rad/s]             &
@@ -872,9 +877,10 @@ module vehicle_m
               &yf[ft]               zf[ft]               e0                   &
               &ex                   ey                   ez"
 
-            write(t%iunit_rk4,'(X,14(ES19.12,1X))') t0, t%state
-
+            write(t%iunit_rk4,'(X,22(ES19.12,1X))') t0, t%state
+            write(t%iunit_rk4,*)
             write(t%iunit_rk4,*) '  rk4 function called...'
+            write(t%iunit_rk4,*)
           end if 
 
           ! K terms for RK4
@@ -897,7 +903,7 @@ module vehicle_m
               &q[rad/s]             r[rad/s]             xf[ft]               &
               &yf[ft]               zf[ft]               e0                   &
               &ex                   ey                   ez'
-            write(t%iunit_rk4,'(X,14(ES19.12,1X))') t0+delta_t, state
+            write(t%iunit_rk4,'(X,22(ES19.12,1X))') t0+delta_t, state
             write(t%iunit_rk4,*) ' --------------------------- End of single RK4 integration step. ---------------------------'
           end if 
 
@@ -930,7 +936,7 @@ module vehicle_m
 
           if (t%rk4_verbose) then 
             write(t%iunit_rk4,'(A,X,ES19.12,1X)') '    |                  time [s] = ', time 
-            write(t%iunit_rk4,'(A,X,13(ES19.12,1X))') '    |    state vector coming in = ', state 
+            write(t%iunit_rk4,'(A,X,21(ES19.12,1X))') '    |    state vector coming in = ', state 
           end if 
           ! Unpack states
           u  => state(1)
@@ -1121,8 +1127,8 @@ module vehicle_m
             end do 
 
           if (t%rk4_verbose) then 
-            write(t%iunit_rk4,'(A,X,6(ES19.12,1X))') '    | pseudo aerodynamics (F,M) = ', FM
-            write(t%iunit_rk4,'(A,X,13(ES19.12,1X))') '    |           diff_eq results = ', dstate_dt
+            write(t%iunit_rk4,'(A,X,6(ES19.12,1X))')  '    | pseudo aerodynamics (F,M) = ', FM
+            write(t%iunit_rk4,'(A,X,21(ES19.12,1X))') '    |           diff_eq results = ', dstate_dt
           end if 
         end function diff_eq
 
