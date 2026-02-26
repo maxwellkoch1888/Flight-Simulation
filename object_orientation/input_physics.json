@@ -195,7 +195,7 @@
             },
             "control_effectors" : {
                 "aileron" : {
-                    "dynamics_order" : 0, 
+                    "dynamics_order" : 2, 
                     "magnitude_limits[deg]" : [-21.5, 21.5], 
                     "rate_limits[deg/s]" : [-80.0, 80.0], 
                     "acceleration_limits[deg/s^2]" : [-1000.0, 1000.0], 
@@ -204,7 +204,7 @@
                     "damping_ratio" : 0.7 
                 },
                 "elevator" : {
-                    "dynamics_order" : 0, 
+                    "dynamics_order" : 2, 
                     "magnitude_limits[deg]" : [-25.0, 25.0], 
                     "rate_limits[deg/s]" : [-60.0, 60.0], 
                     "acceleration_limits[deg/s^2]" : [-1000.0, 1000.0], 
@@ -213,7 +213,7 @@
                     "damping_ratio" : 0.7 
                 },
                 "rudder" : {
-                    "dynamics_order" : 0, 
+                    "dynamics_order" : 2, 
                     "magnitude_limits[deg]" : [-30.0, 30.0], 
                     "rate_limits[deg/s]" : [-120.0, 120.0], 
                     "acceleration_limits[deg/s^2]" : [-1000.0, 1000.0], 
@@ -222,7 +222,7 @@
                     "damping_ratio" : 0.7 
                 },
                 "throttle" : {
-                    "dynamics_order" : 0, 
+                    "dynamics_order" : 2, 
                     "magnitude_limits" : [0.0, 1.0], 
                     "rate_limits" : [-1.0, 1.0], 
                     "acceleration_limits" : [-1.0, 1.0], 
@@ -230,6 +230,45 @@
                     "natural_frequency[rad/s]" : 1.5, 
                     "damping_ratio" : 1.0
                 }                                                
+            },
+            "controller": {
+                "connections" : {
+                    "receive_pilot_commands": {
+                        "type": "receive", 
+                        "number_of_values" : 3, 
+                        "refresh_rate": 1000, 
+                        "channel_type": "file",
+                        "filename": "pilot_commands.csv", 
+                        "database_type": "rectilinear", 
+                        "double_precision": true
+                    }
+                }, 
+                "PID" : {
+                    "aileron" : {
+                        "update_rate[hz]": 1000, 
+                        "units" : "deg", 
+                        "limits" : [-21.5, 21.5], 
+                        "KP" : -100.0, 
+                        "KI" : -100.0, 
+                        "KD" : 0.0
+                    }, 
+                    "elevator" : {
+                        "update_rate[hz]": 1000, 
+                        "units" : "deg", 
+                        "limits" : [-25.0, 25.0], 
+                        "KP" : 0.0, 
+                        "KI" : 0.0, 
+                        "KD" : 0.0
+                    }, 
+                    "rudder" : {
+                        "update_rate[hz]": 1000, 
+                        "units" : "deg", 
+                        "limits" : [-25.0, 25.0], 
+                        "KP" : -100.0, 
+                        "KI" : -100.0, 
+                        "KD" : 0.0
+                    }                                                         
+                }
             },
             "initial" : {
                 "airspeed[ft/s]" : 550.0,

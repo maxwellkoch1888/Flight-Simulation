@@ -3,6 +3,7 @@ module vehicle_m
     use jsonx_m
     use micro_time_m
     use linalg_mod
+    use controller_m 
 
     implicit none
     real :: rho0
@@ -91,6 +92,7 @@ module vehicle_m
           ! States/controls
           real :: state(21)
           type(control_t) :: controls(4)
+          type(controller_t) :: controller 
 
           type(trim_settings_t) :: trim
         end type vehicle_t
@@ -224,6 +226,7 @@ module vehicle_m
               call jsonx_get(t%j_vehicle, 'aerodynamics.coefficients.Cn.alpha_aileron', t%Cn_alpha_aileron)
               call jsonx_get(t%j_vehicle, 'aerodynamics.coefficients.Cn.rudder',        t%Cn_rudder)
 
+              ! Control Effectors
               write(*,*) '  -controls'
               t%controls(1)%state_ID = 14
               t%controls(2)%state_ID = 15
@@ -261,6 +264,12 @@ module vehicle_m
               call jsonx_get(t%j_vehicle, 'control_effectors.throttle.time_constant[1/s]',       t%controls(4)%time_constant    , 0.0)
               call jsonx_get(t%j_vehicle, 'control_effectors.throttle.natural_frequency[rad/s]',   t%controls(4)%natural_frequency, 0.0)
               call jsonx_get(t%j_vehicle, 'control_effectors.throttle.damping_ratio',       t%controls(4)%damping_ratio    , 0.0)              
+
+              call json_get(t%j_vehicle, 'controller', j_controller, found)
+              if (found) then 
+                write(*,*) '   -controller'
+                call controller_init(t%controller, j_controller)
+              end if 
 
               do i = 1,3 
                 t%controls(i)%mag_limit   = t%controls(i)%mag_limit   * pi / 180.0
@@ -339,10 +348,12 @@ module vehicle_m
             t%init_state(10:13) = euler_to_quat(t%init_eul) 
             t%state = t%init_state 
 
+            call get_controller_input(t, 0.0)
+
           end if 
           write(*,*) 'Finished vehicle initialization.'
           
-        end subroutine
+        end subroutine vehicle_init
 
       !----------------------------------------
       ! Write states to a file
@@ -779,9 +790,29 @@ module vehicle_m
 
           ! Normalize quaternion
           call quat_norm(t%state(10:13)) 
+
+          call get_controller_input(t, time+dt) 
           
         end subroutine
 
+      !----------------------------------------   
+      ! Get a controller input
+        subroutine get_controller_input(t,time) 
+          implicit none 
+          type(vehicle_t) :: t 
+          real, intent(in) :: time 
+          real :: controls_setpoint(4) 
+          integer :: i 
+
+          if(t%controller%running) then 
+            controls_setpoint(:) = controller_update(t%controller, t%state, time) 
+            do i = 1,4 
+              t%control(i)%set_point = controls_setpoint(i)
+              if(t%controls(i)%dynamics_order == 0) t%state(13+i) = max(min(t%controls(i)%set_point, t%controls(i)%mag_limit(2)), t%controls(i)%mag_limit(1))
+            end do 
+          end if 
+
+        end subroutine get_controller_input
       !----------------------------------------   
       ! Spherical Earth model 
         subroutine spherical_earth(t, y1, y2)
