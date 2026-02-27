@@ -244,30 +244,56 @@
                     }
                 }, 
                 "PID" : {
-                    "aileron" : {
+                    "p->aileron" : {
                         "update_rate[hz]": 1000, 
                         "units" : "deg", 
                         "limits" : [-21.5, 21.5], 
                         "KP" : -100.0, 
                         "KI" : -100.0, 
-                        "KD" : 0.0
+                        "KD" : 0.0,
+                        "dyp_schedule" : true
                     }, 
-                    "elevator" : {
+                    "q->elevator" : {
                         "update_rate[hz]": 1000, 
                         "units" : "deg", 
                         "limits" : [-25.0, 25.0], 
                         "KP" : 0.0, 
                         "KI" : 0.0, 
-                        "KD" : 0.0
+                        "KD" : 0.0,
+                        "dyp_schedule" : true
                     }, 
-                    "rudder" : {
+                    "r->rudder" : {
                         "update_rate[hz]": 1000, 
                         "units" : "deg", 
                         "limits" : [-25.0, 25.0], 
                         "KP" : -100.0, 
                         "KI" : -100.0, 
+                        "KD" : 0.0, 
+                        "dyp_schedule" : true
+                    }, 
+                    "bank->p" : {
+                        "update_rate[hz]": 1000, 
+                        "units" : "deg", 
+                        "limits" : [-1000.0, 1000.0], 
+                        "KP" : 3.0, 
+                        "KI" : 0.5, 
                         "KD" : 0.0
-                    }                                                         
+                    }, 
+                    "gamma->q" : {
+                        "update_rate[hz]": 1000, 
+                        "units" : "deg", 
+                        "limits" : [-1000.0, 1000.0], 
+                        "KP" : 0.4, 
+                        "KI" : 0.05, 
+                        "KD" : 0.0
+                    }, 
+                    "V->throttle" : {
+                        "update_rate[hz]": 1000, 
+                        "limits" : [0.0, 1.0], 
+                        "KP" : 0.01, 
+                        "KI" : 0.002, 
+                        "KD" : 0.0
+                    }                                                                                                                 
                 }
             },
             "initial" : {
