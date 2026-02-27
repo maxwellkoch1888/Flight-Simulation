@@ -807,7 +807,7 @@ module vehicle_m
           if(t%controller%running) then 
             controls_setpoint(:) = controller_update(t%controller, t%state, time) 
             do i = 1,4 
-              t%control(i)%set_point = controls_setpoint(i)
+              t%controls(i)%set_point = controls_setpoint(i)
               if(t%controls(i)%dynamics_order == 0) t%state(13+i) = max(min(t%controls(i)%set_point, t%controls(i)%mag_limit(2)), t%controls(i)%mag_limit(1))
             end do 
           end if 

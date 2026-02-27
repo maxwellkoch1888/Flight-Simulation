@@ -10,15 +10,16 @@ module controller_m
     real :: KP, KI, KD 
     real :: error, prev_error, error_int, error_deriv 
     real :: prev_time, prev_ans, update_rate 
-    real, allocatable :: limit 
+    real, allocatable :: limit(:)
     character(len=:), allocatable :: units 
     real :: display_units = 1.0 
+    logical :: dyp_schedule
   end type pid_t
 
   type controller_t 
     type (pid_t) :: p_da, q_de, r_dr, bank_p, gamma_q, V_tau
-    integer :; num_pid 
-    type(connnection) : pilot_conn 
+    integer :: num_pid 
+    type(connection) :: pilot_conn 
     logical :: running = .false. 
   end type controller_t 
 
@@ -28,8 +29,6 @@ module controller_m
       implicit none 
       type(controller_t), intent(inout) :: t 
       type(json_value), pointer :: j_main, j_connections, j_pid, j_temp 
-      integer :: i 
-      logical :: found 
 
       write(*,*) 'Initializing controller...'
       t%running = .true. 
@@ -66,7 +65,7 @@ module controller_m
     subroutine pid_init(t, j_pid) 
       implicit none 
       type(pid_t), intent(inout) :: t 
-      type(json-value), pointer :: j_pid 
+      type(json_value), pointer :: j_pid 
 
       t%name = j_pid%name 
       write(*,*) 'Initializing PID for ', t%name 
@@ -99,9 +98,9 @@ module controller_m
       real, intent(in) :: states(21), time 
       real :: ans(4) 
       real :: u, v, w, p, q, r
-      real :: eul(3), sp, st, cp, ct, 
+      real :: eul(3), sp, st, cp, ct 
       real :: Vmag, gamma, g 
-      real :: Z, Temp, P, rho, a, mu, dyp 
+      real :: Z, temp, Pressure, rho, a, mu, dyp 
       real :: pilot_command(3), bank_sp, gamma_sp, V_sp, p_sp, q_sp, r_sp
 
       u = states(1)
@@ -120,7 +119,7 @@ module controller_m
       Vmag = sqrt(u**2 + v**2 + w**2) 
 
       gamma = asin((u*st - (v*sp + w*cp) * ct) / Vmag) 
-      call std_atm_English(-states(9), Z, Tmep, P, rho, a, mu) 
+      call std_atm_English(-states(9), Z, temp, Pressure, rho, a, mu) 
       dyp = 0.5 * rho * Vmag**2
       g = gravity_English(-states(9))
 
@@ -140,7 +139,7 @@ module controller_m
 
     end function controller_update
 
-    function pid_get_command(t, commanded, actual, time, dyp) result(time) 
+    function pid_get_command(t, commanded, actual, time, dyp) result(ans) 
       implicit none 
       type(pid_t), intent(inout) :: t 
       real, intent(in) :: commanded, actual, time, dyp 
@@ -157,7 +156,7 @@ module controller_m
         return 
       end if 
 
-      if (time = t%prev_time >= 1.0/t%update_rate-1.0e-12) then ! only update if correct frequency 
+      if (time - t%prev_time >= 1.0/t%update_rate-1.0e-12) then ! only update if correct frequency 
         dt = time - t%prev_time 
 
         ! Proportional error
@@ -165,7 +164,7 @@ module controller_m
 
         ! Integral error
         if ((t%prev_ans > t%limit(1)) .and. (t%prev_ans < t%limit(2))) then ! integrator clamping
-          t%error_int = t%error_int + 0.5 * (t%prev_error + r%error) * dt 
+          t%error_int = t%error_int + 0.5 * (t%prev_error + t%error) * dt 
         else 
           write(*,*) 'PID controller saturated at ', t%prev_ans * t%display_units, '. Using integrator clamping...' 
         end if 
