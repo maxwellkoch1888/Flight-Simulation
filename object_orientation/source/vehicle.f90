@@ -363,7 +363,7 @@ module vehicle_m
           type(vehicle_t) :: t 
           real, intent(in) :: time 
 
-          write(t%iunit_states,'(22(ES20.13,1X))') time, t%state(1:13), t%state(14:16) * 180.0 / pi,t%state(17), t%state(18:21)
+          write(t%iunit_states,'(23(ES20.13,1X))') time, t%state(1:13), t%state(14:16) * 180.0 / pi,t%state(17), t%state(18:21), sqrt(t%state(1) **2 + t%state(2)**2 + t%state(3)**2) 
 
         end subroutine 
       !----------------------------------------

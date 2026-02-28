@@ -3,7 +3,7 @@
         "time_step[s]" : 0.01,
         "end_time[s]" : 60.0,
         "rk4_verbose" : false,
-        "save_states" : false,
+        "save_states" : true,
         "save_lat_long" : false, 
         "geographic_model" : "sphere"
     },
@@ -248,8 +248,8 @@
                         "update_rate[hz]": 1000, 
                         "units" : "deg", 
                         "limits" : [-21.5, 21.5], 
-                        "KP" : -100.0, 
-                        "KI" : -100.0, 
+                        "KP" : -35.0, 
+                        "KI" : -20.0, 
                         "KD" : 0.0,
                         "dyp_schedule" : true
                     }, 
@@ -257,8 +257,8 @@
                         "update_rate[hz]": 1000, 
                         "units" : "deg", 
                         "limits" : [-25.0, 25.0], 
-                        "KP" : 0.0, 
-                        "KI" : 0.0, 
+                        "KP" : -80.0, 
+                        "KI" : -100.0, 
                         "KD" : 0.0,
                         "dyp_schedule" : true
                     }, 
@@ -297,8 +297,8 @@
                 }
             },
             "initial" : {
-                "airspeed[ft/s]" : 550.0,
-                "altitude[ft]" : 30000.0,
+                "airspeed[ft/s]" : 350.0,
+                "altitude[ft]" : 1000.0,
                 "latitude[deg]" : 80.0,
                 "longitude[deg]" : 90.0,
                 "Euler_angles[deg]" : [0.0, 0.0, 45.0],
@@ -315,9 +315,9 @@
                     "throttle" : 0.129524457808
                 },
                 "trim" : {
-                    "type" : "sct",
+                    "type" : "shss",
                     "ref_climb_angle[deg]" : 0.0,
-                    "_sideslip_angle[deg]" : 5.0,
+                    "sideslip_angle[deg]" : 0.0,
                     "load_factor" : 1.2,
                     "solver" : {
                         "finite_difference_step_size" : 0.01,
