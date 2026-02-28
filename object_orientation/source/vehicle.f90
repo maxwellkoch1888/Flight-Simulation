@@ -106,10 +106,11 @@ module vehicle_m
         subroutine vehicle_init(t, j_vehicle_input)
           implicit none 
           type(vehicle_t), intent(inout) :: t
-          type(json_value), pointer :: j_vehicle_input
+          type(json_value), pointer :: j_vehicle_input, j_controller
           character(len=:), allocatable :: init_type 
           real :: geopotential_altitude_ft,temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
           integer :: i 
+          logical :: found
 
           t%j_vehicle => j_vehicle_input 
           t%name = t%j_vehicle%name 
@@ -807,8 +808,8 @@ module vehicle_m
           if(t%controller%running) then 
             controls_setpoint(:) = controller_update(t%controller, t%state, time) 
             do i = 1,4 
-              t%controls(i)%set_point = controls_setpoint(i)
-              if(t%controls(i)%dynamics_order == 0) t%state(13+i) = max(min(t%controls(i)%set_point, t%controls(i)%mag_limit(2)), t%controls(i)%mag_limit(1))
+              t%controls(i)%commanded_value = controls_setpoint(i)
+              if(t%controls(i)%dynamics_order == 0) t%state(13+i) = max(min(t%controls(i)%commanded_value, t%controls(i)%mag_limit(2)), t%controls(i)%mag_limit(1))
             end do 
           end if 
 

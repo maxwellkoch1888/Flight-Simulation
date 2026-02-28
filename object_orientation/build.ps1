@@ -13,7 +13,7 @@ gfortran -ffree-line-length-512 -fdefault-real-8 `
 "$root\source\vehicle.f90" `
 "$root\source\sim.f90" `
 "$root\source\main.f90" `
--o "$root\run.exe" 
+-o "$root\run.exe" -lws2_32
 
 
 # run with 
