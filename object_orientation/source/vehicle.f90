@@ -654,11 +654,6 @@ module vehicle_m
           t%controls(3)%commanded_value = t%state(16)
           t%controls(4)%commanded_value = t%state(17)
 
-          ! t%controls(1)%commanded_value = 0.0
-          ! t%controls(2)%commanded_value = 0.0
-          ! t%controls(3)%commanded_value = 0.0
-          ! t%controls(4)%commanded_value = 0.0
-
           t%limit_controls = .true. 
 
         end subroutine

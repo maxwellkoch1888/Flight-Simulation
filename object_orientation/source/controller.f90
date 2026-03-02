@@ -136,6 +136,7 @@ module controller_m
         dyp = 0.5 * rho * Vmag**2
         g = gravity_English(-states(9))
 
+        ! Command orientation, climb, velocity
         pilot_command = t%pilot_conn%recv([time], time)
         bank_sp  = pilot_command(1) * pi / 180.0 
         gamma_sp = pilot_command(2) * pi /180.0 
@@ -145,10 +146,18 @@ module controller_m
         q_sp = pid_get_command(t%gamma_q, gamma_sp, gamma, time, dyp)
         r_sp = (g*sp*ct + p*w)/u ! neglect gravity relief
 
+        !12.6.2 example
+        ! p_sp = 0.0
+        ! q_sp = 0.0
+        ! r_sp = 0.0
+
         ans(1) = pid_get_command(t%p_da,  p_sp, p,    time, dyp)
         ans(2) = pid_get_command(t%q_de,  q_sp, q,    time, dyp)
         ans(3) = pid_get_command(t%r_dr,  r_sp, r,    time, dyp)
         ans(4) = pid_get_command(t%V_tau, V_sp, Vmag, time, dyp)
+
+        ! 12.6.2 example
+        ! ans(4) = 0.76052985298660364E-01
 
       end function controller_update
     !----------------------------------------
