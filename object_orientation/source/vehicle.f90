@@ -12,91 +12,6 @@ module vehicle_m
     character(len=:), allocatable :: geographic_model 
     logical :: save_lat_long
 
-    !==================================================
-    ! TYPE DECLARATIONS
-    !==================================================
-      !----------------------------------------
-      ! Trim solver type
-        type trim_solver_t
-          real :: step_size, relaxation_factor, tolerance, max_iterations
-        end type trim_solver_t
-      !----------------------------------------
-      ! Trim solver type
-        type trim_settings_t
-          character(len=:), allocatable :: type 
-
-          logical, allocatable :: free_vars(:) 
-          real :: climb_angle, sideslip_angle
-          real :: load_factor
-          logical :: verbose, solve_relative_climb_angle, solve_load_factor
-
-          type(trim_solver_t) :: solver 
-        end type trim_settings_t
-      !----------------------------------------
-      ! Control type
-        type control_t 
-          integer :: dynamics_order, state_ID 
-          real :: commanded_value
-          real, allocatable :: mag_limit(:), rate_limit(:), accel_limit(:) 
-          real :: time_constant, natural_frequency, damping_ratio
-        end type control_t       
-        
-      !----------------------------------------        
-      ! Vehicle type
-        type vehicle_t
-          type(json_value), pointer :: j_vehicle
-              
-          character(len=:), allocatable :: name
-          character(len=:), allocatable :: type
-          character(100) :: states_filename, rk4_filename, trim_filename, latlong_filename
-
-          logical :: run_physics
-          logical :: save_states, limit_controls = .true. 
-          integer :: iunit_states, iunit_rk4, iunit_trim, iunit_latlong
-
-          ! Location 
-          real :: latitude, longitude
-
-          ! Mass
-          real :: mass
-          real :: inertia(3,3)
-          real :: inertia_inv(3,3)
-          real, allocatable :: h(:)
-
-          ! Aerodynamics
-          real, allocatable :: aero_ref_location(:)
-          real :: planform_area, longitudinal_length, lateral_length, sweep
-          real :: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
-          real :: CS_beta, CS_pbar, CS_alpha_pbar, CS_rbar, CS_aileron, CS_rudder
-          real :: CD_L0, CD_L1, CD_L1_L1, CD_CS_CS, CD_qbar, CD_alpha_qbar, CD_elevator, CD_alpha_elevator, CD_elevator_elevator
-          real :: Cl_l0, Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
-          real :: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
-          real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
-          real :: Cm_alpha_0, Cm_alpha_s, Cm_min
-
-          ! Thrust 
-          real :: T0, Ta, thrust_quat(4), rho0
-          real, allocatable :: thrust_location(:), thrust_orientation(:)
-
-          ! Debugging
-          logical :: compressibility = .false., rk4_verbose, print_states, test_compressibility
-
-          ! Stall model 
-          logical :: stall = .false., test_stall
-          real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
-          
-          ! Initialization constants
-          real :: init_airspeed, init_alt, init_state(21)
-          real, allocatable :: init_eul(:) ! has to be allocatable because will be read from json object
-
-          ! States/controls
-          real :: state(21)
-          type(control_t) :: controls(4)
-          type(controller_t) :: controller 
-
-          type(trim_settings_t) :: trim
-        end type vehicle_t
-      !----------------------------------------
     contains
     !==================================================
     ! INITIALIZATION FUNCTIONS
@@ -1204,7 +1119,7 @@ module vehicle_m
             dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
 
           ! Calculate velocity unit vector
-          V            =  (state(1)**2 + state(2)**2 + state(3)**2)**0.5
+          V            =  sqrt(state(1)**2 + state(2)**2 + state(3)**2)
           dyn_pressure = 0.5 * density_slugs_per_ft3 * V **2 * t%planform_area
 
           ! Calculate alpha and beta 3.4.4 and 3.4.5
@@ -1303,7 +1218,7 @@ module vehicle_m
             CL = CL * (1 - sigma_L) + CL_s * sigma_L 
             CD = CD * (1 - sigma_D) + CD_s * sigma_D 
 
-            Cm_s    = t%CM_min * sa**2 * sign_a
+            Cm_s    = t%Cm_min * sa**2 * sign_a
             sigma_m = calc_sigma(t%Cm_lambda_b, t%Cm_alpha_0, t%Cm_alpha_s, alpha)
             Cm      = Cm * (1 - sigma_m) + Cm_s * sigma_m 
       
