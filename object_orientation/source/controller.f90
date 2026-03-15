@@ -4,6 +4,7 @@ module controller_m
   use linalg_mod
   use connection_m 
   implicit none 
+  
   !==================================================
   ! TYPE DECLARATIONS
   !==================================================
@@ -33,7 +34,7 @@ module controller_m
         real :: step_size, relaxation_factor, tolerance, max_iterations
       end type trim_solver_t
     !----------------------------------------
-    ! Trim solver type
+    ! Trim settings type
       type trim_settings_t
         character(len=:), allocatable :: type 
 
@@ -68,7 +69,8 @@ module controller_m
         integer :: iunit_states, iunit_rk4, iunit_trim, iunit_latlong
 
         ! Location 
-        real :: latitude, longitude
+        real :: latitude, longitude, prev_latitude, prev_longitude
+        real :: course_angle
 
         ! Mass
         real :: mass
@@ -109,7 +111,7 @@ module controller_m
 
         type(trim_settings_t) :: trim
       end type vehicle_t
-    !----------------------------------------        
+    !----------------------------------------   
   contains 
   !==================================================
   ! INITIALIZATION FUNCTIONS
@@ -493,5 +495,6 @@ module controller_m
         u(1:3) = delta;
         u(4) = pid_get_command(tau_controller, V_sp, Vmag, time, dyp) ! PID for throttle
       end function dynamic_inversion
+    !----------------------------------------
       
 end module controller_m 
