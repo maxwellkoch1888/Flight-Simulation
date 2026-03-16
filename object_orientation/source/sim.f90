@@ -6,6 +6,7 @@ module sim_m
     integer :: io_unit
     type(json_value), pointer :: j_main
     type(vehicle_t), allocatable :: vehicles(:)
+    type(atmosphere_t) :: atm
     integer :: num_vehicles
 
     contains 
@@ -14,7 +15,7 @@ module sim_m
         subroutine init(filename)
             implicit none 
             character(100), intent(in) :: filename
-            type(json_value), pointer :: j_vehicles, j_temp
+            type(json_value), pointer :: j_vehicles, j_temp, j_atmosphere
             integer :: i
             logical :: save_states, rk4_verbose
 
@@ -39,6 +40,10 @@ module sim_m
             if (geographic_model == 'sphere') geographic_model_ID = 1
             if (geographic_model == 'ellipse') geographic_model_ID = 2
 
+            ! Initialize atmosphere
+            write(*,*) 'Reading Atmospheric JSON Object...'
+            call jsonx_get(j_main, 'atmosphere', j_atmosphere)
+
             ! Initialize vehicles
             do i=1,num_vehicles
                 vehicles(i)%save_states = save_states
@@ -47,6 +52,7 @@ module sim_m
 
             do i = 1,num_vehicles
                 call json_value_get(j_vehicles, i, j_temp)
+                call atmosphere_init(vehicles(i)%atm, j_atmosphere)
                 call vehicle_init(vehicles(i), j_temp)
             end do 
         end subroutine init

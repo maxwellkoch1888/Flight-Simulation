@@ -714,7 +714,7 @@ module vehicle_m
         call quat_norm(t%state(10:13)) 
 
         ! Path follower
-        out = follow_wpp_fillet(waypoints, position, radius)
+        out = follow_wpp_fillet(waypoints, n, position, radius)
 
         flag   = int(out(1))
         r      = out(2:4)

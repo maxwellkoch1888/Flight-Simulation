@@ -3,6 +3,7 @@ module controller_m
   use jsonx_m 
   use linalg_mod
   use connection_m 
+  use atmosphere_m 
   implicit none 
   
   !==================================================
@@ -28,7 +29,7 @@ module controller_m
         type(connection) :: pilot_conn 
         logical :: running = .false. 
       end type controller_t 
-    !----------------------------------------
+    !----------------------------------------    
     ! Trim solver type
       type trim_solver_t
         real :: step_size, relaxation_factor, tolerance, max_iterations
@@ -108,6 +109,7 @@ module controller_m
         real :: state(21)
         type(control_t) :: controls(4)
         type(controller_t) :: controller 
+        type(atmosphere_t) :: atm
 
         type(trim_settings_t) :: trim
       end type vehicle_t

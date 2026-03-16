@@ -7,94 +7,25 @@
         "save_lat_long" : false, 
         "geographic_model" : "sphere"
     },
+    "atmosphere" : {
+        "constant_wind[ft/s]" : [0.0, 0.0, 0.0], 
+        "turbulence" : {
+            "model": "dryden_beal", 
+            "wingspan[ft]" : 30.0, 
+            "hstab_distance[ft]" : 15.0, 
+            "vstab_distance[ft]" : 15.0, 
+            "intensity" : "light", 
+            "repeatable" : false, 
+            "sample" : {
+                "save_filename": "turb_sample.csv", 
+                "height_above_ground[ft]" : 2000.0, 
+                "number_of_points" : 20000, 
+                "dx[ft]" : 20.0, 
+                "psd_analyses" : 100
+            }
+        }
+    },
     "vehicles" : {
-        "ping-pong-ball" : {
-            "type" : "sphere",
-            "run_physics" : false,
-            "mass" : {
-                "weight[lbf]" : 0.006,
-                "Ixx[slug-ft^2]" : 5.215657263284e-7,
-                "Iyy[slug-ft^2]" : 5.215657263284e-7,
-                "Izz[slug-ft^2]" : 5.215657263284e-7
-            },
-            "aerodynamics" : {
-                "reference" : {
-                    "area[ft^2]" : 0.013445314097247,
-                    "longitudinal_length[ft]" : 0.06542,
-                    "lateral_length[ft]" : 0.06542
-                }
-            },
-            "thrust" : {},
-            "initial" : {
-                "airspeed[ft/s]" : 50.0,
-                "altitude[ft]" : 300.0,
-                "latitude[deg]" : 0.0,
-                "longitude[deg]" : 0.0,
-                "Euler_angles[deg]" : [0.0, 0.0, 0.0],
-                "type" : "state",
-                "state" : {
-                    "angle_of_attack[deg]" : 0.0,
-                    "sideslip_angle[deg]" : 0.0,
-                    "p[deg/s]" : 0.0,
-                    "q[deg/s]" : 0.0,
-                    "r[deg/s]" : 0.0
-                }
-            }
-        },
-        "arrow" : {
-            "type" : "arrow",
-            "run_physics" : false,
-            "mass" : {
-                "weight[lbf]" : 0.0697,
-                "Ixx[slug-ft^2]" : 0.0000194,
-                "Iyy[slug-ft^2]" : 0.00097,
-                "Izz[slug-ft^2]" : 0.00097
-            },
-            "thrust" : {},
-            "aerodynamics" : {
-                "reference" : {
-                    "area[ft^2]" : 0.000218,
-                    "longitudinal_length[ft]" : 2.3,
-                    "lateral_length[ft]" : 2.3
-                },
-                "stall" : {
-                    "include_stall" : false
-                },
-                "coefficients" : {
-                    "CL" : {
-                        "alpha" : 4.929
-                    },
-                    "CD" : {
-                        "L0" : 5.096,
-                        "CL1_CL1" : 48.138
-                    },
-                    "Cl" : {
-                        "_0" : 0.0,
-                        "0" : 3.223,
-                        "pbar" : -5.378
-                    },
-                    "Cm" : {
-                        "alpha" : -2.605,
-                        "qbar" : -9.06
-                    }
-                }
-            },
-            "initial" : {
-                "airspeed[ft/s]" : 210.0,
-                "altitude[ft]" : 5.0,
-                "latitude[deg]" : 0.0,
-                "longitude[deg]" : 0.0,
-                "Euler_angles[deg]" : [0.0, 5.0, 0.0],
-                "type" : "state",
-                "state" : {
-                    "angle_of_attack[deg]" : 0.0,
-                    "sideslip_angle[deg]" : 0.0,
-                    "p[deg/s]" : 0.0,
-                    "q[deg/s]" : 0.0,
-                    "r[deg/s]" : 0.0
-                }
-            }
-        },
         "F16" : {
             "type" : "aircraft",
             "run_physics" : true,
