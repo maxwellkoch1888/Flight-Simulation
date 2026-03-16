@@ -153,20 +153,20 @@ module atmosphere_m
         if (j == 1) psd_mean(:,1) = psd_temp(:,1)
         psd_mean(:,2) = psd_mean(:,2) + psd_temp(:,2)/n_psd
 
-        ! ! v component
-        ! call psd(vals(:,2),dx, psd_norm=psd_temp)
-        ! psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,2)/n_psd
+        ! v component
+        call psd(vals(:,2),dx, psd_norm=psd_temp)
+        psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,2)/n_psd
 
-        ! ! w component
-        ! call psd(vals(:,3),dx, psd_norm=psd_temp)
-        ! psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,2)/n_psd
+        ! w component
+        call psd(vals(:,3),dx, psd_norm=psd_temp)
+        psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,2)/n_psd
       end do 
 
         write(psd_mean_unit,*) 'omega,Su,Sv,Sw'
 
         do i = 1, n/2+1
-          write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',(psd_mean(i,2)/(2*pi))/(sigma**2)
-          ! write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',psd_mean(i,2)/(2*pi), ',',psd_mean(i,3)/(2*pi), ',',psd_mean(i,4)/(2*pi)        
+          ! write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',(psd_mean(i,2)/(2*pi))/(sigma**2)
+          write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',psd_mean(i,2)/(2*pi), ',',psd_mean(i,3)/(2*pi), ',',psd_mean(i,4)/(2*pi)        
         end do
         close(psd_mean_unit) 
       end if 
@@ -219,9 +219,9 @@ module atmosphere_m
     f = ((1.0 - Av) * t%prev_f + 2.0 * Av * etav)/(1.0 + Av) 
     g = ((1.0 - Aw) * t%prev_g + 2.0 * Aw * etaw)/(1.0 + Aw) 
 
-    ans(1) = ((1.0 + Au) * t%prev_turb(1) + 2.0 * Au * etau)/ (1.0 + Au)
-    ans(2) = ((1.0 + Av) * t%prev_turb(2) + Av*(f + t%prev_f) + sqrt(3.0)*(f - t%prev_f))/(1.0 + Av)
-    ans(3) = ((1.0 + Aw) * t%prev_turb(3) + Aw*(g + t%prev_g) + sqrt(3.0)*(g - t%prev_g))/(1.0 + Aw)
+    ans(1) = ((1.0 - Au) * t%prev_turb(1) + 2.0 * Au * etau)/ (1.0 + Au)
+    ans(2) = ((1.0 - Av) * t%prev_turb(2) + Av*(f + t%prev_f) + sqrt(3.0)*(f - t%prev_f))/(1.0 + Av)
+    ans(3) = ((1.0 - Aw) * t%prev_turb(3) + Aw*(g + t%prev_g) + sqrt(3.0)*(g - t%prev_g))/(1.0 + Aw)
 
     t%prev_f = f 
     t%prev_g = g 

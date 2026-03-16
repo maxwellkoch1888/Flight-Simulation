@@ -401,27 +401,26 @@ module koch_m
         real, intent(in) :: x(:), dt
         real, intent(out), optional :: psd_norm(:,:)
         character(len=*), intent(in), optional :: filename
+
         integer :: n, k, i, iunit
         real :: fs, f, mean, stdev
-        real, allocatable :: Pxx(:), loc_psd_norm(:,:)
-        complex :: eye, temp
+        real, allocatable :: xm(:), Pxx(:), loc_psd_norm(:,:)
+        complex :: W, Wi, temp
+        real :: theta
 
         n = size(x)
-        if (mod(n,2) /= 0) error stop "periodogram: N must be even for N/2 bin."
+        if (mod(n,2) /= 0) error stop "periodogram: N must be even"
+
+        allocate(xm(n))
         allocate(Pxx(n/2+1))
         allocate(loc_psd_norm(n/2+1,2))
-        eye = cmplx(0.0, 1.0)
 
-        ! compute mean and stdev
-        mean = 0.0
-        stdev = 0.0
-        do i=1,n
-            mean = mean + x(i)/n
-        end do
-        do i=1,n
-            stdev = stdev + (x(i)-mean)**2
-        end do
-        stdev = sqrt(stdev/(n-1))
+        fs = 1.0/dt
+
+        ! Fast intrinsic mean/std
+        mean = sum(x)/real(n)
+        xm = x - mean
+        stdev = sqrt(sum(xm**2)/real(n-1))
 
         if(present(filename)) then
             open(newunit=iunit, file=filename, status="replace", action="write")
@@ -429,29 +428,44 @@ module koch_m
             write(*,*) trim(filename),'   Mean = ',mean,'   Std. Dev = ',stdev
         end if
 
-        Pxx(:) = 0.0
-        fs = 1.0/dt
         do k=0,n/2
-            f = real(k)*fs/real(n)
-            temp = cmplx(0.0, 0.0)
+
+            theta = -2.0*PI*real(k)/real(n)
+            W = cmplx(cos(theta), sin(theta))
+            Wi = cmplx(1.0,0.0)
+
+            temp = cmplx(0.0,0.0)
+
             do i=1,n
-                temp = temp + (x(i)-mean)*exp(-eye*2.0*PI*real(i-1)*real(k)/real(n))
+                temp = temp + xm(i)*Wi
+                Wi = Wi*W
             end do
-            Pxx(k+1) = 1/fs/real(n)*abs(temp)**2
+
+            Pxx(k+1) = abs(temp)**2/(fs*real(n))
+
             if (k /= 0 .and. k /= n/2) Pxx(k+1) = 2.0*Pxx(k+1)
+
+            f = real(k)*fs/real(n)
             loc_psd_norm(k+1,1) = f
             loc_psd_norm(k+1,2) = Pxx(k+1)/stdev**2
+
             if(present(filename)) then
                 if(k==0) then
-                    write(iunit,'(ES20.12,",",ES20.12,",",ES20.12,",",ES20.12,",",ES20.12)') f, Pxx(k+1), loc_psd_norm(k+1,2),mean,stdev
+                    write(iunit,'(ES20.12,",",ES20.12,",",ES20.12,",",ES20.12,",",ES20.12)') &
+                    f,Pxx(k+1),loc_psd_norm(k+1,2),mean,stdev
                 else
-                    write(iunit,'(ES20.12,",",ES20.12,",",ES20.12)') f, Pxx(k+1), loc_psd_norm(k+1,2)
+                    write(iunit,'(ES20.12,",",ES20.12,",",ES20.12)') &
+                    f,Pxx(k+1),loc_psd_norm(k+1,2)
                 end if
             end if
+
         end do
 
         if(present(filename)) close(iunit)
         if(present(psd_norm)) psd_norm = loc_psd_norm
+
+        deallocate(xm,Pxx,loc_psd_norm)
+
     end subroutine psd
 
     !---------------------------------------------------------------------------------
