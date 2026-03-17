@@ -105,7 +105,7 @@ module atmosphere_m
     character(len=:), allocatable :: fn 
     integer :: i, j, n, n_psd, iunit, psd_mean_unit 
     real, allocatable :: vals(:,:), psd_mean(:,:), psd_temp(:,:) 
-    real :: hag, sigma, sigma_np, dx, turb(4) 
+    real :: hag, sigma, dx, turb(4) 
     logical :: found 
 
     ! ! Test random number generator 
@@ -121,14 +121,13 @@ module atmosphere_m
     allocate(vals(n,4)) 
 
     sigma = interpolate_1D(t%turb_hag, t%turb_sig, hag) 
-    sigma_np = sigma * sqrt(0.8 * pi * (t%Lw/t%Lb)**(1/3) / (t%Lw * dx))
 
     write(*,*) '    Altitude[ft] = ', hag
     write(*,*) '    Turbulence Standard Deviation, sigma = ', sigma 
 
     write(iunit, *) 'distance[ft],uprime[ft/s],vprime[ft/s],wprime[ft/s],pprime[ft/s]'
     do i = 1,n 
-      turb(:) = get_turbulence(t, dx, sigma, sigma, sigma, sigma_np) 
+      turb(:) = get_turbulence(t, dx, sigma, sigma, sigma) 
       write(iunit,*) dx*real(i-1),',',turb(1),',',turb(2),',',turb(3),',',turb(4)
       vals(i,:) = turb(:) 
     end do 
@@ -137,7 +136,7 @@ module atmosphere_m
     call json_get(j_sample, 'psd_analyses', n_psd, found) 
     if(found) then 
       call jsonx_get(j_sample, 'psd_analyses', n_psd) 
-      allocate(psd_mean(n/2+1,4))
+      allocate(psd_mean(n/2+1,5))
       allocate(psd_temp(n/2+1,2))
       psd_mean = 0.0 
       psd_temp = 0.0 
@@ -148,7 +147,7 @@ module atmosphere_m
       do j=1,n_psd 
         write(*,*) 'PSD',j,'of',n_psd
         do i=1,n 
-          turb(:) = get_turbulence(t, dx, sigma, sigma, sigma, sigma_np) 
+          turb(:) = get_turbulence(t, dx, sigma, sigma, sigma) 
           vals(i,:) = turb(:) 
         end do 
         ! u component
@@ -158,23 +157,22 @@ module atmosphere_m
 
         ! v component
         call psd(vals(:,2),dx, psd_norm=psd_temp)
-        psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,3)/n_psd
+        psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,2)/n_psd
 
         ! w component
         call psd(vals(:,3),dx, psd_norm=psd_temp)
-        psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,4)/n_psd
+        psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,2)/n_psd
 
         ! p component 
         call psd(vals(:,4),dx, psd_norm=psd_temp)
-        psd_mean(:,5) = psd_mean(:,5) + psd_temp(:,5)/n_psd
+        psd_mean(:,5) = psd_mean(:,5) + psd_temp(:,2)/n_psd
 
       end do 
 
-        write(psd_mean_unit,*) 'omega,Su,Sv,Sw'
+        write(psd_mean_unit,*) 'omega,Su,Sv,Sw,Sp'
 
         do i = 1, n/2+1
-          ! write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',(psd_mean(i,2)/(2*pi))/(sigma**2)
-          write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',psd_mean(i,2)/(2*pi), ',',psd_mean(i,3)/(2*pi), ',',psd_mean(i,4)/(2*pi)        
+          write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',psd_mean(i,2)/(2*pi), ',',psd_mean(i,3)/(2*pi), ',',psd_mean(i,4)/(2*pi),',',psd_mean(i,5)     
         end do
         close(psd_mean_unit) 
       end if 
@@ -188,32 +186,31 @@ module atmosphere_m
     type(atmosphere_t) :: t 
     real :: states(21) 
     real :: ans(4) 
-    real :: dx, sigma, sigma_np 
+    real :: dx, sigma 
      
     dx = sqrt((states(7) - t%prev_xyz(1))**2 + (states(8) - t%prev_xyz(2))**2 + (states(9) - t%prev_xyz(3))**2)
     sigma = interpolate_1D(t%turb_hag, t%turb_sig, -states(9))
-    sigma_np = sigma * sqrt(0.8 * pi * (t%Lw/t%Lb)**(1/3) / (t%Lw * dx))
 
-    ans = get_turbulence(t, dx, sigma, sigma, sigma, sigma_np) 
+    ans = get_turbulence(t, dx, sigma, sigma, sigma) 
     t%prev_xyz(:) = states(7:9) 
   end function atmosphere_get_turbulence
 
-  function get_turbulence(t, dx, su, sv, sw, sp) result(ans) 
+  function get_turbulence(t, dx, su, sv, sw) result(ans) 
     implicit none 
     type(atmosphere_t) :: t 
-    real :: dx, su, sv, sw, sp 
+    real :: dx, su, sv, sw
     real :: ans(4) 
 
     select case(trim(t%turb_model)) 
     case('dryden_beal') 
-      ans(:) = dryden_beal(t,dx,su,sv,sw, sp) 
+      ans(:) = dryden_beal(t,dx,su,sv,sw) 
     end select 
   end function get_turbulence
 
-  function dryden_beal(t, dx, su, sv, sw, sp) result(ans) 
+  function dryden_beal(t, dx, su, sv, sw) result(ans) 
     implicit none
     type(atmosphere_t) :: t 
-    real, intent(in) :: dx, su, sv, sw, sp
+    real, intent(in) :: dx, su, sv, sw
     real :: ans(4) 
     real :: Au, Av, Aw, Ap, etau, etav, etaw, etap, f, g 
 
@@ -225,8 +222,8 @@ module atmosphere_m
     etau = rand_normal() * su * sqrt(2.0 * t%Lu/dx)
     etav = rand_normal() * sv * sqrt(2.0 * t%Lv/dx)
     etaw = rand_normal() * sw * sqrt(2.0 * t%Lw/dx)  
-    etap = rand_normal() * sp * sqrt(2.0 * t%Lb/dx)     
-    
+    etap = sw * sqrt(0.8 * pi * (t%Lw/t%Lb)**(1.0/3.0) / (t%Lw * dx))
+
     f = ((1.0 - Av) * t%prev_f + 2.0 * Av * etav)/(1.0 + Av) 
     g = ((1.0 - Aw) * t%prev_g + 2.0 * Aw * etaw)/(1.0 + Aw) 
 
