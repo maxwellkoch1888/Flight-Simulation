@@ -125,7 +125,7 @@ module atmosphere_m
     write(*,*) '    Altitude[ft] = ', hag
     write(*,*) '    Turbulence Standard Deviation, sigma = ', sigma 
 
-    write(iunit, *) 'distance[ft],uprime[ft/s],vprime[ft/s],wprime[ft/s],pprime[ft/s]'
+    write(iunit, *) 'distance[ft],uprime[ft/s],vprime[ft/s],wprime[ft/s],pprime[rad/s]'
     do i = 1,n 
       turb(:) = get_turbulence(t, dx, sigma, sigma, sigma) 
       write(iunit,*) dx*real(i-1),',',turb(1),',',turb(2),',',turb(3),',',turb(4)
@@ -150,18 +150,21 @@ module atmosphere_m
           turb(:) = get_turbulence(t, dx, sigma, sigma, sigma) 
           vals(i,:) = turb(:) 
         end do 
-        ! u component
+
+        ! frequency 
         call psd(vals(:,1),dx, psd_norm=psd_temp)
         if (j == 1) psd_mean(:,1) = psd_temp(:,1)
-        psd_mean(:,2) = psd_mean(:,2) + psd_temp(:,2)/n_psd
 
-        ! v component
-        call psd(vals(:,2),dx, psd_norm=psd_temp)
-        psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,2)/n_psd
+        ! u component
+        ! psd_mean(:,2) = psd_mean(:,2) + psd_temp(:,2)/n_psd
 
-        ! w component
-        call psd(vals(:,3),dx, psd_norm=psd_temp)
-        psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,2)/n_psd
+        ! ! v component
+        ! call psd(vals(:,2),dx, psd_norm=psd_temp)
+        ! psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,2)/n_psd
+
+        ! ! w component
+        ! call psd(vals(:,3),dx, psd_norm=psd_temp)
+        ! psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,2)/n_psd
 
         ! p component 
         call psd(vals(:,4),dx, psd_norm=psd_temp)
@@ -172,7 +175,7 @@ module atmosphere_m
         write(psd_mean_unit,*) 'omega,Su,Sv,Sw,Sp'
 
         do i = 1, n/2+1
-          write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',psd_mean(i,2)/(2*pi), ',',psd_mean(i,3)/(2*pi), ',',psd_mean(i,4)/(2*pi),',',psd_mean(i,5)     
+          write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',psd_mean(i,2)/(2*pi), ',',psd_mean(i,3)/(2*pi), ',',psd_mean(i,4)/(2*pi),',',psd_mean(i,5)/(2*pi)    
         end do
         close(psd_mean_unit) 
       end if 
@@ -222,7 +225,7 @@ module atmosphere_m
     etau = rand_normal() * su * sqrt(2.0 * t%Lu/dx)
     etav = rand_normal() * sv * sqrt(2.0 * t%Lv/dx)
     etaw = rand_normal() * sw * sqrt(2.0 * t%Lw/dx)  
-    etap = sw * sqrt(0.8 * pi * (t%Lw/t%Lb)**(1.0/3.0) / (t%Lw * dx))
+    etap = rand_normal() * sw * sqrt(0.8 * pi * (t%Lw/t%Lb)**(1.0/3.0) / (t%Lw * dx))
 
     f = ((1.0 - Av) * t%prev_f + 2.0 * Av * etav)/(1.0 + Av) 
     g = ((1.0 - Aw) * t%prev_g + 2.0 * Aw * etaw)/(1.0 + Aw) 
