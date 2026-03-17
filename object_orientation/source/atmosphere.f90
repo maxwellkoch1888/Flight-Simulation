@@ -17,8 +17,8 @@ module atmosphere_m
     real :: severe_sig(4) = [15.0, 21.0, 21.0, 3.0]
 
     real, allocatable :: turb_hag(:), turb_sig(:)
-    real :: prev_turb(3), prev_xyz(3), prev_f, prev_g 
-    real :: Lu, Lv, Lw 
+    real :: prev_turb(4), prev_xyz(3), prev_f, prev_g 
+    real :: Lu, Lv, Lw, Lb
   end type atmosphere_t     
 
   contains 
@@ -83,6 +83,7 @@ module atmosphere_m
           t%Lu = 1750.0 
           t%Lv = 875.0 
           t%Lw = 875.0 
+          t%Lb = 4*t%wingspan / pi
         end select 
         
         t%prev_turb(:) = 0.0 
@@ -104,7 +105,7 @@ module atmosphere_m
     character(len=:), allocatable :: fn 
     integer :: i, j, n, n_psd, iunit, psd_mean_unit 
     real, allocatable :: vals(:,:), psd_mean(:,:), psd_temp(:,:) 
-    real :: hag, sigma, dx, turb(3) 
+    real :: hag, sigma, sigma_np, dx, turb(4) 
     logical :: found 
 
     ! ! Test random number generator 
@@ -117,16 +118,18 @@ module atmosphere_m
     call jsonx_get(j_sample, 'number_of_points',    n) 
     call jsonx_get(j_sample, 'dx[ft]',              dx) 
     call jsonx_get(j_sample, 'height_above_ground[ft]', hag) 
-    allocate(vals(n,3)) 
+    allocate(vals(n,4)) 
 
     sigma = interpolate_1D(t%turb_hag, t%turb_sig, hag) 
+    sigma_np = sigma * sqrt(0.8 * pi * (t%Lw/t%Lb)**(1/3) / (t%Lw * dx))
+
     write(*,*) '    Altitude[ft] = ', hag
     write(*,*) '    Turbulence Standard Deviation, sigma = ', sigma 
 
-    write(iunit, *) 'distance[ft],uprime[ft/s],vprime[ft/s],wprime[ft/s]'
+    write(iunit, *) 'distance[ft],uprime[ft/s],vprime[ft/s],wprime[ft/s],pprime[ft/s]'
     do i = 1,n 
-      turb(:) = get_turbulence(t, dx, sigma, sigma, sigma) 
-      write(iunit,*) dx*real(i-1),',',turb(1),',',turb(2),',',turb(3)
+      turb(:) = get_turbulence(t, dx, sigma, sigma, sigma, sigma_np) 
+      write(iunit,*) dx*real(i-1),',',turb(1),',',turb(2),',',turb(3),',',turb(4)
       vals(i,:) = turb(:) 
     end do 
     close(iunit) 
@@ -145,7 +148,7 @@ module atmosphere_m
       do j=1,n_psd 
         write(*,*) 'PSD',j,'of',n_psd
         do i=1,n 
-          turb(:) = get_turbulence(t, dx, sigma, sigma, sigma) 
+          turb(:) = get_turbulence(t, dx, sigma, sigma, sigma, sigma_np) 
           vals(i,:) = turb(:) 
         end do 
         ! u component
@@ -155,11 +158,16 @@ module atmosphere_m
 
         ! v component
         call psd(vals(:,2),dx, psd_norm=psd_temp)
-        psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,2)/n_psd
+        psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,3)/n_psd
 
         ! w component
         call psd(vals(:,3),dx, psd_norm=psd_temp)
-        psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,2)/n_psd
+        psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,4)/n_psd
+
+        ! p component 
+        call psd(vals(:,4),dx, psd_norm=psd_temp)
+        psd_mean(:,5) = psd_mean(:,5) + psd_temp(:,5)/n_psd
+
       end do 
 
         write(psd_mean_unit,*) 'omega,Su,Sv,Sw'
@@ -179,50 +187,54 @@ module atmosphere_m
     implicit none 
     type(atmosphere_t) :: t 
     real :: states(21) 
-    real :: ans(3) 
-    real :: dx, sigma 
+    real :: ans(4) 
+    real :: dx, sigma, sigma_np 
      
     dx = sqrt((states(7) - t%prev_xyz(1))**2 + (states(8) - t%prev_xyz(2))**2 + (states(9) - t%prev_xyz(3))**2)
     sigma = interpolate_1D(t%turb_hag, t%turb_sig, -states(9))
+    sigma_np = sigma * sqrt(0.8 * pi * (t%Lw/t%Lb)**(1/3) / (t%Lw * dx))
 
-    ans = get_turbulence(t, dx, sigma, sigma, sigma) 
+    ans = get_turbulence(t, dx, sigma, sigma, sigma, sigma_np) 
     t%prev_xyz(:) = states(7:9) 
   end function atmosphere_get_turbulence
 
-  function get_turbulence(t, dx, su, sv, sw) result(ans) 
+  function get_turbulence(t, dx, su, sv, sw, sp) result(ans) 
     implicit none 
     type(atmosphere_t) :: t 
-    real :: dx, su, sv, sw 
-    real :: ans(3) 
+    real :: dx, su, sv, sw, sp 
+    real :: ans(4) 
 
     select case(trim(t%turb_model)) 
     case('dryden_beal') 
-      ans(:) = dryden_beal(t,dx,su,sv,sw) 
+      ans(:) = dryden_beal(t,dx,su,sv,sw, sp) 
     end select 
   end function get_turbulence
 
-  function dryden_beal(t, dx, su, sv, sw) result(ans) 
+  function dryden_beal(t, dx, su, sv, sw, sp) result(ans) 
     implicit none
     type(atmosphere_t) :: t 
-    real, intent(in) :: dx, su, sv, sw 
-    real :: ans(3) 
-    real :: Au, Av, Aw, etau, etav, etaw, f, g 
+    real, intent(in) :: dx, su, sv, sw, sp
+    real :: ans(4) 
+    real :: Au, Av, Aw, Ap, etau, etav, etaw, etap, f, g 
 
-    Au = 0.5 * dx/t%Lu
+    Au = 0.5  * dx/t%Lu
     Av = 0.25 * dx/t%Lv 
     Aw = 0.25 * dx/t%Lw 
+    Ap = 0.5  * dx/t%Lb
 
     etau = rand_normal() * su * sqrt(2.0 * t%Lu/dx)
     etav = rand_normal() * sv * sqrt(2.0 * t%Lv/dx)
-    etaw = rand_normal() * sw * sqrt(2.0 * t%Lw/dx)       
+    etaw = rand_normal() * sw * sqrt(2.0 * t%Lw/dx)  
+    etap = rand_normal() * sp * sqrt(2.0 * t%Lb/dx)     
     
     f = ((1.0 - Av) * t%prev_f + 2.0 * Av * etav)/(1.0 + Av) 
     g = ((1.0 - Aw) * t%prev_g + 2.0 * Aw * etaw)/(1.0 + Aw) 
 
-    ans(1) = ((1.0 - Au) * t%prev_turb(1) + 2.0 * Au * etau)/ (1.0 + Au)
+    ans(1) = ((1.0 - Au) * t%prev_turb(1) + 2.0 * Au * etau)/(1.0 + Au)
     ans(2) = ((1.0 - Av) * t%prev_turb(2) + Av*(f + t%prev_f) + sqrt(3.0)*(f - t%prev_f))/(1.0 + Av)
     ans(3) = ((1.0 - Aw) * t%prev_turb(3) + Aw*(g + t%prev_g) + sqrt(3.0)*(g - t%prev_g))/(1.0 + Aw)
-
+    ans(4) = ((1.0 - Ap) * t%prev_turb(4) + 2.0 * Ap * etap)/(1.0 + Ap)
+    
     t%prev_f = f 
     t%prev_g = g 
     t%prev_turb(:) = ans(:) 
