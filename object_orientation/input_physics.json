@@ -21,7 +21,8 @@
                 "height_above_ground[ft]" : 2000.0, 
                 "number_of_points" : 20000, 
                 "dx[ft]" : 20.0, 
-                "psd_analyses" : 1000
+                "psd_analyses" : 1000,
+                "time_history_points" : 40
             }
         }
     },

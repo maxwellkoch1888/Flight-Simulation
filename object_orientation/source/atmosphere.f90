@@ -17,9 +17,10 @@ module atmosphere_m
     real :: severe_sig(4) = [15.0, 21.0, 21.0, 3.0]
 
     real, allocatable :: turb_hag(:), turb_sig(:)
-    real :: prev_turb(4), prev_xyz(3), prev_f, prev_g 
+    real :: prev_turb(6), prev_xyz(3), prev_f, prev_g 
     real :: Lu, Lv, Lw, Lb
-  end type atmosphere_t     
+    real, allocatable :: time_history(:,:)
+  end type atmosphere_t
 
   contains 
   
@@ -103,9 +104,9 @@ module atmosphere_m
     type(atmosphere_t) :: t 
     type(json_value), pointer :: j_sample 
     character(len=:), allocatable :: fn 
-    integer :: i, j, n, n_psd, iunit, psd_mean_unit 
+    integer :: i, j, k, n, n_psd, iunit, psd_mean_unit 
     real, allocatable :: vals(:,:), psd_mean(:,:), psd_temp(:,:) 
-    real :: hag, sigma, dx, turb(4) 
+    real :: hag, sigma, dx, turb(6) 
     logical :: found 
 
     ! ! Test random number generator 
@@ -119,6 +120,13 @@ module atmosphere_m
     call jsonx_get(j_sample, 'dx[ft]',              dx) 
     call jsonx_get(j_sample, 'height_above_ground[ft]', hag) 
     allocate(vals(n,4)) 
+
+    ! initialize time history
+    allocate(t%time_history(max(ceiling(t%hstab_dist), ceiling(t%vstab_dist)), 3))
+    t%time_history = 0.0 
+    do k = 1,max(ceiling(t%hstab_dist), ceiling(t%vstab_dist))
+      t%time_history(k,1) = (k-1) * dx
+    end do 
 
     sigma = interpolate_1D(t%turb_hag, t%turb_sig, hag) 
 
@@ -188,7 +196,7 @@ module atmosphere_m
     implicit none 
     type(atmosphere_t) :: t 
     real :: states(21) 
-    real :: ans(4) 
+    real :: ans(6) 
     real :: dx, sigma 
      
     dx = sqrt((states(7) - t%prev_xyz(1))**2 + (states(8) - t%prev_xyz(2))**2 + (states(9) - t%prev_xyz(3))**2)
@@ -202,7 +210,7 @@ module atmosphere_m
     implicit none 
     type(atmosphere_t) :: t 
     real :: dx, su, sv, sw
-    real :: ans(4) 
+    real :: ans(6) 
 
     select case(trim(t%turb_model)) 
     case('dryden_beal') 
@@ -214,8 +222,10 @@ module atmosphere_m
     implicit none
     type(atmosphere_t) :: t 
     real, intent(in) :: dx, su, sv, sw
-    real :: ans(4) 
+    real :: ans(6) 
     real :: Au, Av, Aw, Ap, etau, etav, etaw, etap, f, g 
+    real :: w_cg, v_cg, w_h, v_h
+    integer :: n_hist 
 
     Au = 0.5  * dx/t%Lu
     Av = 0.25 * dx/t%Lv 
@@ -234,7 +244,26 @@ module atmosphere_m
     ans(2) = ((1.0 - Av) * t%prev_turb(2) + Av*(f + t%prev_f) + sqrt(3.0)*(f - t%prev_f))/(1.0 + Av)
     ans(3) = ((1.0 - Aw) * t%prev_turb(3) + Aw*(g + t%prev_g) + sqrt(3.0)*(g - t%prev_g))/(1.0 + Aw)
     ans(4) = ((1.0 - Ap) * t%prev_turb(4) + 2.0 * Ap * etap)/(1.0 + Ap)
-    
+
+    ! disturbance at cg
+    w_cg = ans(3)
+    v_cg = ans(2)
+
+    ! Update time history 
+    n_hist = size(t%time_history,1)
+
+    t%time_history(2:n_hist,2) = t%time_history(1:n_hist-1,2)
+    t%time_history(2:n_hist,3) = t%time_history(1:n_hist-1,3)
+    t%time_history(1,2) = v_cg
+    t%time_history(1,3) = w_cg    
+
+    ! disturbance at tail 
+    w_h = interpolate_1D(t%time_history(:,1), t%time_history(:,3), t%hstab_dist)
+    v_h = interpolate_1D(t%time_history(:,1), t%time_history(:,2), t%vstab_dist)
+
+    ans(5) =  (w_cg - w_h)/t%hstab_dist
+    ans(6) = -(v_cg - v_h)/t%vstab_dist 
+
     t%prev_f = f 
     t%prev_g = g 
     t%prev_turb(:) = ans(:) 
