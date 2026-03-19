@@ -20,6 +20,7 @@ module atmosphere_m
     real :: prev_turb(6), prev_xyz(3), prev_f, prev_g 
     real :: Lu, Lv, Lw, Lb
     real, allocatable :: time_history(:,:)
+    integer :: time_history_points
   end type atmosphere_t
 
   contains 
@@ -29,7 +30,7 @@ module atmosphere_m
     type(atmosphere_t) :: t 
     type(json_value), pointer :: j_atmosphere, j_turb, j_sample 
     logical :: found 
-    integer :: i, n, seed 
+    integer :: i, k, n, seed 
     integer, allocatable :: seed_array(:) 
 
     write(*,*) 'Initializing atmospheric model...' 
@@ -45,9 +46,17 @@ module atmosphere_m
         call jsonx_get(j_turb, 'vstab_distance[ft]', t%vstab_dist)
         call jsonx_get(j_turb, 'intensity',          t%turb_intensity)
         call jsonx_get(j_turb, 'repeatable',         t%turb_repeatable)
+        call jsonx_get(j_turb, 'time_history_points',t%time_history_points) 
 
         write(*,*) '    Turbulence intensity = ', t%turb_intensity
         write(*,*) '    Turbulence model = ', t%turb_model
+
+        ! initialize time history
+        allocate(t%time_history(t%time_history_points, 3))
+        t%time_history = 0.0 
+        do k = 1,t%time_history_points
+          t%time_history(k,1) = (k-1) * max(t%hstab_dist, t%vstab_dist)
+        end do         
 
         ! random number generator
         if(t%turb_repeatable) then 
@@ -108,6 +117,7 @@ module atmosphere_m
     real, allocatable :: vals(:,:), psd_mean(:,:), psd_temp(:,:) 
     real :: hag, sigma, dx, turb(6) 
     logical :: found 
+    real :: temp_variance, mean_variance
 
     ! ! Test random number generator 
     ! call test_rand__normal() 
@@ -119,14 +129,8 @@ module atmosphere_m
     call jsonx_get(j_sample, 'number_of_points',    n) 
     call jsonx_get(j_sample, 'dx[ft]',              dx) 
     call jsonx_get(j_sample, 'height_above_ground[ft]', hag) 
-    allocate(vals(n,4)) 
 
-    ! initialize time history
-    allocate(t%time_history(max(ceiling(t%hstab_dist), ceiling(t%vstab_dist)), 3))
-    t%time_history = 0.0 
-    do k = 1,max(ceiling(t%hstab_dist), ceiling(t%vstab_dist))
-      t%time_history(k,1) = (k-1) * dx
-    end do 
+    allocate(vals(n,4)) 
 
     sigma = interpolate_1D(t%turb_hag, t%turb_sig, hag) 
 
@@ -164,19 +168,20 @@ module atmosphere_m
         if (j == 1) psd_mean(:,1) = psd_temp(:,1)
 
         ! u component
-        ! psd_mean(:,2) = psd_mean(:,2) + psd_temp(:,2)/n_psd
+        psd_mean(:,2) = psd_mean(:,2) + psd_temp(:,2)/n_psd
 
-        ! ! v component
-        ! call psd(vals(:,2),dx, psd_norm=psd_temp)
-        ! psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,2)/n_psd
+        ! v component
+        call psd(vals(:,2),dx, psd_norm=psd_temp)
+        psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,2)/n_psd
 
-        ! ! w component
-        ! call psd(vals(:,3),dx, psd_norm=psd_temp)
-        ! psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,2)/n_psd
+        ! w component
+        call psd(vals(:,3),dx, psd_norm=psd_temp)
+        psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,2)/n_psd
 
         ! p component 
-        call psd(vals(:,4),dx, psd_norm=psd_temp)
+        call psd(vals(:,4),dx, psd_norm=psd_temp, variance=temp_variance)
         psd_mean(:,5) = psd_mean(:,5) + psd_temp(:,2)/n_psd
+        mean_variance = mean_variance + temp_variance/n_psd
 
       end do 
 
@@ -250,12 +255,23 @@ module atmosphere_m
     v_cg = ans(2)
 
     ! Update time history 
-    n_hist = size(t%time_history,1)
+    n_hist = t%time_history_points
 
-    t%time_history(2:n_hist,2) = t%time_history(1:n_hist-1,2)
-    t%time_history(2:n_hist,3) = t%time_history(1:n_hist-1,3)
+    write(*,*) 'new call '
+    write(*,*) t%time_history(:,1)
+    write(*,*) t%time_history(:,2)
+    write(*,*) t%time_history(:,3)
+
+    t%time_history(:,1) = t%time_history(:,1) + dx 
+    t%time_history(2:n_hist,:) = t%time_history(1:n_hist-1,:)
+    t%time_history(1,1) = 0.0
     t%time_history(1,2) = v_cg
-    t%time_history(1,3) = w_cg    
+    t%time_history(1,3) = w_cg  
+
+    write(*,*)
+    write(*,*) t%time_history(:,1)
+    write(*,*) t%time_history(:,2)
+    write(*,*) t%time_history(:,3)
 
     ! disturbance at tail 
     w_h = interpolate_1D(t%time_history(:,1), t%time_history(:,3), t%hstab_dist)
@@ -263,6 +279,9 @@ module atmosphere_m
 
     ans(5) =  (w_cg - w_h)/t%hstab_dist
     ans(6) = -(v_cg - v_h)/t%vstab_dist 
+
+    if (t%hstab_dist > t%time_history(n_hist,1)) write(*,*) 'Time history too small to interpolate hstab.'
+    if (t%vstab_dist > t%time_history(n_hist,1)) write(*,*) 'Time history too small to interpolate vstab.'
 
     t%prev_f = f 
     t%prev_g = g 

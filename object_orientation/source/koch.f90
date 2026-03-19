@@ -396,7 +396,7 @@ module koch_m
     end function interpolate
 
     !---------------------------------------------------------------------------------
-    subroutine psd(x, dt, psd_norm, filename)
+    subroutine psd(x, dt, psd_norm, filename, variance)
         implicit none
         real, intent(in) :: x(:), dt
         real, intent(out), optional :: psd_norm(:,:)
@@ -407,6 +407,7 @@ module koch_m
         real, allocatable :: xm(:), Pxx(:), loc_psd_norm(:,:)
         complex :: W, Wi, temp
         real :: theta
+        real, intent(out), optional :: variance 
 
         n = size(x)
         if (mod(n,2) /= 0) error stop "periodogram: N must be even"
@@ -421,6 +422,7 @@ module koch_m
         mean = sum(x)/real(n)
         xm = x - mean
         stdev = sqrt(sum(xm**2)/real(n-1))
+        variance = stdev**2 
 
         if(present(filename)) then
             open(newunit=iunit, file=filename, status="replace", action="write")
