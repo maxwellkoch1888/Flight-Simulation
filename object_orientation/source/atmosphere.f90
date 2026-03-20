@@ -113,7 +113,7 @@ module atmosphere_m
     type(atmosphere_t) :: t 
     type(json_value), pointer :: j_sample 
     character(len=:), allocatable :: fn 
-    integer :: i, j, k, n, n_psd, iunit, psd_mean_unit 
+    integer :: i, j, n, n_psd, iunit, psd_mean_unit 
     real, allocatable :: vals(:,:), psd_mean(:,:), psd_temp(:,:) 
     real :: hag, sigma, dx, turb(6) 
     logical :: found 
@@ -121,6 +121,7 @@ module atmosphere_m
 
     ! ! Test random number generator 
     ! call test_rand__normal() 
+    temp_variance = 0.0
 
     write(*,*) '    Sampling Atmospheric Turbulence...' 
     call jsonx_get(j_sample, 'save_filename', fn) 
@@ -130,17 +131,17 @@ module atmosphere_m
     call jsonx_get(j_sample, 'dx[ft]',              dx) 
     call jsonx_get(j_sample, 'height_above_ground[ft]', hag) 
 
-    allocate(vals(n,4)) 
+    allocate(vals(n,6)) 
 
     sigma = interpolate_1D(t%turb_hag, t%turb_sig, hag) 
 
     write(*,*) '    Altitude[ft] = ', hag
     write(*,*) '    Turbulence Standard Deviation, sigma = ', sigma 
 
-    write(iunit, *) 'distance[ft],uprime[ft/s],vprime[ft/s],wprime[ft/s],pprime[rad/s]'
+    write(iunit, *) 'distance[ft],uprime[ft/s],vprime[ft/s],wprime[ft/s],pprime[rad/s],qprime[rad/s],rprime[rad/s]'
     do i = 1,n 
       turb(:) = get_turbulence(t, dx, sigma, sigma, sigma) 
-      write(iunit,*) dx*real(i-1),',',turb(1),',',turb(2),',',turb(3),',',turb(4)
+      write(iunit,*) dx*real(i-1),',',turb(1),',',turb(2),',',turb(3),',',turb(4),',',turb(5),',',turb(6)
       vals(i,:) = turb(:) 
     end do 
     close(iunit) 
@@ -148,7 +149,7 @@ module atmosphere_m
     call json_get(j_sample, 'psd_analyses', n_psd, found) 
     if(found) then 
       call jsonx_get(j_sample, 'psd_analyses', n_psd) 
-      allocate(psd_mean(n/2+1,5))
+      allocate(psd_mean(n/2+1,7))
       allocate(psd_temp(n/2+1,2))
       psd_mean = 0.0 
       psd_temp = 0.0 
@@ -157,7 +158,7 @@ module atmosphere_m
       open(newunit=psd_mean_unit, file = 'output_files/' // 'PSD_Mean_Analyses.csv', status='REPLACE')
       write(*,*) '  -saving normalized PSD analysis to PSD_Mean_Analyses.csv'
       do j=1,n_psd 
-        write(*,*) 'PSD',j,'of',n_psd
+        write(*,*) '    PSD',j,'of',n_psd
         do i=1,n 
           turb(:) = get_turbulence(t, dx, sigma, sigma, sigma) 
           vals(i,:) = turb(:) 
@@ -167,31 +168,39 @@ module atmosphere_m
         call psd(vals(:,1),dx, psd_norm=psd_temp)
         if (j == 1) psd_mean(:,1) = psd_temp(:,1)
 
-        ! u component
-        psd_mean(:,2) = psd_mean(:,2) + psd_temp(:,2)/n_psd
+        ! ! u component
+        ! psd_mean(:,2) = psd_mean(:,2) + psd_temp(:,2)/n_psd
 
-        ! v component
-        call psd(vals(:,2),dx, psd_norm=psd_temp)
-        psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,2)/n_psd
+        ! ! v component
+        ! call psd(vals(:,2),dx, psd_norm=psd_temp)
+        ! psd_mean(:,3) = psd_mean(:,3) + psd_temp(:,2)/n_psd
 
-        ! w component
-        call psd(vals(:,3),dx, psd_norm=psd_temp)
-        psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,2)/n_psd
+        ! ! w component
+        ! call psd(vals(:,3),dx, psd_norm=psd_temp)
+        ! psd_mean(:,4) = psd_mean(:,4) + psd_temp(:,2)/n_psd
 
-        ! p component 
-        call psd(vals(:,4),dx, psd_norm=psd_temp, variance=temp_variance)
-        psd_mean(:,5) = psd_mean(:,5) + psd_temp(:,2)/n_psd
+        ! ! p component 
+        ! call psd(vals(:,4),dx, psd_norm=psd_temp)
+        ! psd_mean(:,5) = psd_mean(:,5) + psd_temp(:,2)/n_psd
+
+        ! q component 
+        call psd(vals(:,5),dx, psd_norm=psd_temp, variance=temp_variance)
+        psd_mean(:,6) = psd_mean(:,6) + psd_temp(:,2)/n_psd
         mean_variance = mean_variance + temp_variance/n_psd
-
+        
+        ! ! r component 
+        ! call psd(vals(:,6),dx, psd_norm=psd_temp, variance=temp_variance)
+        ! psd_mean(:,7) = psd_mean(:,7) + psd_temp(:,2)/n_psd
+        ! mean_variance = mean_variance + temp_variance/n_psd 
       end do 
 
-        write(psd_mean_unit,*) 'omega,Su,Sv,Sw,Sp'
+      write(psd_mean_unit,*) 'omega,Su,Sv,Sw,Sp,Sq,Sr'
 
-        do i = 1, n/2+1
-          write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',psd_mean(i,2)/(2*pi), ',',psd_mean(i,3)/(2*pi), ',',psd_mean(i,4)/(2*pi),',',psd_mean(i,5)/(2*pi)    
-        end do
-        close(psd_mean_unit) 
-      end if 
+      do i = 1, n/2+1
+        write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',psd_mean(i,2)/(2*pi), ',',psd_mean(i,3)/(2*pi), ',',psd_mean(i,4)/(2*pi),',',psd_mean(i,5)/(2*pi),',',psd_mean(i,6)/(2*pi) ,',',psd_mean(i,7)/(2*pi) 
+      end do
+      close(psd_mean_unit) 
+    end if 
 
       deallocate(vals) 
 
@@ -257,21 +266,12 @@ module atmosphere_m
     ! Update time history 
     n_hist = t%time_history_points
 
-    write(*,*) 'new call '
-    write(*,*) t%time_history(:,1)
-    write(*,*) t%time_history(:,2)
-    write(*,*) t%time_history(:,3)
-
-    t%time_history(:,1) = t%time_history(:,1) + dx 
     t%time_history(2:n_hist,:) = t%time_history(1:n_hist-1,:)
+    t%time_history(:,1) = t%time_history(:,1) + dx
+
     t%time_history(1,1) = 0.0
     t%time_history(1,2) = v_cg
-    t%time_history(1,3) = w_cg  
-
-    write(*,*)
-    write(*,*) t%time_history(:,1)
-    write(*,*) t%time_history(:,2)
-    write(*,*) t%time_history(:,3)
+    t%time_history(1,3) = w_cg
 
     ! disturbance at tail 
     w_h = interpolate_1D(t%time_history(:,1), t%time_history(:,3), t%hstab_dist)
