@@ -1112,13 +1112,13 @@ module vehicle_m
       function pseudo_aero(t, state) result(FM)
         implicit none
         type(vehicle_t) :: t
-        real, intent(in) :: state(21)
+        real, intent(inout) :: state(21)
         real :: FM(6) 
         real :: Re, geometric_altitude_ft, geopotential_altitude_ft
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
         real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
         real :: V, dyn_pressure
-        real :: alpha, beta, beta_f, pbar, qbar, rbar, angular_rates(3)
+        real :: alpha, beta, beta_f, pbar, qbar, rbar
         real :: CL, CL1, CD, CS, L, D, S, Cl_roll, Cm, Cn
         real :: CM1, CM2, mach_num
         real :: ca, cb, sa, sb
@@ -1127,6 +1127,7 @@ module vehicle_m
         real :: thrust, throttle
         real :: CL_s, CD_s, Cm_s 
         real :: sigma_D, sigma_L, sigma_m, sign_a
+        real :: turbulence(6)
         
         ! Ccmpressibility
         real :: blend, drag_factor, lift_factor, moment_factor
@@ -1141,6 +1142,12 @@ module vehicle_m
           geometric_altitude_ft, geopotential_altitude_ft,     & 
           temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, & 
           dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
+
+        ! Add turbulence
+        if (t%atm%turb_model .ne. 'none') then
+          turbulence = atmosphere_get_turbulence(t%atm, t%state)
+          state(1:6) = state(1:6) + turbulence
+        end if 
 
         ! Calculate velocity unit vector
         V            =  sqrt(state(1)**2 + state(2)**2 + state(3)**2)
@@ -1161,13 +1168,9 @@ module vehicle_m
         beta_hat  = 0.0
 
         ! Calculate rotation rates from eq 3.4.23
-        angular_rates(1) = 1 / (2*V) * state(4) * t%lateral_length
-        angular_rates(2) = 1 / (2*V) * state(5) * t%longitudinal_length
-        angular_rates(3) = 1 / (2*V) * state(6) * t%lateral_length
-
-        pbar = angular_rates(1)
-        qbar = angular_rates(2)
-        rbar = angular_rates(3)
+        pbar = 1 / (2*V) * state(4) * t%lateral_length
+        qbar = 1 / (2*V) * state(5) * t%longitudinal_length
+        rbar = 1 / (2*V) * state(6) * t%lateral_length
 
         if(t%type == 'aircraft') then 
           ! Pull out controls

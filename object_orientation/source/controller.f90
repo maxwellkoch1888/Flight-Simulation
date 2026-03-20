@@ -302,7 +302,7 @@ module controller_m
         real :: u(4)
         real :: pilot_command(3)
         real :: omega(3), omegadot_des(3), Kp(3,3)
-        real :: Vmag, alpha, beta, dyp, altitude
+        real :: Vmag, alpha, beta, dyp
         real :: geometric_altitude_ft, geopotential_altitude_ft
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
         real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec      

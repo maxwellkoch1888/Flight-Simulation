@@ -8,7 +8,6 @@ module atmosphere_m
     character(len=:), allocatable :: turb_model, turb_intensity 
     real :: wingspan, hstab_dist, vstab_dist 
     logical :: turb_repeatable
-
     real :: light_hag(3) = [2000.0, 8000.0, 17000.0]
     real :: light_sig(3) = [5.0, 5.0, 3.0]
     real :: moderate_hag(3) = [2000.0, 11000.0, 45000.0]
@@ -183,26 +182,30 @@ module atmosphere_m
         ! call psd(vals(:,4),dx, psd_norm=psd_temp)
         ! psd_mean(:,5) = psd_mean(:,5) + psd_temp(:,2)/n_psd
 
-        ! q component 
-        call psd(vals(:,5),dx, psd_norm=psd_temp, variance=temp_variance)
-        psd_mean(:,6) = psd_mean(:,6) + psd_temp(:,2)/n_psd
-        mean_variance = mean_variance + temp_variance/n_psd
+        ! ! q component 
+        ! call psd(vals(:,5),dx, psd_norm=psd_temp, variance=temp_variance)
+        ! psd_mean(:,6) = psd_mean(:,6) + psd_temp(:,2)/n_psd
+        ! mean_variance = mean_variance + temp_variance/n_psd
         
-        ! ! r component 
-        ! call psd(vals(:,6),dx, psd_norm=psd_temp, variance=temp_variance)
-        ! psd_mean(:,7) = psd_mean(:,7) + psd_temp(:,2)/n_psd
-        ! mean_variance = mean_variance + temp_variance/n_psd 
+        ! r component 
+        call psd(vals(:,6),dx, psd_norm=psd_temp, variance=temp_variance)
+        psd_mean(:,7) = psd_mean(:,7) + psd_temp(:,2)/n_psd
+        mean_variance = mean_variance + temp_variance/n_psd 
       end do 
 
-      write(psd_mean_unit,*) 'omega,Su,Sv,Sw,Sp,Sq,Sr'
+      write(*,*) 'mean variance', mean_variance
+      ! write(psd_mean_unit,*) 'omega,Su,Sv,Sw,Sp,Sq,Sr'
+      write(psd_mean_unit,*) 'Sr'
 
       do i = 1, n/2+1
-        write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',psd_mean(i,2)/(2*pi), ',',psd_mean(i,3)/(2*pi), ',',psd_mean(i,4)/(2*pi),',',psd_mean(i,5)/(2*pi),',',psd_mean(i,6)/(2*pi) ,',',psd_mean(i,7)/(2*pi) 
+        ! write(psd_mean_unit,*) psd_mean(i,1)*2*pi, ',',psd_mean(i,2)/(2*pi), ',',psd_mean(i,3)/(2*pi), ',',psd_mean(i,4)/(2*pi),',',psd_mean(i,5)/(2*pi),',',psd_mean(i,6)/(2*pi) ,',',psd_mean(i,7)/(2*pi) 
+        write(psd_mean_unit,*) psd_mean(i,7)/(2*pi) 
+
       end do
       close(psd_mean_unit) 
     end if 
 
-      deallocate(vals) 
+    deallocate(vals) 
 
   end subroutine turbulence_sample 
 
