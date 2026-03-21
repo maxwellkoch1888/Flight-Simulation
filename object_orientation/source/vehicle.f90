@@ -40,13 +40,13 @@ module vehicle_m
           if(t%save_states) then 
             t%states_filename = 'output_files/' // trim(t%name) // '_states.csv'
             open(newunit=t%iunit_states, file=t%states_filename, status='REPLACE')
-            write(t%iunit_states,*) " time[s]             u[ft/s]              &
-            &v[ft/s]              w[ft/s]              p[rad/s]             &
-            &q[rad/s]             r[rad/s]             xf[ft]               &
-            &yf[ft]               zf[ft]               e0                   &
-            &ex                   ey                   ez                   &
-            &aileron[deg]         elevator[deg]        rudder[deg]          throttle&
-            &             daileron[deg]        delevator[deg]       drudder[deg]         dthrottle"
+            write(t%iunit_states,'(*(A,:,","))') &
+                'time[s]', 'u[ft/s]', 'v[ft/s]', 'w[ft/s]', &
+                'p[rad/s]', 'q[rad/s]', 'r[rad/s]', &
+                'xf[ft]', 'yf[ft]', 'zf[ft]', &
+                'e0', 'ex', 'ey', 'ez', &
+                'aileron[deg]', 'elevator[deg]', 'rudder[deg]', 'throttle', &
+                'daileron[deg]', 'delevator[deg]', 'drudder[deg]', 'dthrottle'
             write(*,*) '- saving states to ', t%states_filename
           end if 
 
@@ -282,7 +282,12 @@ module vehicle_m
         type(vehicle_t) :: t 
         real, intent(in) :: time 
 
-        write(t%iunit_states,'(23(ES20.13,1X))') time, t%state(1:13), t%state(14:16) * 180.0 / pi,t%state(17), t%state(18:21), sqrt(t%state(1) **2 + t%state(2)**2 + t%state(3)**2) 
+        write(t%iunit_states,'(*(g0,","))') &
+            time, t%state(1), t%state(2), t%state(3), t%state(4), t%state(5), t%state(6), &
+            t%state(7), t%state(8), t%state(9), t%state(10), t%state(11), t%state(12), t%state(13), &
+            t%state(14)*180.0/pi, t%state(15)*180.0/pi, t%state(16)*180.0/pi, &
+            t%state(17)*180.0/pi, t%state(18)*180.0/pi, t%state(19)*180.0/pi, &
+            t%state(20), t%state(21)
 
       end subroutine 
     !----------------------------------------
@@ -355,8 +360,11 @@ module vehicle_m
         real, allocatable :: res(:), R_pos(:), R_neg(:), jac(:,:), delta_x(:) 
         integer, allocatable, dimension(:) :: idx_free 
         real :: error
+        logical :: temp_turb 
 
         t%limit_controls = .false. 
+        temp_turb = t%atm%use_turb
+        t%atm%use_turb = .false. 
 
         allocate(t%trim%free_vars(n_vars))
 
@@ -396,9 +404,8 @@ module vehicle_m
         write(*,*) '          Relaxation Factor = ', t%trim%solver%relaxation_factor 
         write(*,*) '                  Tolerance = ', t%trim%solver%tolerance
 
-        ! t%trim%solve_fixed_climb_angle =    .false. 
-        ! t%trim%solve_relative_climb_angle = .false. 
-        ! t%trim%solve_load_factor =          .false. 
+        t%trim%solve_relative_climb_angle = .false. 
+        t%trim%solve_load_factor =          .false. 
 
         x = 0.0 
         x(7:9) = t%init_eul(:) 
@@ -563,7 +570,7 @@ module vehicle_m
           write(t%iunit_trim, '(A,*(1X,G25.17))') ' p[deg/sec]               = ', t%init_state(4) * 180.0 / pi 
           write(t%iunit_trim, '(A,*(1X,G25.17))') ' q[deg/sec]               = ', t%init_state(5) * 180.0 / pi 
           write(t%iunit_trim, '(A,*(1X,G25.17))') ' r[deg/sec]               = ', t%init_state(6) * 180.0 / pi 
-        end if        
+        end if
         
         t%init_eul(:) = x(7:9)
         t%init_state(14:17) = x(3:6)
@@ -574,6 +581,7 @@ module vehicle_m
         t%controls(4)%commanded_value = t%state(17)
 
         t%limit_controls = .true. 
+        t%atm%use_turb = temp_turb        
 
       end subroutine
 
@@ -591,6 +599,8 @@ module vehicle_m
         real :: u, v, w, euler(3)
         real :: angular_rates(3)
         real :: ans(n_free), temp_state(21), dummy_res(21)
+
+        ans = 0.0 
 
         ! Pull out controls
         t%state(14:17) = x(3:6)
@@ -653,9 +663,14 @@ module vehicle_m
 
         if(t%trim%solve_load_factor) then 
           last = last + 1
-          FM = pseudo_aero(t, temp_state)           
+          FM = pseudo_aero(t, temp_state)  
           ans(last) = t%trim%load_factor - ((FM(1)*sa - FM(3)*ca) / (t%mass*(g-ac)))
         end if 
+
+        if (last /= n_free) then
+          write(*,*) 'ERROR: residual size mismatch, last = ', last, ', n_free = ', n_free
+          stop
+        end if        
 
         if (t%trim%verbose) then 
           write(t%iunit_trim, '(A,*(1X,G25.17))') '       x =', x
@@ -665,9 +680,9 @@ module vehicle_m
             write(t%iunit_trim, *) '         r[deg/s] = ', angular_rates(3) * 180.0 / pi 
           end if 
             write(t%iunit_trim, '(A,*(1X,G25.17))') '       R =', ans
-        end if    
+        end if 
+        ! write(*,*) temp_state
         t%init_state(4:6) = temp_state(4:6)     
-
       end function calc_r
 
       function calc_relative_climb_angle(y) result(ans)
@@ -877,6 +892,8 @@ module vehicle_m
           write(t%iunit_rk4,'(X,22(ES19.12,1X))') t0+delta_t, state
           write(t%iunit_rk4,*) ' --------------------------- End of single RK4 integration step. ---------------------------'
         end if 
+
+        t%atm%prev_xyz(:) = state(7:9) 
 
       end function rk4
     
@@ -1128,8 +1145,6 @@ module vehicle_m
         real :: CL_s, CD_s, Cm_s 
         real :: sigma_D, sigma_L, sigma_m, sign_a
         real :: turbulence(6)
-        
-        ! Ccmpressibility
         real :: blend, drag_factor, lift_factor, moment_factor
         real :: pg_factor, kt_factor
         real :: m_high, m_low, m_trans_start
@@ -1147,6 +1162,7 @@ module vehicle_m
         if (t%atm%turb_model .ne. 'none') then
           turbulence = atmosphere_get_turbulence(t%atm, t%state)
           state(1:6) = state(1:6) + turbulence
+          ! write(*,*) turbulence 
         end if 
 
         ! Calculate velocity unit vector

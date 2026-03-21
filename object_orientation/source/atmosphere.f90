@@ -7,7 +7,7 @@ module atmosphere_m
     real, allocatable :: wind(:) 
     character(len=:), allocatable :: turb_model, turb_intensity 
     real :: wingspan, hstab_dist, vstab_dist 
-    logical :: turb_repeatable
+    logical :: turb_repeatable, use_turb
     real :: light_hag(3) = [2000.0, 8000.0, 17000.0]
     real :: light_sig(3) = [5.0, 5.0, 3.0]
     real :: moderate_hag(3) = [2000.0, 11000.0, 45000.0]
@@ -37,9 +37,12 @@ module atmosphere_m
 
     write(*,*) '   Constant wind[ft/s] = ', t%wind(:) 
     call json_get(j_atmosphere, 'turbulence', j_turb, found) 
+    t%use_turb = .false. 
+
     if(found) then 
       call jsonx_get(j_turb, 'model', t%turb_model, 'none') 
       if (t%turb_model .ne. 'none') then 
+        t%use_turb = .true. 
         call jsonx_get(j_turb, 'wingspan[ft]',       t%wingspan)
         call jsonx_get(j_turb, 'hstab_distance[ft]', t%hstab_dist)
         call jsonx_get(j_turb, 'vstab_distance[ft]', t%vstab_dist)
@@ -215,12 +218,18 @@ module atmosphere_m
     real :: states(21) 
     real :: ans(6) 
     real :: dx, sigma 
-     
-    dx = sqrt((states(7) - t%prev_xyz(1))**2 + (states(8) - t%prev_xyz(2))**2 + (states(9) - t%prev_xyz(3))**2)
-    sigma = interpolate_1D(t%turb_hag, t%turb_sig, -states(9))
+    
+    if (t%use_turb) then 
+      dx = sqrt((states(7) - t%prev_xyz(1))**2 + (states(8) - t%prev_xyz(2))**2 + (states(9) - t%prev_xyz(3))**2)
+      write(*,*)
+      write(*,*) 'dx = ', dx
+      write(*,*) 'states(7:9) = ', states(7:9)
+      write(*,*) 't%prev_xyz(1:3) = ', t%prev_xyz(1:3)
+      write(*,*)
+      sigma = interpolate_1D(t%turb_hag, t%turb_sig, -states(9))
 
-    ans = get_turbulence(t, dx, sigma, sigma, sigma) 
-    t%prev_xyz(:) = states(7:9) 
+      ans = get_turbulence(t, dx, sigma, sigma, sigma) 
+    end if 
   end function atmosphere_get_turbulence
 
   function get_turbulence(t, dx, su, sv, sw) result(ans) 
@@ -228,11 +237,12 @@ module atmosphere_m
     type(atmosphere_t) :: t 
     real :: dx, su, sv, sw
     real :: ans(6) 
-
-    select case(trim(t%turb_model)) 
-    case('dryden_beal') 
-      ans(:) = dryden_beal(t,dx,su,sv,sw) 
-    end select 
+    if (t%use_turb) then 
+      select case(trim(t%turb_model)) 
+      case('dryden_beal') 
+        ans(:) = dryden_beal(t,dx,su,sv,sw) 
+      end select 
+    end if 
   end function get_turbulence
 
   function dryden_beal(t, dx, su, sv, sw) result(ans) 

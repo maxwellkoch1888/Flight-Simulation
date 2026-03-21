@@ -147,6 +147,10 @@ module sim_m
             write(*,*) "Integrated Time", integrated_time
             write(*,*) "Time Error", time_error
 
+            do i=1,num_vehicles
+                close(vehicles(i)%iunit_states)
+            end do 
+
             close(io_unit)
 
         end subroutine run
