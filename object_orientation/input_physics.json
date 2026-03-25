@@ -5,7 +5,7 @@
         "rk4_verbose" : false,
         "save_states" : true,
         "save_lat_long" : false, 
-        "geographic_model" : "sphere"
+        "geographic_model" : "none"
     },
     "atmosphere" : {
         "constant_wind[ft/s]" : [0.0, 0.0, 0.0], 
@@ -14,13 +14,13 @@
             "wingspan[ft]" : 30.0, 
             "hstab_distance[ft]" : 15.0, 
             "vstab_distance[ft]" : 15.0, 
-            "intensity" : "light", 
+            "intensity" : "severe", 
             "repeatable" : false, 
-            "time_history_points" : 5,
+            "time_history_points" : 20,
             "sample" : {
                 "save_filename": "turb_sample.csv", 
                 "height_above_ground[ft]" : 2000.0, 
-                "number_of_points" : 131072, 
+                "number_of_points" : 2048, 
                 "dx[ft]" : 5.0, 
                 "_psd_analyses" : 100
             }
@@ -163,7 +163,7 @@
                     "damping_ratio" : 1.0
                 }                                                
             },
-            "controller": {
+            "_controller": {
                 "connections" : {
                     "receive_pilot_commands": {
                         "type": "receive", 
@@ -230,7 +230,7 @@
             },
             "initial" : {
                 "airspeed[ft/s]" : 350.0,
-                "altitude[ft]" : 1000.0,
+                "altitude[ft]" : 3000.0,
                 "latitude[deg]" : 80.0,
                 "longitude[deg]" : 90.0,
                 "Euler_angles[deg]" : [20.0, 0.0, 0.0],
@@ -247,9 +247,9 @@
                     "throttle" : 0.129524457808
                 },
                 "trim" : {
-                    "type" : "sct",
+                    "type" : "shss",
                     "ref_climb_angle[deg]" : 0.0,
-                    "_sideslip_angle[deg]" : 0.0,
+                    "sideslip_angle[deg]" : 0.0,
                     "_load_factor" : 1.2,
                     "solver" : {
                         "finite_difference_step_size" : 0.01,

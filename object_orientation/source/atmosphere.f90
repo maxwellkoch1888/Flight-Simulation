@@ -221,14 +221,12 @@ module atmosphere_m
     
     if (t%use_turb) then 
       dx = sqrt((states(7) - t%prev_xyz(1))**2 + (states(8) - t%prev_xyz(2))**2 + (states(9) - t%prev_xyz(3))**2)
-      write(*,*)
-      write(*,*) 'dx = ', dx
-      write(*,*) 'states(7:9) = ', states(7:9)
-      write(*,*) 't%prev_xyz(1:3) = ', t%prev_xyz(1:3)
-      write(*,*)
       sigma = interpolate_1D(t%turb_hag, t%turb_sig, -states(9))
-
-      ans = get_turbulence(t, dx, sigma, sigma, sigma) 
+      if (dx < tol) then 
+        ans = t%prev_turb
+      else 
+        ans = get_turbulence(t, dx, sigma, sigma, sigma) 
+      end if 
     end if 
   end function atmosphere_get_turbulence
 

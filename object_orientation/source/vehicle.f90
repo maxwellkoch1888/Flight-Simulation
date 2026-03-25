@@ -47,13 +47,13 @@ module vehicle_m
                 'e0', 'ex', 'ey', 'ez', &
                 'aileron[deg]', 'elevator[deg]', 'rudder[deg]', 'throttle', &
                 'daileron[deg]', 'delevator[deg]', 'drudder[deg]', 'dthrottle'
-            write(*,*) '- saving states to ', t%states_filename
+            ! write(*,*) '- saving states to ', t%states_filename
           end if 
 
           if(t%rk4_verbose) then 
             t%rk4_filename = 'output_files/' // trim(t%name)//'_RK4.txt'
             open(newunit=t%iunit_rk4, file=t%rk4_filename, status='REPLACE')
-            write(*,*) '- saving RK4 results to ', t%rk4_filename
+            ! write(*,*) '- saving RK4 results to ', t%rk4_filename
           end if 
 
           if(save_lat_long) then 
@@ -61,10 +61,10 @@ module vehicle_m
             open(newunit=t%iunit_latlong, file=t%latlong_filename, status='REPLACE')
             write(t%iunit_latlong,*) "time[s]              longitude[deg]       &
             &latitude[deg]        azimuth[deg]"              
-            write(*,*) '- saving latlong results to ', t%latlong_filename
+            ! write(*,*) '- saving latlong results to ', t%latlong_filename
           end if 
 
-          write(*,*) '- mass' 
+          ! write(*,*) '- mass' 
           call jsonx_get(t%j_vehicle, 'mass.weight[lbf]', t%mass)
           t%mass = t%mass/gravity_English(0.0)
 
@@ -78,7 +78,7 @@ module vehicle_m
           call jsonx_get(t%j_vehicle, 'mass.h[slug-ft^2/s]',  t%h, 0.0, 3)
 
           ! Read aerodynamic data      
-          write(*,*) '- aerodynamics'
+          ! write(*,*) '- aerodynamics'
           call jsonx_get(t%j_vehicle, 'aerodynamics.compressibility',                   t%compressibility, .false.)
           call jsonx_get(t%j_vehicle, 'aerodynamics.test_compressibility',              t%test_compressibility, .false.)
           call jsonx_get(t%j_vehicle, 'aerodynamics.sweep[deg]',                        t%sweep, 0.0)
@@ -143,7 +143,7 @@ module vehicle_m
             call jsonx_get(t%j_vehicle, 'aerodynamics.coefficients.Cn.rudder',        t%Cn_rudder)
 
             ! Control Effectors
-            write(*,*) '  -controls'
+            ! write(*,*) '  -controls'
             t%controls(1)%state_ID = 14
             t%controls(2)%state_ID = 15
             t%controls(3)%state_ID = 16
@@ -183,7 +183,7 @@ module vehicle_m
 
             call json_get(t%j_vehicle, 'controller', j_controller, found)
             if (found) then 
-              write(*,*) '   -controller'
+              ! write(*,*) '   -controller'
               call controller_init(t%controller, j_controller)
             end if 
 
@@ -220,7 +220,7 @@ module vehicle_m
           end if 
 
           ! Thrust coefficients
-          write(*,*) '- thrust'
+          ! write(*,*) '- thrust'
           call jsonx_get(t%j_vehicle, 'thrust.T0[lbf]',          t%T0, 0.0)
           call jsonx_get(t%j_vehicle, 'thrust.Ta',               t%Ta, 0.0)
           call jsonx_get(t%j_vehicle, 'thrust.location[ft]',     t%thrust_location, 0.0, 3)
@@ -236,7 +236,7 @@ module vehicle_m
           t%rho0 = density_slugs_per_ft3
 
           ! Initial conditions
-          write(*,*) '- Initial Conditions'
+          ! write(*,*) '- Initial Conditions'
           t%init_state = 0.0 
 
           call jsonx_get(t%j_vehicle, 'initial.airspeed[ft/s]', t%init_airspeed)
@@ -253,25 +253,26 @@ module vehicle_m
           call jsonx_get(t%j_vehicle, 'initial.type', init_type)
 
           if(init_type == 'state') then 
-            write(*,*) 'initializing state...'
+            ! write(*,*) 'initializing state...'
             call init_to_state(t)
           else 
-            write(*,*) 'initializing trim state...'
+            ! write(*,*) 'initializing trim state...'
             call init_to_trim(t) 
           end if 
-          write(*,*) 'init euler:'
-          write(*,*) t%init_eul * 180.0 / pi 
+          ! write(*,*) 'init euler:'
+          ! write(*,*) t%init_eul * 180.0 / pi 
           t%init_state(10:13) = euler_to_quat(t%init_eul) 
           t%state = t%init_state 
-          write(*,*) 'initializing course angle...'
+          ! write(*,*) 'initializing course angle...'
           t%course_angle   = t%init_eul(3)
           t%prev_latitude  = t%latitude - cos(t%course_angle)
           t%prev_longitude = t% longitude - sin(t%course_angle) 
+          t%atm%prev_xyz = t%init_state(7:9)      
 
           call get_controller_input(t, 0.0)
 
         end if 
-        write(*,*) 'Finished vehicle initialization.'
+        ! write(*,*) 'Finished vehicle initialization.'
         
       end subroutine vehicle_init
 
@@ -286,8 +287,8 @@ module vehicle_m
             time, t%state(1), t%state(2), t%state(3), t%state(4), t%state(5), t%state(6), &
             t%state(7), t%state(8), t%state(9), t%state(10), t%state(11), t%state(12), t%state(13), &
             t%state(14)*180.0/pi, t%state(15)*180.0/pi, t%state(16)*180.0/pi, &
-            t%state(17)*180.0/pi, t%state(18)*180.0/pi, t%state(19)*180.0/pi, &
-            t%state(20), t%state(21)
+            t%state(17), t%state(18)*180.0/pi, t%state(19)*180.0/pi, &
+            t%state(20)*180/pi, t%state(21)
 
       end subroutine 
     !----------------------------------------
@@ -368,7 +369,7 @@ module vehicle_m
 
         allocate(t%trim%free_vars(n_vars))
 
-        write(*,*) '  -trimming'
+        ! write(*,*) '  -trimming'
         ! Get json objects 
         call jsonx_get(t%j_vehicle, 'initial', j_initial) 
         call jsonx_get(j_initial, 'trim',      j_trim)
@@ -379,7 +380,7 @@ module vehicle_m
         call jsonx_get(j_trim, 'ref_climb_angle[deg]', t%trim%climb_angle, -999.0) 
         call jsonx_get(j_trim, 'load_factor',          t%trim%load_factor, -999.0) 
 
-        write(*,*) '   -trimming vehicle for ', t%trim%type 
+        ! write(*,*) '   -trimming vehicle for ', t%trim%type 
 
         call jsonx_get(j_solver, 'finite_difference_step_size', t%trim%solver%step_size)
         call jsonx_get(j_solver, 'relaxation_factor',           t%trim%solver%relaxation_factor)
@@ -398,11 +399,11 @@ module vehicle_m
           write(t%iunit_trim, *) '                  Tolerance = ', t%trim%solver%tolerance
         end if 
 
-        write(*,*) 
-        write(*,*) 'Newton Solver Settings: '
-        write(*,*) 'Finite Difference Step Size = ', t%trim%solver%step_size
-        write(*,*) '          Relaxation Factor = ', t%trim%solver%relaxation_factor 
-        write(*,*) '                  Tolerance = ', t%trim%solver%tolerance
+        ! write(*,*) 
+        ! write(*,*) 'Newton Solver Settings: '
+        ! write(*,*) 'Finite Difference Step Size = ', t%trim%solver%step_size
+        ! write(*,*) '          Relaxation Factor = ', t%trim%solver%relaxation_factor 
+        ! write(*,*) '                  Tolerance = ', t%trim%solver%tolerance
 
         t%trim%solve_relative_climb_angle = .false. 
         t%trim%solve_load_factor =          .false. 
@@ -422,7 +423,7 @@ module vehicle_m
         if(abs(t%trim%climb_angle+999.0) > tol) then 
           t%trim%climb_angle = t%trim%climb_angle * pi / 180.0
           x(8) = t%trim%climb_angle
-          write(*,*) ' Reference Climb Angle[deg] = ', t%trim%climb_angle * 180.0 / pi 
+          ! write(*,*) ' Reference Climb Angle[deg] = ', t%trim%climb_angle * 180.0 / pi 
           write(t%iunit_trim,*) ' Reference Climb Angle[deg] = ', t%trim%climb_angle * 180.0 / pi 
           t%trim%free_vars(8) = .true. 
           t%trim%solve_relative_climb_angle = .true. 
@@ -432,7 +433,7 @@ module vehicle_m
           t%trim%solve_load_factor = .true. 
           x(7) = acos(cos(x(8))/t%trim%load_factor) ! load factor approximation
           t%trim%free_vars(7) = .true. 
-          write(*,*) '                Load Factor =', t%trim%load_factor
+          ! write(*,*) '                Load Factor =', t%trim%load_factor
           write(t%iunit_trim,*) '                Load Factor =', t%trim%load_factor
         end if 
 
@@ -453,10 +454,10 @@ module vehicle_m
           write(t%iunit_trim, *) 'free_vars = ', t%trim%free_vars
           write(t%iunit_trim, *) 'idx_free = ', idx_free(:)
         end if 
-        write(*,*) '    n_vars = ', n_vars 
-        write(*,*) '    n_free = ', n_free 
-        write(*,*) '    free_vars = ', t%trim%free_vars
-        write(*,*) '    idx_free = ', idx_free(:)
+        ! write(*,*) '    n_vars = ', n_vars 
+        ! write(*,*) '    n_free = ', n_free 
+        ! write(*,*) '    free_vars = ', t%trim%free_vars
+        ! write(*,*) '    idx_free = ', idx_free(:)
 
         iter = 0
 
@@ -581,7 +582,7 @@ module vehicle_m
         t%controls(4)%commanded_value = t%state(17)
 
         t%limit_controls = .true. 
-        t%atm%use_turb = temp_turb        
+        t%atm%use_turb = temp_turb  
 
       end subroutine
 
@@ -1129,7 +1130,8 @@ module vehicle_m
       function pseudo_aero(t, state) result(FM)
         implicit none
         type(vehicle_t) :: t
-        real, intent(inout) :: state(21)
+        real, intent(in) :: state(21)
+        real :: local_state(21) 
         real :: FM(6) 
         real :: Re, geometric_altitude_ft, geopotential_altitude_ft
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
@@ -1150,6 +1152,8 @@ module vehicle_m
         real :: m_high, m_low, m_trans_start
         real :: sqrt_term
         real :: max_CL_factor, max_CD_factor, max_Cl_roll_factor
+
+        local_state = state 
         
         ! Build atmosphere
         geometric_altitude_ft = -state(9)
@@ -1159,20 +1163,20 @@ module vehicle_m
           dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
 
         ! Add turbulence
-        if (t%atm%turb_model .ne. 'none') then
-          turbulence = atmosphere_get_turbulence(t%atm, t%state)
-          state(1:6) = state(1:6) + turbulence
+        if (t%atm%use_turb) then
+          turbulence = atmosphere_get_turbulence(t%atm, state)
+          local_state(1:6) = state(1:6) + turbulence
           ! write(*,*) turbulence 
         end if 
 
         ! Calculate velocity unit vector
-        V            =  sqrt(state(1)**2 + state(2)**2 + state(3)**2)
+        V            =  sqrt(local_state(1)**2 + local_state(2)**2 + local_state(3)**2)
         dyn_pressure = 0.5 * density_slugs_per_ft3 * V **2 * t%planform_area
 
         ! Calculate alpha and beta 3.4.4 and 3.4.5
-        alpha  = atan2(state(3) , state(1))
-        beta   = asin(state(2) / V)
-        beta_f = atan2(state(2) , state(1))
+        alpha  = atan2(local_state(3) , local_state(1))
+        beta   = asin(local_state(2) / V)
+        beta_f = atan2(local_state(2) , local_state(1))
 
         ca = cos(alpha)
         cb = cos(beta)
@@ -1184,9 +1188,9 @@ module vehicle_m
         beta_hat  = 0.0
 
         ! Calculate rotation rates from eq 3.4.23
-        pbar = 1 / (2*V) * state(4) * t%lateral_length
-        qbar = 1 / (2*V) * state(5) * t%longitudinal_length
-        rbar = 1 / (2*V) * state(6) * t%lateral_length
+        pbar = 1 / (2*V) * local_state(4) * t%lateral_length
+        qbar = 1 / (2*V) * local_state(5) * t%longitudinal_length
+        rbar = 1 / (2*V) * local_state(6) * t%lateral_length
 
         if(t%type == 'aircraft') then 
           ! Pull out controls
