@@ -14,7 +14,7 @@
             "wingspan[ft]" : 30.0, 
             "hstab_distance[ft]" : 15.0, 
             "vstab_distance[ft]" : 15.0, 
-            "intensity" : "severe", 
+            "intensity" : "moderate", 
             "repeatable" : false, 
             "time_history_points" : 20,
             "sample" : {
@@ -231,9 +231,9 @@
             "initial" : {
                 "airspeed[ft/s]" : 350.0,
                 "altitude[ft]" : 3000.0,
-                "latitude[deg]" : 80.0,
-                "longitude[deg]" : 90.0,
-                "Euler_angles[deg]" : [20.0, 0.0, 0.0],
+                "latitude[deg]" : 0.0,
+                "longitude[deg]" : 0.0,
+                "Euler_angles[deg]" : [0.0, 0.0, 0.0],
                 "type" : "trim",
                 "state" : {
                     "angle_of_attack[deg]" : 11.278107537468,

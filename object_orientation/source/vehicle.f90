@@ -894,8 +894,6 @@ module vehicle_m
           write(t%iunit_rk4,*) ' --------------------------- End of single RK4 integration step. ---------------------------'
         end if 
 
-        t%atm%prev_xyz(:) = state(7:9) 
-
       end function rk4
     
     !----------------------------------------

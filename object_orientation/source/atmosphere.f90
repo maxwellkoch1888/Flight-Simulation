@@ -226,6 +226,7 @@ module atmosphere_m
         ans = t%prev_turb
       else 
         ans = get_turbulence(t, dx, sigma, sigma, sigma) 
+        t%prev_xyz(:) = states(7:9) 
       end if 
     end if 
   end function atmosphere_get_turbulence
