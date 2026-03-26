@@ -258,8 +258,8 @@
                 "Euler_angles[deg]" : [0.0, 0.0, 0.0],
                 "type" : "state",
                 "state" : {
-                    "angle_of_attack[deg]" : 5.0,
-                    "sideslip_angle[deg]" : 5.0,
+                    "angle_of_attack[deg]" : -15.0,
+                    "sideslip_angle[deg]" : 20.0,
                     "p[deg/s]" : -0.766207504385,
                     "q[deg/s]" : 3.834356702909,
                     "r[deg/s]" : 3.834356702909,

@@ -1207,13 +1207,9 @@ module vehicle_m
         beta_hat  = 0.0
 
         ! Calculate rotation rates from eq 3.4.23
-        ! pbar = 1 / (2*V) * local_state(4) * t%lateral_length
-        ! qbar = 1 / (2*V) * local_state(5) * t%longitudinal_length
-        ! rbar = 1 / (2*V) * local_state(6) * t%lateral_length
-
-        pbar = 0.01
-        qbar = 0.01
-        rbar = 0.01
+        pbar = 1 / (2*V) * local_state(4) * t%lateral_length
+        qbar = 1 / (2*V) * local_state(5) * t%longitudinal_length
+        rbar = 1 / (2*V) * local_state(6) * t%lateral_length
 
         if(t%type == 'aircraft') then 
           ! Pull out controls
@@ -1437,8 +1433,24 @@ module vehicle_m
         end if 
 
         if(t%use_database) then 
+          write(*,*) 'alpha      = ', alpha * 180.0 / pi 
+          write(*,*) 'beta       = ', beta * 180.0 / pi 
+          write(*,*) 'pbar       = ', pbar 
+          write(*,*) 'qbar       = ', qbar 
+          write(*,*) 'rbar       = ', rbar 
+          write(*,*) 'delta_a    = ', delta_a * 180.0 / pi 
+          write(*,*) 'delta_e    = ', delta_e * 180.0 / pi 
+          write(*,*) 'delta_r    = ', delta_r * 180.0 / pi 
+          write(*,*) 'speedbrake = ', speedbrake * 180.0 / pi 
+          write(*,*) 'lef        = ', lef * 180.0 / pi 
+          
           write(*,*) 'Cxyzlmn'
-          write(*,*) Cxyzlmn
+          write(*,'(F0.10)') Cxyzlmn(1)
+          write(*,'(F0.10)') Cxyzlmn(2)
+          write(*,'(F0.10)') Cxyzlmn(3)
+          write(*,'(F0.10)') Cxyzlmn(4)
+          write(*,'(F0.10)') Cxyzlmn(5)
+          write(*,'(F0.10)') Cxyzlmn(6)
           write(*,*)
           FM(1:3) = Cxyzlmn(1:3) 
           FM(4)   = Cxyzlmn(4) * t%lateral_length 
