@@ -4,6 +4,7 @@ module vehicle_m
   use micro_time_m
   use linalg_mod
   use controller_m 
+  use database_m
 
   implicit none
   real :: rho0
@@ -25,7 +26,7 @@ module vehicle_m
         character(len=:), allocatable :: init_type 
         real :: geopotential_altitude_ft,temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
         integer :: i 
-        logical :: found
+        logical :: found, allow_saturation
 
         t%j_vehicle => j_vehicle_input 
         t%name = t%j_vehicle%name 
@@ -141,6 +142,24 @@ module vehicle_m
             call jsonx_get(t%j_vehicle, 'aerodynamics.coefficients.Cn.aileron',       t%Cn_aileron)
             call jsonx_get(t%j_vehicle, 'aerodynamics.coefficients.Cn.alpha_aileron', t%Cn_alpha_aileron)
             call jsonx_get(t%j_vehicle, 'aerodynamics.coefficients.Cn.rudder',        t%Cn_rudder)
+
+            ! Aerodynamic Databases
+            call jsonx_get(t%j_vehicle, 'aerodynamics.rectilinear_databases', t%db_fn, 'none') 
+            if(trim(t%db_fn(1)) /= 'none') then 
+              t%n_db = size(t%db_fn) 
+              allocate(t%db(t%n_db))
+              call jsonx_get(t%j_vehicle, 'aerodynamics.use_database',                    t%use_database)
+              call jsonx_get(t%j_vehicle, 'aerodynamics.database_directory',              t%db_path, '')
+              call jsonx_get(t%j_vehicle, 'aerodynamics.database_allow_past_saturation',  allow_saturation)
+              call jsonx_get(t%j_vehicle, 'aerodynamics.speed_brake[deg]',                t%speed_brake)
+              call jsonx_get(t%j_vehicle, 'aerodynamics.leading_edge_flap[deg]',          t%le_flap) 
+              t%speed_brake = t%speed_brake * pi / 180.0 
+              t%le_flap     = t%le_flap * pi / 180.0 
+              do i = 1,t%n_db 
+                call t%db(i)%init(t%db_fn(i), pn=t%db_path, verbose=.true., presorted=.true.)
+                t%db(i)%saturate = allow_saturation 
+              end do 
+            end if 
 
             ! Control Effectors
             ! write(*,*) '  -controls'
@@ -1150,6 +1169,8 @@ module vehicle_m
         real :: m_high, m_low, m_trans_start
         real :: sqrt_term
         real :: max_CL_factor, max_CD_factor, max_Cl_roll_factor
+        real :: alphad, betad, ded, speedbrake, lef, Cxyzlmn(6) 
+        real :: db1(1), db2(2), db3(3), db6(6)
 
         local_state = state 
         
@@ -1186,9 +1207,13 @@ module vehicle_m
         beta_hat  = 0.0
 
         ! Calculate rotation rates from eq 3.4.23
-        pbar = 1 / (2*V) * local_state(4) * t%lateral_length
-        qbar = 1 / (2*V) * local_state(5) * t%longitudinal_length
-        rbar = 1 / (2*V) * local_state(6) * t%lateral_length
+        ! pbar = 1 / (2*V) * local_state(4) * t%lateral_length
+        ! qbar = 1 / (2*V) * local_state(5) * t%longitudinal_length
+        ! rbar = 1 / (2*V) * local_state(6) * t%lateral_length
+
+        pbar = 0.01
+        qbar = 0.01
+        rbar = 0.01
 
         if(t%type == 'aircraft') then 
           ! Pull out controls
@@ -1204,22 +1229,108 @@ module vehicle_m
             throttle = state(17)
           end if 
 
-          ! Calculate lift, drag, side force coef
-          CL1 =  t%CL0 + t%CL_alpha * alpha
-          CL  = CL1 + t%CL_qbar * qbar + t%CL_alphahat * alpha_hat + t%CL_elevator * delta_e
-          CS  = t%CS_beta * beta + (t%CS_pbar + t%CS_alpha_pbar * alpha) * pbar + t%CS_rbar * rbar &
-                + t%CS_aileron * delta_a + t%CS_rudder * delta_r
-          CD  =  t%CD_L0 + t%CD_L1 * CL1 + t%CD_L1_L1 * CL1 **2 + t%CD_CS_CS * CS **2 &
-                + (t%CD_qbar + t%CD_alpha_qbar * alpha) * qbar + (t%CD_elevator + t%CD_alpha_elevator * alpha) &
-                * delta_e + t%CD_elevator_elevator * delta_e ** 2
+          ! Database aerodynamics
+          Cxyzlmn = 0.0 
+          if(t%use_database) then 
+            if(allocated(t%db)) then 
+              alphad = alpha * 180.0 / pi 
+              betad = beta * 180.0 / pi 
+              ded = delta_e * 180.0 / pi 
+              speedbrake = t%speed_brake 
+              lef = t%le_flap 
 
-          ! Calculate roll, pitch, yaw coef
-          Cl_roll = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar &
-                    + t%Cl_aileron * delta_a + t%Cl_rudder * delta_r  ! roll moment
-          Cm      = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar + t%Cm_alphahat * alpha_hat + t%Cm_elevator * delta_e ! pitch moment
-          Cn      = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar &
-                    + (t%Cn_aileron + t%Cn_alpha_aileron * alpha) * delta_a + t%Cn_rudder * delta_r ! yaw moment
-        
+              ! C(x,y,z,l,m,n)o(elevator,alpha,beta)
+              db6 = t%db(1)%interpolate([ded,alphad,betad])
+              Cxyzlmn = Cxyzlmn + db6 
+
+              ! DC(m)(alpha)
+              db1 = t%db(2)%interpolate([alphad])
+              Cxyzlmn(5) = Cxyzlmn(5) + db1(1) 
+
+              ! DC(m)(elevator,alpha) 
+              db1 = t%db(3)%interpolate([ded,alphad])
+              Cxyzlmn(5) = Cxyzlmn(5) + db1(1) 
+
+              ! DC(l,n),beta(alpha) 
+              db2(:) = t%db(4)%interpolate([alphad])
+              Cxyzlmn(4) = Cxyzlmn(4) + db2(1)*beta
+              Cxyzlmn(6) = Cxyzlmn(6) + db2(2)*beta 
+
+              ! DC(x,y,z,l,m,n,leg(alpha,beta) 
+              db6 = t%db(5)%interpolate([alphad,betad]) 
+              Cxyzlmn = Cxyzlmn + db6*lef 
+
+              ! DC(x,z,m),qbar_lef(alpha) 
+              db3 = t%db(6)%interpolate([alphad])
+              Cxyzlmn(1) = Cxyzlmn(1) + db3(1)*qbar*lef 
+              Cxyzlmn(3) = Cxyzlmn(3) + db3(2)*qbar*lef 
+              Cxyzlmn(5) = Cxyzlmn(5) + db3(3)*qbar*lef 
+
+              ! DC(s,z,m),qbar(alpha) 
+              db3 = t%db(7)%interpolate([alphad])
+              Cxyzlmn(1) = Cxyzlmn(1) + db3(1)*qbar
+              Cxyzlmn(3) = Cxyzlmn(3) + db3(2)*qbar
+              Cxyzlmn(5) = Cxyzlmn(5) + db3(3)*qbar
+
+              ! DC(x,z,m),sb(alpha)
+              db3 = t%db(8)%interpolate([alphad])
+              Cxyzlmn(1) = Cxyzlmn(1) + db3(1)*speedbrake 
+              Cxyzlmn(3) = Cxyzlmn(3) + db3(2)*speedbrake 
+              Cxyzlmn(5) = Cxyzlmn(5) + db3(3)*speedbrake 
+
+              ! DC(y,l,n),aileron_lef(alpha,beta)
+              db3 = t%db(9)%interpolate([alphad,betad])
+              Cxyzlmn(2) = Cxyzlmn(2) + db3(1)*delta_a*lef 
+              Cxyzlmn(4) = Cxyzlmn(4) + db3(2)*delta_a*lef 
+              Cxyzlmn(6) = Cxyzlmn(6) + db3(3)*delta_a*lef 
+
+              ! DC(y,l,n),aileron(alpha,beta)
+              db3 = t%db(10)%interpolate([alphad,betad])
+              Cxyzlmn(2) = Cxyzlmn(2) + db3(1)*delta_a
+              Cxyzlmn(4) = Cxyzlmn(4) + db3(2)*delta_a
+              Cxyzlmn(6) = Cxyzlmn(6) + db3(3)*delta_a
+              
+              ! DC(y,l,n),pbar_lef(alpha)
+              db3 = t%db(11)%interpolate([alphad])
+              Cxyzlmn(2) = Cxyzlmn(2) + db3(1)*pbar*lef 
+              Cxyzlmn(4) = Cxyzlmn(4) + db3(2)*pbar*lef 
+              Cxyzlmn(6) = Cxyzlmn(6) + db3(3)*pbar*lef 
+              
+              ! DC(y,l,n),pbar(alpha)
+              db3 = t%db(12)%interpolate([alphad])
+              Cxyzlmn(2) = Cxyzlmn(2) + db3(1)*pbar
+              Cxyzlmn(4) = Cxyzlmn(4) + db3(2)*pbar
+              Cxyzlmn(6) = Cxyzlmn(6) + db3(3)*pbar
+              
+              ! DC(y,l,n),rbar_lef(alpha)
+              db3 = t%db(13)%interpolate([alphad])
+              Cxyzlmn(2) = Cxyzlmn(2) + db3(1)*rbar*lef 
+              Cxyzlmn(4) = Cxyzlmn(4) + db3(2)*rbar*lef 
+              Cxyzlmn(6) = Cxyzlmn(6) + db3(3)*rbar*lef 
+              
+              ! DC(y,l,n),rbar(alpha)
+              db3 = t%db(14)%interpolate([alphad])
+              Cxyzlmn(2) = Cxyzlmn(2) + db3(1)*rbar 
+              Cxyzlmn(4) = Cxyzlmn(4) + db3(2)*rbar 
+              Cxyzlmn(6) = Cxyzlmn(6) + db3(3)*rbar 
+              
+              ! DC(y,l,n),rudder(alpha,beta)
+              db3 = t%db(15)%interpolate([alphad,betad])
+              Cxyzlmn(2) = Cxyzlmn(2) + db3(1)*delta_r 
+              Cxyzlmn(4) = Cxyzlmn(4) + db3(2)*delta_r 
+              Cxyzlmn(6) = Cxyzlmn(6) + db3(3)*delta_r 
+            end if  
+          else 
+            ! Force and moment coefficients 
+            CL1 =  t%CL0 + t%CL_alpha * alpha
+            CL  = CL1 + t%CL_qbar * qbar + t%CL_alphahat * alpha_hat + t%CL_elevator * delta_e
+            CS  = t%CS_beta * beta + (t%CS_pbar + t%CS_alpha_pbar * alpha) * pbar + t%CS_rbar * rbar + t%CS_aileron * delta_a + t%CS_rudder * delta_r
+            CD  =  t%CD_L0 + t%CD_L1 * CL1 + t%CD_L1_L1 * CL1 **2 + t%CD_CS_CS * CS **2 + (t%CD_qbar + t%CD_alpha_qbar * alpha) * qbar + (t%CD_elevator + t%CD_alpha_elevator * alpha) * delta_e + t%CD_elevator_elevator * delta_e ** 2
+            Cl_roll = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar + t%Cl_aileron * delta_a + t%Cl_rudder * delta_r  ! roll moment
+            Cm      = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar + t%Cm_alphahat * alpha_hat + t%Cm_elevator * delta_e ! pitch moment
+            Cn      = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar + (t%Cn_aileron + t%Cn_alpha_aileron * alpha) * delta_a + t%Cn_rudder * delta_r ! yaw moment         
+          end if                
+
         else if (t%type == 'arrow') then 
           CL = t%CL_alpha * alpha 
           CS = -t%CL_alpha * beta_f 
@@ -1325,19 +1436,31 @@ module vehicle_m
           CD = CD * min(drag_factor, max_CD_factor)
         end if 
 
-        L =   CL * dyn_pressure
-        S =   CS * dyn_pressure
-        D =   CD * dyn_pressure
+        if(t%use_database) then 
+          write(*,*) 'Cxyzlmn'
+          write(*,*) Cxyzlmn
+          write(*,*)
+          FM(1:3) = Cxyzlmn(1:3) 
+          FM(4)   = Cxyzlmn(4) * t%lateral_length 
+          FM(5)   = Cxyzlmn(5) * t%longitudinal_length
+          FM(6)   = Cxyzlmn(6) * t%lateral_length
 
-        ! Table 3.4.4
-        FM(1) = - (ca*(D*cb + S*sb) - L*sa)
-        FM(2) = (S*cb - D*sb)
-        FM(3) = - (sa*(D*cb + S*sb) + L*ca)
+          FM(1:6) = FM(1:6) * dyn_pressure
+        else 
+          L =   CL * dyn_pressure
+          S =   CS * dyn_pressure
+          D =   CD * dyn_pressure
 
-        FM(4) = Cl_roll * dyn_pressure * t%lateral_length
-        FM(5) = Cm       * dyn_pressure * t%longitudinal_length
-        FM(6) = Cn       * dyn_pressure * t%lateral_length
+          ! Table 3.4.4
+          FM(1) = - (ca*(D*cb + S*sb) - L*sa)
+          FM(2) = (S*cb - D*sb)
+          FM(3) = - (sa*(D*cb + S*sb) + L*ca)
 
+          FM(4) = Cl_roll  * dyn_pressure * t%lateral_length
+          FM(5) = Cm       * dyn_pressure * t%longitudinal_length
+          FM(6) = Cn       * dyn_pressure * t%lateral_length          
+        end if 
+  
         ! Add thrust
         thrust = throttle * t%T0 * (density_slugs_per_ft3/t%rho0) ** t%Ta
         FM(1)  = FM(1) + thrust

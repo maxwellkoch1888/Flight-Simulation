@@ -4,6 +4,7 @@ module controller_m
   use linalg_mod
   use connection_m 
   use atmosphere_m 
+  use database_m 
   implicit none 
   
   !==================================================
@@ -65,7 +66,7 @@ module controller_m
         character(len=:), allocatable :: type
         character(100) :: states_filename, rk4_filename, trim_filename, latlong_filename
 
-        logical :: run_physics
+        logical :: run_physics, use_database 
         logical :: save_states, limit_controls = .true. 
         integer :: iunit_states, iunit_rk4, iunit_trim, iunit_latlong
 
@@ -89,6 +90,13 @@ module controller_m
         real :: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
         real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
         real :: Cm_alpha_0, Cm_alpha_s, Cm_min
+
+        ! Aerodynamic database
+        character(len=:), allocatable :: db_path 
+        character(len=200), allocatable, dimension(:) :: db_fn(:)
+        type(db_rect), allocatable :: db(:) 
+        integer :: n_db 
+        real :: speed_brake, le_flap
 
         ! Thrust 
         real :: T0, Ta, thrust_quat(4), rho0
