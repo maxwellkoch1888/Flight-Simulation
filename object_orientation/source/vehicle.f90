@@ -571,25 +571,24 @@ module vehicle_m
           write(t%iunit_trim,*)
           write(t%iunit_trim,*) 'Trim Solution:'
           write(t%iunit_trim,*) '--------------------------'
-          write(t%iunit_trim,*) 'max error = ', error 
-          write(t%iunit_trim, '(A,*(1X,G25.17))') ' angle of attack[deg]     = ', x(1) * 180.0 / pi 
-          write(t%iunit_trim, '(A,*(1X,G25.17))') ' sideslip angle[deg]      = ', x(2) * 180 / pi      
-          write(t%iunit_trim,*)
+          write(t%iunit_trim,*) 'max error = ', error
           write(t%iunit_trim, '(A,*(1X,G25.17))') ' bank angle[deg]          = ', x(7) * 180.0 / pi 
           write(t%iunit_trim, '(A,*(1X,G25.17))') ' elevation angle[deg]     = ', x(8) * 180.0 / pi 
-          write(t%iunit_trim, '(A,*(1X,G25.17))') ' azimuth   angle[deg]     = ', x(9) * 180.0 / pi 
-          write(t%iunit_trim,*)          
+          write(t%iunit_trim, '(A,*(1X,G25.17))') ' angle of attack[deg]     = ', x(1) * 180.0 / pi 
+          write(t%iunit_trim, '(A,*(1X,G25.17))') ' sideslip angle[deg]      = ', x(2) * 180 / pi      
+
+          write(t%iunit_trim, '(A,*(1X,G25.17))') ' p[deg/sec]               = ', t%init_state(4) * 180.0 / pi 
+          write(t%iunit_trim, '(A,*(1X,G25.17))') ' q[deg/sec]               = ', t%init_state(5) * 180.0 / pi 
+          write(t%iunit_trim, '(A,*(1X,G25.17))') ' r[deg/sec]               = ', t%init_state(6) * 180.0 / pi          
+
           write(t%iunit_trim, '(A,*(1X,G25.17))') ' aileron deflection[deg]  = ', x(3) * 180.0 / pi 
           write(t%iunit_trim, '(A,*(1X,G25.17))') ' elevator deflection[deg] = ', x(4) * 180.0 / pi 
           write(t%iunit_trim, '(A,*(1X,G25.17))') ' rudder deflection[deg]   = ', x(5) * 180.0 / pi 
           write(t%iunit_trim, '(A,*(1X,G25.17))') ' throttle[none]           = ', x(6)      
+
+          write(t%iunit_trim, '(A,*(1X,G25.17))') ' azimuth   angle[deg]     = ', x(9) * 180.0 / pi
           write(t%iunit_trim,*)
-          write(t%iunit_trim, '(A,*(1X,G25.17))') ' Latitude[deg]            = ', t%latitude  * 180.0 / pi 
-          write(t%iunit_trim, '(A,*(1X,G25.17))') ' Longitude[deg]           = ', t%longitude * 180.0 / pi 
-          write(t%iunit_trim,*)
-          write(t%iunit_trim, '(A,*(1X,G25.17))') ' p[deg/sec]               = ', t%init_state(4) * 180.0 / pi 
-          write(t%iunit_trim, '(A,*(1X,G25.17))') ' q[deg/sec]               = ', t%init_state(5) * 180.0 / pi 
-          write(t%iunit_trim, '(A,*(1X,G25.17))') ' r[deg/sec]               = ', t%init_state(6) * 180.0 / pi 
+
         end if
         
         t%init_eul(:) = x(7:9)
@@ -1433,25 +1432,6 @@ module vehicle_m
         end if 
 
         if(t%use_database) then 
-          write(*,*) 'alpha      = ', alpha * 180.0 / pi 
-          write(*,*) 'beta       = ', beta * 180.0 / pi 
-          write(*,*) 'pbar       = ', pbar 
-          write(*,*) 'qbar       = ', qbar 
-          write(*,*) 'rbar       = ', rbar 
-          write(*,*) 'delta_a    = ', delta_a * 180.0 / pi 
-          write(*,*) 'delta_e    = ', delta_e * 180.0 / pi 
-          write(*,*) 'delta_r    = ', delta_r * 180.0 / pi 
-          write(*,*) 'speedbrake = ', speedbrake * 180.0 / pi 
-          write(*,*) 'lef        = ', lef * 180.0 / pi 
-          
-          write(*,*) 'Cxyzlmn'
-          write(*,'(F0.10)') Cxyzlmn(1)
-          write(*,'(F0.10)') Cxyzlmn(2)
-          write(*,'(F0.10)') Cxyzlmn(3)
-          write(*,'(F0.10)') Cxyzlmn(4)
-          write(*,'(F0.10)') Cxyzlmn(5)
-          write(*,'(F0.10)') Cxyzlmn(6)
-          write(*,*)
           FM(1:3) = Cxyzlmn(1:3) 
           FM(4)   = Cxyzlmn(4) * t%lateral_length 
           FM(5)   = Cxyzlmn(5) * t%longitudinal_length
