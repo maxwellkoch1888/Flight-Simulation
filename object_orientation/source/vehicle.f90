@@ -288,7 +288,7 @@ module vehicle_m
           t%prev_longitude = t% longitude - sin(t%course_angle) 
           t%atm%prev_xyz = t%init_state(7:9)      
 
-          call get_controller_input(t, 0.0)
+          ! call get_controller_input(t, 0.0)
 
         end if 
         write(*,*) 'Finished vehicle initialization.'
@@ -307,7 +307,7 @@ module vehicle_m
             t%state(7), t%state(8), t%state(9), t%state(10), t%state(11), t%state(12), t%state(13), &
             t%state(14)*180.0/pi, t%state(15)*180.0/pi, t%state(16)*180.0/pi, &
             t%state(17), t%state(18)*180.0/pi, t%state(19)*180.0/pi, &
-            t%state(20)*180/pi, t%state(21)
+            t%state(20)*180/pi, t%state(21), t%state(4)*180.0/pi, t%state(5)*180.0/pi, t%state(6)*180.0/pi
 
       end subroutine 
     !----------------------------------------
@@ -727,7 +727,7 @@ module vehicle_m
         real :: hc, chic, cmd(2)      
         integer :: i, flag 
         
-        allocate(waypoints(3,N))
+        ! allocate(waypoints(3,N))
 
         x = t%state
 
@@ -747,23 +747,23 @@ module vehicle_m
         ! Normalize quaternion
         call quat_norm(t%state(10:13)) 
 
-        ! Path follower
-        out = follow_wpp_fillet(waypoints, n, position, radius)
+        ! ! Path follower
+        ! out = follow_wpp_fillet(waypoints, n, position, radius)
 
-        flag   = int(out(1))
-        r      = out(2:4)
-        q      = out(5:7)
-        c      = out(8:10)
-        rho    = out(11)
+        ! flag   = int(out(1))
+        ! r      = out(2:4)
+        ! q      = out(5:7)
+        ! c      = out(8:10)
+        ! rho    = out(11)
 
-        if (flag == 1) then
-            cmd = straight_line_follow(t, r, q)
-        else
-            cmd = follow_orbit(t, c,rho,lambda)
-        end if
+        ! if (flag == 1) then
+        !     cmd = straight_line_follow(t, r, q)
+        ! else
+        !     cmd = follow_orbit(t, c,rho,lambda)
+        ! end if
 
-        hc   = cmd(1)
-        chic = cmd(2)
+        ! hc   = cmd(1)
+        ! chic = cmd(2)
         
         call get_controller_input(t, time+dt) 
         
@@ -779,7 +779,10 @@ module vehicle_m
         integer :: i 
 
         if(t%controller%running) then 
-          controls_setpoint(:) = controller_update(t%controller, t%state, time) 
+          controls_setpoint(:) = controller_update(t%controller, t, t%state, time) 
+          ! controls_setpoint(:) = dynamic_inversion(t, time, t%state, [0.0, 0.0, 0.0, 350.0])
+          ! write(*,*) 'controls_setpoint = ', controls_setpoint(1:3)*180.0/pi, controls_setpoint(4)
+          ! write(*,*)
           do i = 1,4 
             t%controls(i)%commanded_value = controls_setpoint(i)
             if(t%controls(i)%dynamics_order == 0) t%state(13+i) = max(min(t%controls(i)%commanded_value, t%controls(i)%mag_limit(2)), t%controls(i)%mag_limit(1))
@@ -925,12 +928,12 @@ module vehicle_m
         real :: dstate_dt(21) 
         real :: acceleration(3), angular_accelerations(3), rhs(3), velocity(3), quat_change(4) 
         real :: quat_inv(4) 
-        real :: orientation_effect(3), angular_v_effect(3), gyroscopic_change(3)
-        real :: inertia_effects(3), wind_velocity(3), gyroscopic_effects(3,3) 
+        real :: orientation_effect(3), angular_v_effect(3), hmat_dot(3)
+        real :: pqr_term(3), wind_velocity(3), hmat(3,3) 
         real :: quat_matrix(4,3) 
         real :: hxb_dot, hyb_dot, hzb_dot
         real :: Vxw, Vyw, Vzw, gravity_ft_per_sec2, ac
-        real :: angular_inertia(3,3), angular_inertia_inv(3,3)
+        real :: Imat(3,3), Imat_inv(3,3)
         real :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz 
         real :: hxb, hyb, hzb        
         real, pointer :: u, v, w, p, q, r, e0, ex, ey, ez
@@ -989,39 +992,39 @@ module vehicle_m
         angular_v_effect(2) = p*w - r*u
         angular_v_effect(3) = q*u - p*v
 
-        gyroscopic_effects(1,1) =  0.0
-        gyroscopic_effects(1,2) = -hzb
-        gyroscopic_effects(1,3) =  hyb
+        hmat(1,1) =  0.0
+        hmat(1,2) = -hzb
+        hmat(1,3) =  hyb
 
-        gyroscopic_effects(2,1) =  hzb
-        gyroscopic_effects(2,2) =  0.0
-        gyroscopic_effects(2,3) = -hxb
+        hmat(2,1) =  hzb
+        hmat(2,2) =  0.0
+        hmat(2,3) = -hxb
 
-        gyroscopic_effects(3,1) = -hyb
-        gyroscopic_effects(3,2) =  hxb
-        gyroscopic_effects(3,3) =  0.0
+        hmat(3,1) = -hyb
+        hmat(3,2) =  hxb
+        hmat(3,3) =  0.0
 
-        angular_inertia(1,1) =  Ixx
-        angular_inertia(1,2) = -Ixy
-        angular_inertia(1,3) = -Ixz
+        Imat(1,1) =  Ixx
+        Imat(1,2) = -Ixy
+        Imat(1,3) = -Ixz
 
-        angular_inertia(2,1) = -Ixy
-        angular_inertia(2,2) =  Iyy
-        angular_inertia(2,3) = -Iyz
+        Imat(2,1) = -Ixy
+        Imat(2,2) =  Iyy
+        Imat(2,3) = -Iyz
 
-        angular_inertia(3,1) = -Ixz
-        angular_inertia(3,2) = -Iyz
-        angular_inertia(3,3) =  Izz
+        Imat(3,1) = -Ixz
+        Imat(3,2) = -Iyz
+        Imat(3,3) =  Izz
 
-        angular_inertia_inv = matrix_inv(angular_inertia)
+        Imat_inv = matrix_inv(Imat)
 
-        gyroscopic_change(1) = hxb_dot
-        gyroscopic_change(2) = hyb_dot
-        gyroscopic_change(3) = hzb_dot
+        hmat_dot(1) = hxb_dot
+        hmat_dot(2) = hyb_dot
+        hmat_dot(3) = hzb_dot
 
-        inertia_effects(1) = (Iyy - Izz)*q*r + Iyz*(q**2 -r**2) + Ixz*p*q - Ixy*p*r
-        inertia_effects(2) = (Izz - Ixx)*p*r + Ixz*(r**2 -p**2) + Ixy*q*r - Iyz*p*q
-        inertia_effects(3) = (Ixx - Iyy)*p*q + Ixy*(p**2 -q**2) + Iyz*p*r - Ixz*q*r
+        pqr_term(1) = (Iyy - Izz)*q*r + Iyz*(q**2 -r**2) + Ixz*p*q - Ixy*p*r
+        pqr_term(2) = (Izz - Ixx)*p*r + Ixz*(r**2 -p**2) + Ixy*q*r - Iyz*p*q
+        pqr_term(3) = (Ixx - Iyy)*p*q + Ixy*(p**2 -q**2) + Iyz*p*r - Ixz*q*r
 
         wind_velocity(1) = Vxw
         wind_velocity(2) = Vyw
@@ -1050,13 +1053,13 @@ module vehicle_m
 
         ! Differential equations
         ! Roll, pitch, yaw accel
-        rhs(1) = FM(4) + gyroscopic_effects(1,1)*p + gyroscopic_effects(1,2)*q + gyroscopic_effects(1,3)*r + inertia_effects(1) - gyroscopic_change(1)
-        rhs(2) = FM(5) + gyroscopic_effects(2,1)*p + gyroscopic_effects(2,2)*q + gyroscopic_effects(2,3)*r + inertia_effects(2) - gyroscopic_change(2)
-        rhs(3) = FM(6) + gyroscopic_effects(3,1)*p + gyroscopic_effects(3,2)*q + gyroscopic_effects(3,3)*r + inertia_effects(3) - gyroscopic_change(3)
+        rhs(1) = FM(4) + hmat(1,1)*p + hmat(1,2)*q + hmat(1,3)*r + pqr_term(1) - hmat_dot(1)
+        rhs(2) = FM(5) + hmat(2,1)*p + hmat(2,2)*q + hmat(2,3)*r + pqr_term(2) - hmat_dot(2)
+        rhs(3) = FM(6) + hmat(3,1)*p + hmat(3,2)*q + hmat(3,3)*r + pqr_term(3) - hmat_dot(3)
 
-        angular_accelerations(1) = angular_inertia_inv(1,1)*rhs(1) + angular_inertia_inv(1,2)*rhs(2) + angular_inertia_inv(1,3)*rhs(3)
-        angular_accelerations(2) = angular_inertia_inv(2,1)*rhs(1) + angular_inertia_inv(2,2)*rhs(2) + angular_inertia_inv(2,3)*rhs(3)
-        angular_accelerations(3) = angular_inertia_inv(3,1)*rhs(1) + angular_inertia_inv(3,2)*rhs(2) + angular_inertia_inv(3,3)*rhs(3)
+        angular_accelerations(1) = Imat_inv(1,1)*rhs(1) + Imat_inv(1,2)*rhs(2) + Imat_inv(1,3)*rhs(3)
+        angular_accelerations(2) = Imat_inv(2,1)*rhs(1) + Imat_inv(2,2)*rhs(2) + Imat_inv(2,3)*rhs(3)
+        angular_accelerations(3) = Imat_inv(3,1)*rhs(1) + Imat_inv(3,2)*rhs(2) + Imat_inv(3,3)*rhs(3)
 
         ! Velocity in inertial
         velocity = quat_base_to_dependent(state(1:3), state(10:13)) + wind_velocity
@@ -1135,6 +1138,12 @@ module vehicle_m
           write(t%iunit_rk4,'(A,X,6(ES19.12,1X))')  '    | pseudo aerodynamics (F,M) = ', FM
           write(t%iunit_rk4,'(A,X,21(ES19.12,1X))') '    |           diff_eq results = ', dstate_dt
         end if 
+        ! write(*,*) 'Imat_inv = ', Imat_inv 
+        ! write(*,*) 'hmat = ', hmat 
+        ! write(*,*) 'omega = ', state(4:6)
+        ! write(*,*) 'FM = ', FM(4:6)
+        ! write(*,*) 'pqr_term = ', pqr_term 
+        ! write(*,*) 'pqrdot = ', dstate_dt(4:6)
       end function diff_eq
 
     !----------------------------------------
@@ -1170,6 +1179,7 @@ module vehicle_m
         real :: max_CL_factor, max_CD_factor, max_Cl_roll_factor
         real :: alphad, betad, ded, speedbrake, lef, Cxyzlmn(6) 
         real :: db1(1), db2(2), db3(3), db6(6)
+        real :: C_states(3), C_control(3,3)
 
         local_state = state 
         
@@ -1323,6 +1333,22 @@ module vehicle_m
             Cl_roll = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar + t%Cl_aileron * delta_a + t%Cl_rudder * delta_r  ! roll moment
             Cm      = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar + t%Cm_alphahat * alpha_hat + t%Cm_elevator * delta_e ! pitch moment
             Cn      = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar + (t%Cn_aileron + t%Cn_alpha_aileron * alpha) * delta_a + t%Cn_rudder * delta_r ! yaw moment         
+ 
+            C_states(1) = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar
+            C_states(2) = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar
+            C_states(3) = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar   
+            ! write(*,*) 'pseudo_aero C_states = ', C_states   
+
+            C_control = 0.0 
+            C_control(1,1) = t%Cl_aileron
+            C_control(1,3) = t%Cl_rudder
+            C_control(2,2) = t%Cm_elevator
+            C_control(3,1) = t%Cn_aileron + t%Cn_alpha_aileron * alpha
+            C_control(3,3) = t%Cn_rudder      
+            ! write(*,*) 'pseudo_aero C_control = ', C_control 
+
+            ! write(*,*) 'difference = ', C_states + matmul(C_control, state(14:16)) - [Cl_roll, Cm, Cn]
+
           end if                
 
         else if (t%type == 'arrow') then 
@@ -1449,7 +1475,7 @@ module vehicle_m
 
           FM(4) = Cl_roll  * dyn_pressure * t%lateral_length
           FM(5) = Cm       * dyn_pressure * t%longitudinal_length
-          FM(6) = Cn       * dyn_pressure * t%lateral_length          
+          FM(6) = Cn       * dyn_pressure * t%lateral_length       
         end if 
   
         ! Add thrust

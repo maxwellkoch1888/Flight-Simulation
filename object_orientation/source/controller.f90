@@ -199,16 +199,21 @@ module controller_m
   !==================================================         
     !----------------------------------------
     ! Update a controller
-      function controller_update(t, states, time) result(ans) 
+      function controller_update(t, vehicle, states, time) result(ans) 
         implicit none 
         type(controller_t), intent(inout) :: t 
+        type(vehicle_t) :: vehicle 
         real, intent(in) :: states(21), time 
         real :: ans(4) 
         real :: u, v, w, p, q, r
         real :: eul(3), sp, st, cp, ct 
         real :: Vmag, gamma, g 
         real :: Z, temp, Pressure, rho, a, mu, dyp 
-        real :: pilot_command(3), bank_sp, gamma_sp, V_sp, p_sp, q_sp, r_sp
+        real :: bank_sp, gamma_sp, V_sp, p_sp, q_sp, r_sp, setpoint(4)
+        ! Command bank and climb angles
+        real :: pilot_command(3)
+        ! Command angular rates
+        ! real :: pilot_command(4)
 
         u = states(1)
         v = states(2)
@@ -230,8 +235,9 @@ module controller_m
         dyp = 0.5 * rho * Vmag**2
         g = gravity_English(-states(9))
 
-        ! Command orientation, climb, velocity
         pilot_command = t%pilot_conn%recv([time], time)
+        
+        ! Command bank angle, climb angle, velocity
         bank_sp  = pilot_command(1) * pi / 180.0 
         gamma_sp = pilot_command(2) * pi /180.0 
         V_sp     = pilot_command(3) 
@@ -240,18 +246,24 @@ module controller_m
         q_sp = pid_get_command(t%gamma_q, gamma_sp, gamma, time, dyp)
         r_sp = (g*sp*ct + p*w)/u ! neglect gravity relief
 
-        !12.6.2 example
-        ! p_sp = 0.0
-        ! q_sp = 0.0
-        ! r_sp = 0.0
+        ! Command a roll, pitch, yaw rate
+        ! p_sp = pilot_command(1) * pi / 180.0 
+        ! q_sp = pilot_command(2) * pi / 180.0 
+        ! r_sp = pilot_command(3) * pi / 180.0 
+        ! V_sp = pilot_command(4) 
 
-        ans(1) = pid_get_command(t%p_da,  p_sp, p,    time, dyp)
-        ans(2) = pid_get_command(t%q_de,  q_sp, q,    time, dyp)
-        ans(3) = pid_get_command(t%r_dr,  r_sp, r,    time, dyp)
-        ans(4) = pid_get_command(t%V_tau, V_sp, Vmag, time, dyp)
+        ! PID Controller
+        ! ans(1) = pid_get_command(t%p_da,  p_sp, p,    time, dyp)
+        ! ans(2) = pid_get_command(t%q_de,  q_sp, q,    time, dyp)
+        ! ans(3) = pid_get_command(t%r_dr,  r_sp, r,    time, dyp)
+        ! ans(4) = pid_get_command(t%V_tau, V_sp, Vmag, time, dyp)
 
-        ! 12.6.2 example
-        ! ans(4) = 0.76052985298660364E-01
+        ! Dynamic Inversion Controller
+        setpoint(1) = p_sp
+        setpoint(2) = q_sp 
+        setpoint(3) = r_sp 
+        setpoint(4) = V_sp 
+        ans = dynamic_inversion(vehicle, time, states, setpoint)
 
       end function controller_update
     !----------------------------------------
@@ -283,7 +295,7 @@ module controller_m
           if ((t%prev_ans > t%limit(1)) .and. (t%prev_ans < t%limit(2))) then ! integrator clamping
             t%error_int = t%error_int + 0.5 * (t%prev_error + t%error) * dt 
           else 
-            write(*,*) 'PID controller saturated at ', t%prev_ans * t%display_units, '. Using integrator clamping...' 
+            ! write(*,*) 'PID controller saturated at ', t%prev_ans * t%display_units, '. Using integrator clamping...' 
           end if 
           
           ! Derivative error
@@ -302,14 +314,14 @@ module controller_m
       end function pid_get_command
     !----------------------------------------
     ! Dynamic Inversion Controller
-      function dynamic_inversion(t, time, state) result(u)
+      function dynamic_inversion(t, time, state, sp) result(u)
         implicit none 
         type(vehicle_t) :: t
         type(pid_t) :: tau_controller
-        real, intent(in) :: time, state(21)
+        real, intent(in) :: time, state(21), sp(4)
         real :: u(4)
         real :: pilot_command(3)
-        real :: omega(3), omegadot_des(3), Kp(3,3)
+        real :: omega(3), omegadot_des(3), Kp(3,3), Ki(3,3)
         real :: Vmag, alpha, beta, dyp
         real :: geometric_altitude_ft, geopotential_altitude_ft
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
@@ -319,29 +331,31 @@ module controller_m
         real :: sign_a, sa, Cm_s, sigma_m, pos, neg 
         real :: angular_rates(3), pbar, qbar, rbar, p, q, r 
         real :: dyn_pressure_mat(3,3), C_states(3), C_control(3,3), pqr_term(3)
-        real :: f(3), G(3,3), G_inv(3,3), delta(3), V_sp
+        real :: f(3), G(3,3), G_inv(3,3), delta(3), V_sp, error(3)
 
         omega = state(4:6)
 
         ! Define desired angular acceleration with proportional controller
         Kp = 0.0
-        Kp(1,1) = 2.0
-        Kp(2,2) = 2.0
-        Kp(3,3) = 2.0
-        omegadot_des = matmul(-Kp, omega); ! desired is zero     
+        Kp(1,1) = 5.0
+        Kp(2,2) = 5.0
+        Kp(3,3) = 5.0
+        Ki = 0.0 
+        Ki(1,1) = 1.0
+        Ki(2,2) = 1.0
+        Ki(3,3) = 1.0        
 
-        ! ! Define reference signal
-        ! omega_ref = pi/180 * [5*sin(2*t); -2*sin(t); sin(t)]; 
-        ! omega_ref_dot = pi/180 * [10*cos(2*t); -2*cos(t); cos(t)]; 
-        ! error = omega - omega_ref;
+        error = omega - sp(1:3)
+        ! int_error = state(13:15) % integral error
+
+        omegadot_des = matmul(-Kp, error); ! desired is zero     
 
         ! ! Define error
-        ! int_error = state(13:15); % integral error
 
         ! ! Define desired angular acceleration with proportional controller
-        ! Kp = diag([4,2,4]);
-        ! Ki = diag([1,1,1]); 
-        ! omegadot_des = -Kp*error - Ki*int_error + omega_ref_dot;         
+        ! Kp = diag([4,2,4])
+        ! Ki = diag([1,1,1])
+        ! omegadot_des = -Kp*error - Ki*int_error + sp(1:3)       
 
         ! Aircraft model
           ! Velocity and angles
@@ -399,13 +413,10 @@ module controller_m
           p = state(4)
           q = state(5)
           r = state(6)
-          angular_rates(1) = 1 / (2*Vmag) * state(4) * t%lateral_length
-          angular_rates(2) = 1 / (2*Vmag) * state(5) * t%longitudinal_length
-          angular_rates(3) = 1 / (2*Vmag) * state(6) * t%lateral_length
 
-          pbar = angular_rates(1)
-          qbar = angular_rates(2)
-          rbar = angular_rates(3)
+          pbar = 1 / (2*Vmag) * state(4) * t%lateral_length
+          qbar = 1 / (2*Vmag) * state(5) * t%longitudinal_length
+          rbar = 1 / (2*Vmag) * state(6) * t%lateral_length
 
           ! Dynamic Pressure
           dyn_pressure_mat = 0.0
@@ -422,6 +433,7 @@ module controller_m
           C_states(1) = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar
           C_states(2) = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar
           C_states(3) = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar
+          ! write(*,*) 'controller C_states = ', C_states 
 
           C_control = 0.0 
           C_control(1,1) = t%Cl_aileron
@@ -429,7 +441,8 @@ module controller_m
           C_control(2,2) = t%Cm_elevator
           C_control(3,1) = t%Cn_aileron + t%Cn_alpha_aileron * alpha
           C_control(3,3) = t%Cn_rudder
-
+          ! write(*,*) 'controller C_control = ', C_control 
+          
           ! Compressibility model
           ! if (t%compressibility) then 
           !   CM1      = 2.13/ (t%sweep + 0.15)**2
@@ -475,6 +488,7 @@ module controller_m
 
           ! Stall model 
           if (t%stall) then 
+            write(*,*) 'using stall '
             sign_a  = sign(1.0,alpha)
             sa = sin(alpha)
 
@@ -490,20 +504,45 @@ module controller_m
 
         ! f(x)
         f = matmul(Imat_inv, matmul(dyn_pressure_mat,C_states) + pqr_term + matmul(hmat,omega))
+
         ! G(x)
         G = matmul(Imat_inv, matmul(dyn_pressure_mat, C_control))      
         G_inv = matrix_inv(G)
 
         ! Dynamic Inversion
+        ! write(*,*) 
+        ! write(*,*) 'controller Imat_inv = ', Imat_inv 
+        ! write(*,*) 'controller hmat = ', hmat 
+        ! write(*,*) 'controller omega = ', state(4:6)
+        ! write(*,*) 'FM = ', matmul(dyn_pressure_mat, C_states + matmul(C_control, [state(14), state(15), state(16)]))
+
+        ! write(*,*) 'controller pqr_term = ', pqr_term         
+        ! write(*,*) 'controller pqrdot = ', f + matmul(G,[state(14), state(15), state(16)])
+        ! write(*,*) 
+        ! write(*,*) 'G_inv'
+        ! write(*,*) '-----------------------------------------------------------'
+        ! write(*,*) '[',G_inv(1,1),',',G_inv(1,2),',',G_inv(1,3),';',G_inv(2,1),',',G_inv(2,2),',',G_inv(2,3),';',G_inv(3,1),',',G_inv(3,2),',',G_inv(3,3),']'
+        ! write(*,*) 
+        ! write(*,*) 'f'
+        ! write(*,*) '-----------------------------------------------------------'
+        ! write(*,*) '[',f(1),';',f(2),';',f(3),']'
+        ! write(*,*) 
+        ! write(*,*) 'omegadot_des'
+        ! write(*,*) '-----------------------------------------------------------'
+        ! write(*,*) '[',omegadot_des(1),';',omegadot_des(2),';',omegadot_des(3),']'              
+        ! write(*,*) 
+
         delta = matmul(G_inv, (omegadot_des - f))
         
         ! PID Terms
         dyp = 0.5 * density_slugs_per_ft3 * Vmag**2
-        V_sp = pilot_command(3) 
+        V_sp = sp(4)
         
         ! Control Vector 
         u(1:3) = delta;
-        u(4) = pid_get_command(tau_controller, V_sp, Vmag, time, dyp) ! PID for throttle
+        u(4) = pid_get_command(t%controller%V_tau, V_sp, Vmag, time, dyp) ! PID for throttle
+        ! write(*,*) 'control = ', u(1:3)*180.0/pi, u(4)
+        
       end function dynamic_inversion
     !----------------------------------------
       

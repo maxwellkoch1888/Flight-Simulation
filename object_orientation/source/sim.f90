@@ -20,11 +20,11 @@ module sim_m
             logical :: save_states, rk4_verbose
 
             ! Begin simulation
-            ! write(*,*) 'Initializing Simulation...'            
+            write(*,*) 'Initializing Simulation...'            
             call jsonx_load(filename, j_main)              
 
             ! Initialize vehicles
-            ! write(*,*) 'Initializing vehicles...'
+            write(*,*) 'Initializing vehicles...'
             call jsonx_get(j_main, 'vehicles', j_vehicles)
             num_vehicles = json_value_count(j_vehicles)
             allocate(vehicles(num_vehicles))
@@ -41,7 +41,7 @@ module sim_m
             if (geographic_model == 'ellipse') geographic_model_ID = 2
 
             ! Initialize atmosphere
-            ! write(*,*) 'Reading Atmospheric JSON Object...'
+            write(*,*) 'Reading Atmospheric JSON Object...'
             call jsonx_get(j_main, 'atmosphere', j_atmosphere)
 
             ! Initialize vehicles
@@ -117,7 +117,7 @@ module sim_m
 
                 time = time + dt
                 integrated_time = integrated_time + dt
-                ! write(*,*) time, dt
+                write(*,*) time, dt
                 
                 do i=1,num_vehicles
                     if(vehicles(i)%run_physics) then 
@@ -143,9 +143,9 @@ module sim_m
             time_error = actual_time - integrated_time
 
             ! WRITE OUT THE TIME DIFFERENCES
-            ! write(*,*) "Actual Time Elapsed", actual_time
-            ! write(*,*) "Integrated Time", integrated_time
-            ! write(*,*) "Time Error", time_error
+            write(*,*) "Actual Time Elapsed", actual_time
+            write(*,*) "Integrated Time", integrated_time
+            write(*,*) "Time Error", time_error
 
             do i=1,num_vehicles
                 close(vehicles(i)%iunit_states)

@@ -1,7 +1,7 @@
 {
     "simulation" : {
         "time_step[s]" : 0.01,
-        "end_time[s]" : 600.0,
+        "end_time[s]" : 100.0,
         "rk4_verbose" : false,
         "save_states" : true,
         "save_lat_long" : false, 
@@ -9,12 +9,12 @@
     },
     "atmosphere" : {
         "constant_wind[ft/s]" : [0.0, 0.0, 0.0], 
-        "turbulence" : {
-            "model": "none", 
+        "_turbulence" : {
+            "model": "dryden_beal", 
             "wingspan[ft]" : 30.0, 
             "hstab_distance[ft]" : 15.0, 
             "vstab_distance[ft]" : 15.0, 
-            "intensity" : "severe", 
+            "intensity" : "light", 
             "repeatable" : false, 
             "time_history_points" : 20,
             "_sample" : {
@@ -51,7 +51,7 @@
                     "area[ft^2]" : 300.0,
                     "longitudinal_length[ft]" : 11.32,
                     "lateral_length[ft]" : 30.0,
-                    "location[ft]" : [-1.0, 0.0, 0.0]
+                    "location[ft]" : [0.0, 0.0, 0.0]
                 },
                 "stall" : {
                     "include_stall" : false,
@@ -176,7 +176,7 @@
                     "damping_ratio" : 0.7 
                 },
                 "throttle" : {
-                    "dynamics_order" : 2, 
+                    "dynamics_order" : 0, 
                     "magnitude_limits" : [0.0, 1.0], 
                     "rate_limits" : [-1.0, 1.0], 
                     "acceleration_limits" : [-1.0, 1.0], 
