@@ -47,7 +47,8 @@ module vehicle_m
                 'xf[ft]', 'yf[ft]', 'zf[ft]', &
                 'e0', 'ex', 'ey', 'ez', &
                 'aileron[deg]', 'elevator[deg]', 'rudder[deg]', 'throttle', &
-                'daileron[deg]', 'delevator[deg]', 'drudder[deg]', 'dthrottle'
+                'daileron[deg]', 'delevator[deg]', 'drudder[deg]', 'dthrottle', &
+                'p_integral_error', 'q_integral_error', 'r_integral_error'
             write(*,*) '- saving states to ', t%states_filename
           end if 
 
@@ -212,6 +213,9 @@ module vehicle_m
               t%controls(i)%accel_limit = t%controls(i)%accel_limit * pi / 180.0
             end do 
 
+            ! Initialize integral error 
+            t%zdot = 0.0 
+
           end if 
 
           ! Stall conditions
@@ -307,7 +311,7 @@ module vehicle_m
             t%state(7), t%state(8), t%state(9), t%state(10), t%state(11), t%state(12), t%state(13), &
             t%state(14)*180.0/pi, t%state(15)*180.0/pi, t%state(16)*180.0/pi, &
             t%state(17), t%state(18)*180.0/pi, t%state(19)*180.0/pi, &
-            t%state(20)*180/pi, t%state(21), t%state(4)*180.0/pi, t%state(5)*180.0/pi, t%state(6)*180.0/pi
+            t%state(20)*180/pi, t%state(21), t%state(22)*180.0/pi, t%state(23)*180.0/pi, t%state(24)*180.0/pi
 
       end subroutine 
     !----------------------------------------
@@ -361,6 +365,8 @@ module vehicle_m
           t%state(14) = t%state(14) * pi / 180.0
           t%state(15) = t%state(15) * pi / 180.0
           t%state(16) = t%state(16) * pi / 180.0
+
+          t%state(18:24) = 0.0 
 
           t%controls(1)%commanded_value = t%state(14)
           t%controls(2)%commanded_value = t%state(15)
@@ -593,6 +599,7 @@ module vehicle_m
         
         t%init_eul(:) = x(7:9)
         t%init_state(14:17) = x(3:6)
+        t%init_state(18:24) = 0.0 
 
         t%controls(1)%commanded_value = t%state(14)
         t%controls(2)%commanded_value = t%state(15)
@@ -617,7 +624,7 @@ module vehicle_m
         real :: ca, cb, sa, sb, cp, sp, ct, st
         real :: u, v, w, euler(3)
         real :: angular_rates(3)
-        real :: ans(n_free), temp_state(21), dummy_res(21)
+        real :: ans(n_free), temp_state(24), dummy_res(24)
 
         ans = 0.0 
 
@@ -706,7 +713,7 @@ module vehicle_m
 
       function calc_relative_climb_angle(y) result(ans)
         implicit none 
-        real :: y(21), ans 
+        real :: y(24), ans 
         real :: xyzdot(3), Vmag 
 
         xyzdot = quat_dependent_to_base(y(1:3), y(10:13))
@@ -719,7 +726,7 @@ module vehicle_m
         implicit none 
         type(vehicle_t) :: t 
         real, intent(in) :: time, dt 
-        real :: x1(21), x(21), out(11)
+        real :: x1(24), x(24), out(11)
         real :: r(3), q(3), c(3), position(3)
         integer :: N
         real, allocatable :: waypoints(:,:)
@@ -873,8 +880,8 @@ module vehicle_m
       function rk4(t, t0, x1, delta_t) result(state)
         implicit none
         type(vehicle_t) :: t
-        real, intent(in) :: t0, delta_t, x1(21)
-        real, dimension(21) :: state, k1, k2, k3, k4
+        real, intent(in) :: t0, delta_t, x1(24)
+        real, dimension(24) :: state, k1, k2, k3, k4
 
         if(t%rk4_verbose) then 
           write(t%iunit_rk4,*)
@@ -923,9 +930,9 @@ module vehicle_m
         implicit none 
         type(vehicle_t), intent(inout) :: t
         real :: time
-        real, target :: state(21) 
+        real, target :: state(24) 
         real :: FM(6) 
-        real :: dstate_dt(21) 
+        real :: dstate_dt(24) 
         real :: acceleration(3), angular_accelerations(3), rhs(3), velocity(3), quat_change(4) 
         real :: quat_inv(4) 
         real :: orientation_effect(3), angular_v_effect(3), hmat_dot(3)
@@ -944,7 +951,7 @@ module vehicle_m
 
         if (t%rk4_verbose) then 
           write(t%iunit_rk4,'(A,X,ES19.12,1X)') '    |                  time [s] = ', time 
-          write(t%iunit_rk4,'(A,X,21(ES19.12,1X))') '    |    state vector coming in = ', state 
+          write(t%iunit_rk4,'(A,X,24(ES19.12,1X))') '    |    state vector coming in = ', state 
         end if 
         ! Unpack states
         u  => state(1)
@@ -1134,16 +1141,14 @@ module vehicle_m
 
           end do 
 
+          ! Integral error
+          dstate_dt(22:24) = t%zdot 
+
         if (t%rk4_verbose) then 
           write(t%iunit_rk4,'(A,X,6(ES19.12,1X))')  '    | pseudo aerodynamics (F,M) = ', FM
-          write(t%iunit_rk4,'(A,X,21(ES19.12,1X))') '    |           diff_eq results = ', dstate_dt
+          write(t%iunit_rk4,'(A,X,24(ES19.12,1X))') '    |           diff_eq results = ', dstate_dt
         end if 
-        ! write(*,*) 'Imat_inv = ', Imat_inv 
-        ! write(*,*) 'hmat = ', hmat 
-        ! write(*,*) 'omega = ', state(4:6)
-        ! write(*,*) 'FM = ', FM(4:6)
-        ! write(*,*) 'pqr_term = ', pqr_term 
-        ! write(*,*) 'pqrdot = ', dstate_dt(4:6)
+
       end function diff_eq
 
     !----------------------------------------
@@ -1155,8 +1160,8 @@ module vehicle_m
       function pseudo_aero(t, state) result(FM)
         implicit none
         type(vehicle_t) :: t
-        real, intent(in) :: state(21)
-        real :: local_state(21) 
+        real, intent(in) :: state(24)
+        real :: local_state(24) 
         real :: FM(6) 
         real :: Re, geometric_altitude_ft, geopotential_altitude_ft
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3

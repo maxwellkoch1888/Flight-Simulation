@@ -110,14 +110,15 @@ module controller_m
         real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
         
         ! Initialization constants
-        real :: init_airspeed, init_alt, init_state(21)
+        real :: init_airspeed, init_alt, init_state(24)
         real, allocatable :: init_eul(:) ! has to be allocatable because will be read from json object
 
         ! States/controls
-        real :: state(21)
+        real :: state(24)
         type(control_t) :: controls(4)
         type(controller_t) :: controller 
         type(atmosphere_t) :: atm
+        real :: zdot(3) ! Integral error
 
         type(trim_settings_t) :: trim
       end type vehicle_t
@@ -203,7 +204,7 @@ module controller_m
         implicit none 
         type(controller_t), intent(inout) :: t 
         type(vehicle_t) :: vehicle 
-        real, intent(in) :: states(21), time 
+        real, intent(in) :: states(24), time 
         real :: ans(4) 
         real :: u, v, w, p, q, r
         real :: eul(3), sp, st, cp, ct 
@@ -267,7 +268,7 @@ module controller_m
 
       end function controller_update
     !----------------------------------------
-    ! Get commanded values for a PID controller
+    ! Get commanded values for a controller
       function pid_get_command(t, commanded, actual, time, dyp) result(ans) 
         implicit none 
         type(pid_t), intent(inout) :: t 
@@ -318,10 +319,11 @@ module controller_m
         implicit none 
         type(vehicle_t) :: t
         type(pid_t) :: tau_controller
-        real, intent(in) :: time, state(21), sp(4)
+        real, intent(in) :: time, state(24), sp(4)
         real :: u(4)
         real :: pilot_command(3)
-        real :: omega(3), omegadot_des(3), Kp(3,3), Ki(3,3)
+        real :: omega(3), omegadot_des(3), omega_ref(3), omega_ref_dot(3)
+        real :: Kp(3,3), Ki(3,3)
         real :: Vmag, alpha, beta, dyp
         real :: geometric_altitude_ft, geopotential_altitude_ft
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
@@ -331,31 +333,45 @@ module controller_m
         real :: sign_a, sa, Cm_s, sigma_m, pos, neg 
         real :: angular_rates(3), pbar, qbar, rbar, p, q, r 
         real :: dyn_pressure_mat(3,3), C_states(3), C_control(3,3), pqr_term(3)
-        real :: f(3), G(3,3), G_inv(3,3), delta(3), V_sp, error(3)
+        real :: f(3), G(3,3), G_inv(3,3), delta(3), V_sp
+        real :: error(3), int_error(3)
 
         omega = state(4:6)
 
+        ! ! Define desired angular acceleration with proportional controller
+        ! Kp = 0.0
+        ! Kp(1,1) = 5.0
+        ! Kp(2,2) = 5.0
+        ! Kp(3,3) = 5.0
+        ! Ki = 0.0 
+        ! Ki(1,1) = 1.0
+        ! Ki(2,2) = 1.0
+        ! Ki(3,3) = 1.0        
+
+        ! error = omega - sp(1:3)
+        ! int_error = state(22:24)
+
+        ! omegadot_des = matmul(-Kp, error); ! desired is zero     
+
+        ! Define reference signal
+        omega_ref = pi/180.0 * [5.0*sin(2.0*time), -2.0*sin(time), sin(time)]
+        omega_ref_dot = pi/180.0 * [10.0*cos(2.0*time), -2.0*cos(time), cos(time)] 
+        error = omega - omega_ref
+
+        ! Define error
+        int_error = state(22:24) ! integral error
+
         ! Define desired angular acceleration with proportional controller
-        Kp = 0.0
-        Kp(1,1) = 5.0
-        Kp(2,2) = 5.0
-        Kp(3,3) = 5.0
-        Ki = 0.0 
+        Kp = 0.0 
+        Ki = 0.0
+        Kp(1,1) = 4.0
+        Kp(2,2) = 2.0
+        Kp(3,3) = 4.0 
         Ki(1,1) = 1.0
         Ki(2,2) = 1.0
-        Ki(3,3) = 1.0        
+        Ki(3,3) = 1.0
 
-        error = omega - sp(1:3)
-        ! int_error = state(13:15) % integral error
-
-        omegadot_des = matmul(-Kp, error); ! desired is zero     
-
-        ! ! Define error
-
-        ! ! Define desired angular acceleration with proportional controller
-        ! Kp = diag([4,2,4])
-        ! Ki = diag([1,1,1])
-        ! omegadot_des = -Kp*error - Ki*int_error + sp(1:3)       
+        omegadot_des = -matmul(Kp, error) - matmul(Ki, int_error) + omega_ref_dot  
 
         ! Aircraft model
           ! Velocity and angles
@@ -420,9 +436,10 @@ module controller_m
 
           ! Dynamic Pressure
           dyn_pressure_mat = 0.0
-          dyn_pressure_mat(1,1) = 0.5 * density_slugs_per_ft3 * Vmag **2 * t%planform_area * t%lateral_length
-          dyn_pressure_mat(2,2) = 0.5 * density_slugs_per_ft3 * Vmag **2 * t%planform_area * t%longitudinal_length
-          dyn_pressure_mat(3,3) = 0.5 * density_slugs_per_ft3 * Vmag **2 * t%planform_area * t%lateral_length
+          dyp = 0.5 * density_slugs_per_ft3 * Vmag**2
+          dyn_pressure_mat(1,1) = dyp * t%planform_area * t%lateral_length
+          dyn_pressure_mat(2,2) = dyp * t%planform_area * t%longitudinal_length
+          dyn_pressure_mat(3,3) = dyp * t%planform_area * t%lateral_length
 
           ! pqr_term
           pqr_term(1) = (Iyy - Izz)*q*r + Iyz*(q**2 -r**2) + Ixz*p*q - Ixy*p*r
@@ -433,7 +450,6 @@ module controller_m
           C_states(1) = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar
           C_states(2) = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar
           C_states(3) = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar
-          ! write(*,*) 'controller C_states = ', C_states 
 
           C_control = 0.0 
           C_control(1,1) = t%Cl_aileron
@@ -510,39 +526,15 @@ module controller_m
         G_inv = matrix_inv(G)
 
         ! Dynamic Inversion
-        ! write(*,*) 
-        ! write(*,*) 'controller Imat_inv = ', Imat_inv 
-        ! write(*,*) 'controller hmat = ', hmat 
-        ! write(*,*) 'controller omega = ', state(4:6)
-        ! write(*,*) 'FM = ', matmul(dyn_pressure_mat, C_states + matmul(C_control, [state(14), state(15), state(16)]))
-
-        ! write(*,*) 'controller pqr_term = ', pqr_term         
-        ! write(*,*) 'controller pqrdot = ', f + matmul(G,[state(14), state(15), state(16)])
-        ! write(*,*) 
-        ! write(*,*) 'G_inv'
-        ! write(*,*) '-----------------------------------------------------------'
-        ! write(*,*) '[',G_inv(1,1),',',G_inv(1,2),',',G_inv(1,3),';',G_inv(2,1),',',G_inv(2,2),',',G_inv(2,3),';',G_inv(3,1),',',G_inv(3,2),',',G_inv(3,3),']'
-        ! write(*,*) 
-        ! write(*,*) 'f'
-        ! write(*,*) '-----------------------------------------------------------'
-        ! write(*,*) '[',f(1),';',f(2),';',f(3),']'
-        ! write(*,*) 
-        ! write(*,*) 'omegadot_des'
-        ! write(*,*) '-----------------------------------------------------------'
-        ! write(*,*) '[',omegadot_des(1),';',omegadot_des(2),';',omegadot_des(3),']'              
-        ! write(*,*) 
-
         delta = matmul(G_inv, (omegadot_des - f))
-        
-        ! PID Terms
-        dyp = 0.5 * density_slugs_per_ft3 * Vmag**2
-        V_sp = sp(4)
-        
+                
         ! Control Vector 
         u(1:3) = delta;
-        u(4) = pid_get_command(t%controller%V_tau, V_sp, Vmag, time, dyp) ! PID for throttle
-        ! write(*,*) 'control = ', u(1:3)*180.0/pi, u(4)
-        
+        u(4) = pid_get_command(t%controller%V_tau, sp(4), Vmag, time, dyp) ! PID for throttle
+
+        ! Update integral error
+        t%zdot = error
+
       end function dynamic_inversion
     !----------------------------------------
       
