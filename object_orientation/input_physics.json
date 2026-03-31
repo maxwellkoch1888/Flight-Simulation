@@ -1,16 +1,16 @@
 {
     "simulation" : {
-        "time_step[s]" : 0.01,
-        "end_time[s]" : 0.01,
+        "time_step[s]" : 0.0015,
+        "end_time[s]" : 0.0045,
         "rk4_verbose" : false,
         "save_states" : true,
         "save_lat_long" : false, 
-        "geographic_model" : "none"
+        "geographic_model" : "sphere"
     },
     "atmosphere" : {
         "constant_wind[ft/s]" : [0.0, 0.0, 0.0], 
         "_turbulence" : {
-            "model": "dryden_beal", 
+            "model": "none", 
             "wingspan[ft]" : 30.0, 
             "hstab_distance[ft]" : 15.0, 
             "vstab_distance[ft]" : 15.0, 
@@ -29,7 +29,7 @@
     "vehicles" : {
         "F16" : {
             "type" : "aircraft",
-            "run_physics" : false,
+            "run_physics" : true,
             "mass" : {
                 "weight[lbf]" : 20500.0,
                 "Ixx[slug-ft^2]" : 9496.0,
@@ -151,7 +151,8 @@
                 }
             },
             "control_effectors" : {
-                "aileron" : {
+                "1" : {
+                    "name" : "aileron",
                     "dynamics_order" : 2, 
                     "magnitude_limits[deg]" : [-21.5, 21.5], 
                     "rate_limits[deg/s]" : [-80.0, 80.0], 
@@ -160,7 +161,8 @@
                     "natural_frequency[rad/s]" : 20.0, 
                     "damping_ratio" : 0.7 
                 },
-                "elevator" : {
+                "2" : {
+                    "name" : "elevator",
                     "dynamics_order" : 2, 
                     "magnitude_limits[deg]" : [-25.0, 25.0], 
                     "rate_limits[deg/s]" : [-60.0, 60.0], 
@@ -169,7 +171,8 @@
                     "natural_frequency[rad/s]" : 20.0, 
                     "damping_ratio" : 0.7 
                 },
-                "rudder" : {
+                "3" : {
+                    "name" : "rudder",
                     "dynamics_order" : 2, 
                     "magnitude_limits[deg]" : [-30.0, 30.0], 
                     "rate_limits[deg/s]" : [-120.0, 120.0], 
@@ -178,7 +181,8 @@
                     "natural_frequency[rad/s]" : 20.0, 
                     "damping_ratio" : 0.7 
                 },
-                "engine" : {
+                "4" : {
+                    "name" : "engine",
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0.0, 1.0], 
                     "rate_limits" : [-1.0, 1.0], 
@@ -188,7 +192,7 @@
                     "damping_ratio" : 1.0
                 }                                                
             },
-            "controller": {
+            "_controller": {
                 "connections" : {
                     "receive_pilot_commands": {
                         "type": "receive", 
@@ -254,8 +258,8 @@
                 }
             },
             "initial" : {
-                "airspeed[ft/s]" : 350.0,
-                "altitude[ft]" : 1000.0,
+                "airspeed[ft/s]" : 6582.91440687328,
+                "altitude[ft]" : 60000.0,
                 "latitude[deg]" : 0.0,
                 "longitude[deg]" : 0.0,
                 "Euler_angles[deg]" : [5.0, 0.0, 0.0],
@@ -285,7 +289,7 @@
         },
         "quadrotor" : {
             "type" : "quadrotor", 
-            "run_physics" : true, 
+            "run_physics" : false, 
             "mass" : {
                 "weight[lbf]" : 5.0, 
                 "Ixx[slug-ft^2]" : 0.0231, 
@@ -383,10 +387,10 @@
                 "altitude[ft]" : 10000.0, 
                 "latitude[deg]" : 0.0, 
                 "longitude[deg]" : 0.0, 
-                "Euler_angles[deg]" : [0.0, 5.0, 0.0], 
+                "Euler_angles[deg]" : [0.0, -5.0, 0.0], 
                 "type" : "state" ,
                 "state" : {
-                    "angle_of_attack[deg]" : 5.0, 
+                    "angle_of_attack[deg]" : -5.0, 
                     "sideslip_angle[deg]" : 0.0, 
                     "p[deg/s]" : 0.0, 
                     "q[deg/s]" : 0.0, 

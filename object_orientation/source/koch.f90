@@ -44,12 +44,28 @@ module koch_m
         vec_quat = (/0.0, base_vec(1), base_vec(2), base_vec(3)/)
         quat_conj = (/quat(1), -quat(2), -quat(3), -quat(4)/)
 
-        temp_quat = quat_mult(quat, vec_quat)
-        quat_sol  = quat_mult(temp_quat, quat_conj)
+        temp_quat = quat_mult(quat_conj, vec_quat)
+        quat_sol  = quat_mult(temp_quat, quat)
 
         dependent_vec = quat_sol(2:4)
 
     end function quat_base_to_dependent
+    
+    ! function quat_base_to_dependent(vec, quat) result(ans) ! Hunsaker function
+    !     implicit none
+    !     real, intent(in) :: vec(3), quat(4)
+    !     real :: t(4), ans(3)
+
+    !     t(1) = -vec(1)*quat(2) - vec(2)*quat(3) - vec(3)*quat(4)
+    !     t(2) =  vec(1)*quat(1) + vec(2)*quat(4) - vec(3)*quat(3)
+    !     t(3) = -vec(1)*quat(4) + vec(2)*quat(1) + vec(3)*quat(2)
+    !     t(4) =  vec(1)*quat(3) - vec(2)*quat(2) + vec(3)*quat(1)
+
+    !     ans(1) = quat(1)*t(2) - quat(2)*t(1) - quat(3)*t(4) + quat(4)*t(3)
+    !     ans(2) = quat(1)*t(3) + quat(2)*t(4) - quat(3)*t(1) - quat(4)*t(2)
+    !     ans(3) = quat(1)*t(4) - quat(2)*t(3) + quat(3)*t(2) - quat(4)*t(1)
+
+    ! end function quat_base_to_dependent    
 !=========================
 ! Convert a quaternion from a dependent coordinate to a base coordinate
     function quat_dependent_to_base(dependent_vec, quat) result(base_vec)
