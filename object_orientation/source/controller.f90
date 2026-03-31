@@ -50,12 +50,30 @@ module controller_m
     !----------------------------------------
     ! Control type
       type control_t 
+        character(len=:), allocatable :: name, units 
         integer :: dynamics_order, state_ID 
         real :: commanded_value
         real, allocatable :: mag_limit(:), rate_limit(:), accel_limit(:) 
         real :: time_constant, natural_frequency, damping_ratio
+        real :: display_units = 1.0 
       end type control_t       
-      
+    !----------------------------------------              
+    ! Propulsion type 
+      type propulsion_t 
+          character(len=:), allocatable :: name, type, units 
+          real, allocatable :: location(:), orientation_eul(:) 
+          real :: orientation_quat(4) 
+          integer :: control_ID ! ID of controls array associated with this propulsion element 
+
+          ! For type T=f(V) 
+          real, allocatable :: T_coeffs(:) 
+          real :: Ta 
+
+          ! For type propeller_polynomial 
+          real :: diameter, Ixx 
+          integer :: rotation_delta 
+          real, allocatable :: CT_J(:), CP_J(:), CNa_J(:), Cnna_J(:) 
+      end type propulsion_t      
     !----------------------------------------        
     ! Vehicle type
       
@@ -68,6 +86,7 @@ module controller_m
 
         logical :: run_physics, use_database 
         logical :: save_states, limit_controls = .true. 
+        integer :: aileron_ID, elevator_ID, rudder_ID 
         integer :: iunit_states, iunit_rk4, iunit_trim, iunit_latlong
 
         ! Location 
@@ -98,9 +117,9 @@ module controller_m
         integer :: n_db 
         real :: speed_brake, le_flap
 
-        ! Thrust 
-        real :: T0, Ta, thrust_quat(4), rho0
-        real, allocatable :: thrust_location(:), thrust_orientation(:)
+        ! Propulsion
+        integer :: num_props 
+        type(propulsion_t), allocatable :: props(:)  
 
         ! Debugging
         logical :: compressibility = .false., rk4_verbose, print_states, test_compressibility

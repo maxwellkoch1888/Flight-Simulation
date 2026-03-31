@@ -5,6 +5,7 @@ module vehicle_m
   use linalg_mod
   use controller_m 
   use database_m
+  use propulsion_m 
 
   implicit none
   real :: rho0
@@ -22,7 +23,7 @@ module vehicle_m
       subroutine vehicle_init(t, j_vehicle_input)
         implicit none 
         type(vehicle_t), intent(inout) :: t
-        type(json_value), pointer :: j_vehicle_input, j_controller
+        type(json_value), pointer :: j_vehicle_input, j_controller, j_control, j_control_temp, j_propulsion, j_temp 
         character(len=:), allocatable :: init_type 
         real :: geopotential_altitude_ft,temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
         integer :: i 
@@ -163,44 +164,18 @@ module vehicle_m
             end if 
 
             ! Control Effectors
-            write(*,*) '  -controls'
-            t%controls(1)%state_ID = 14
-            t%controls(2)%state_ID = 15
-            t%controls(3)%state_ID = 16
-            t%controls(4)%state_ID = 17                              
+            write(*,*) '  -control effectors'
+            call jsonx_get(t%j_vehicle, 'control_effectors', j_control) 
+            call jsonx_get(j_control, '1', j_control_temp)
+            call init_control(t, j_control_temp, 1) 
+            call jsonx_get(j_control, '2', j_control_temp)
+            call init_control(t, j_control_temp, 2) 
+            call jsonx_get(j_control, '3', j_control_temp)
+            call init_control(t, j_control_temp, 3) 
+            call jsonx_get(j_control, '4', j_control_temp)
+            call init_control(t, j_control_temp, 4) 
 
-            call jsonx_get(t%j_vehicle, 'control_effectors.aileron.dynamics_order',               t%controls(1)%dynamics_order   , 0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.aileron.magnitude_limits[deg]',        t%controls(1)%mag_limit        , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.aileron.rate_limits[deg/s]',           t%controls(1)%rate_limit       , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.aileron.acceleration_limits[deg/s^2]', t%controls(1)%accel_limit      , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.aileron.time_constant[1/s]',           t%controls(1)%time_constant    , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.aileron.natural_frequency[rad/s]',     t%controls(1)%natural_frequency, 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.aileron.damping_ratio',                t%controls(1)%damping_ratio    , 0.0)
-
-            call jsonx_get(t%j_vehicle, 'control_effectors.elevator.dynamics_order',               t%controls(2)%dynamics_order   , 1)
-            call jsonx_get(t%j_vehicle, 'control_effectors.elevator.magnitude_limits[deg]',        t%controls(2)%mag_limit        , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.elevator.rate_limits[deg/s]',           t%controls(2)%rate_limit       , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.elevator.acceleration_limits[deg/s^2]', t%controls(2)%accel_limit      , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.elevator.time_constant[1/s]',           t%controls(2)%time_constant    , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.elevator.natural_frequency[rad/s]',     t%controls(2)%natural_frequency, 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.elevator.damping_ratio',                t%controls(2)%damping_ratio    , 0.0)
-
-            call jsonx_get(t%j_vehicle, 'control_effectors.rudder.dynamics_order',               t%controls(3)%dynamics_order   , 1)
-            call jsonx_get(t%j_vehicle, 'control_effectors.rudder.magnitude_limits[deg]',        t%controls(3)%mag_limit        , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.rudder.rate_limits[deg/s]',           t%controls(3)%rate_limit       , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.rudder.acceleration_limits[deg/s^2]', t%controls(3)%accel_limit      , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.rudder.time_constant[1/s]',           t%controls(3)%time_constant    , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.rudder.natural_frequency[rad/s]',     t%controls(3)%natural_frequency, 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.rudder.damping_ratio',                t%controls(3)%damping_ratio    , 0.0)              
-
-            call jsonx_get(t%j_vehicle, 'control_effectors.throttle.dynamics_order',      t%controls(4)%dynamics_order   , 1)
-            call jsonx_get(t%j_vehicle, 'control_effectors.throttle.magnitude_limits',    t%controls(4)%mag_limit        , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.throttle.rate_limits',         t%controls(4)%rate_limit       , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.throttle.acceleration_limits', t%controls(4)%accel_limit      , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.throttle.time_constant[1/s]',       t%controls(4)%time_constant    , 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.throttle.natural_frequency[rad/s]',   t%controls(4)%natural_frequency, 0.0)
-            call jsonx_get(t%j_vehicle, 'control_effectors.throttle.damping_ratio',       t%controls(4)%damping_ratio    , 0.0)              
-
+            ! Controller
             call json_get(t%j_vehicle, 'controller', j_controller, found)
             if (found) then 
               write(*,*) '   -controller'
@@ -243,20 +218,15 @@ module vehicle_m
           end if 
 
           ! Thrust coefficients
-          write(*,*) '- thrust'
-          call jsonx_get(t%j_vehicle, 'thrust.T0[lbf]',          t%T0, 0.0)
-          call jsonx_get(t%j_vehicle, 'thrust.Ta',               t%Ta, 0.0)
-          call jsonx_get(t%j_vehicle, 'thrust.location[ft]',     t%thrust_location, 0.0, 3)
-          call jsonx_get(t%j_vehicle, 'thrust.orientation[deg]', t%thrust_orientation, 0.0, 3)
-          
-          t%thrust_orientation = t%thrust_orientation * pi / 180.0
-          t%thrust_quat = euler_to_quat(t%thrust_orientation)
+          write(*,*) '- propulsion'
+          call json_get(t%j_vehicle, 'propulsion', j_propulsion) 
+          t%num_props = json_value_count(j_propulsion) 
+          allocate(t%props(t%num_props)) 
 
-          ! Calculate rho0 for thrust
-          call std_atm_English(0.0, geopotential_altitude_ft,     & 
-            temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, & 
-            dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)
-          t%rho0 = density_slugs_per_ft3
+          do i=1,t%num_props 
+            call json_value_get(j_propulsion, i, j_temp) 
+            call propulsion_init(t%props(i), j_temp) 
+          end do 
 
           ! Initial conditions
           write(*,*) '- Initial Conditions'
@@ -300,6 +270,61 @@ module vehicle_m
       end subroutine vehicle_init
 
     !----------------------------------------
+    ! Control effector initialization
+      subroutine init_control(t, j_control, ID) 
+        implicit none 
+        type(vehicle_t) :: t 
+        type(json_value), pointer :: j_control 
+        integer :: ID, i 
+
+        call jsonx_get(j_control, 'name', t%controls(ID)%name) 
+        write(*,*) '      -reading control effector: ', t%controls(ID)%name 
+        
+        if(t%controls(ID)%name == 'aileron') t%aileron_ID = ID + 13
+        if(t%controls(ID)%name == 'elevator') t%elevator_ID = ID + 13
+        if(t%controls(ID)%name == 'rudder') t%rudder_ID = ID + 13
+
+        call jsonx_get(j_control, 'dynamics_order', t%controls(ID)%dynamics_order, 0) 
+        call jsonx_get(j_control, 'units', t%controls(ID)%units, 'none') 
+        if(t%controls(ID)%units == 'deg') then 
+          t%controls(ID)%display_units = 180.0/pi 
+        else 
+          t%controls(ID)%display_units = 1.0 
+        end if 
+        call jsonx_get(j_control, 'magnitude_limits', t%controls(ID)%mag_limit, 0.0, 2) 
+        t%controls(ID)%mag_limit(:) = t%controls(ID)%mag_limit(:) / t%controls(ID)%display_units 
+
+        ! First order dynamics 
+        if(t%controls(ID)%dynamics_order == 1) then 
+          call jsonx_get(j_control, 'rate_limits[/s]', t%controls(ID)%rate_limit, 0.0, 2) 
+          t%controls(ID)%rate_limit(:) = t%controls(ID)%rate_limit(:) / t%controls(ID)%display_units 
+          call jsonx_get(j_control, 'time_constant[s]', t%controls(ID)%time_constant) 
+        end if 
+
+        ! Second order dynamics 
+        if(t%controls(ID)%dynamics_order == 2) then 
+          call jsonx_get(j_control, 'rate_limits[/s]', t%controls(ID)%rate_limit, 0.0, 2) 
+          t%controls(ID)%rate_limit(:) = t%controls(ID)%rate_limit(:) / t%controls(ID)%display_units 
+
+          call jsonx_get(j_control, 'acceleration_limits[/s^2]', t%controls(ID)%accel_limit, 0.0, 2) 
+          t%controls(ID)%accel_limit(:) = t%controls(ID)%accel_limit(:) / t%controls(ID)%display_units 
+
+          call jsonx_get(j_control, 'natural_frequency[rad/s]', t%controls(ID)%natural_frequency)
+          call jsonx_get(j_control, 'damping_ratio', t%controls(ID)%damping_ratio) 
+        end if 
+
+        do i=1,t%num_props 
+          if(t%controls(ID)%name == t%props(i)%name) then 
+            t%props(i)%control_ID = ID 
+            t%props(i)%units = t%controls(ID)%units 
+          end if 
+        end do         
+
+        t%controls(ID)%state_ID = 13 + ID 
+
+        t%controls(ID)%commanded_value = 0.0 
+      end subroutine init_control 
+    !----------------------------------------
     ! Write states to a file
       subroutine vehicle_write_state(t, time)
         implicit none 
@@ -332,7 +357,9 @@ module vehicle_m
         implicit none 
         type(vehicle_t) :: t
         type(json_value), pointer :: j_initial, j_state 
-        real :: alpha, beta 
+        real :: alpha, beta
+        real, allocatable :: temp_controls(:)
+        integer :: i  
 
         write(*,*) '    - setting prescribed state'
         ! Get json state object 
@@ -357,21 +384,11 @@ module vehicle_m
 
         ! Read initial controls
         if(t%type == 'aircraft') then 
-          call jsonx_get(j_state, 'aileron[deg]' ,  t%state(14))
-          call jsonx_get(j_state, 'elevator[deg]' , t%state(15))
-          call jsonx_get(j_state, 'rudder[deg]' ,   t%state(16))
-          call jsonx_get(j_state, 'throttle' ,      t%state(17))
-
-          t%state(14) = t%state(14) * pi / 180.0
-          t%state(15) = t%state(15) * pi / 180.0
-          t%state(16) = t%state(16) * pi / 180.0
-
-          t%state(18:24) = 0.0 
-
-          t%controls(1)%commanded_value = t%state(14)
-          t%controls(2)%commanded_value = t%state(15)
-          t%controls(3)%commanded_value = t%state(16)
-          t%controls(4)%commanded_value = t%state(17)
+          call jsonx_get(j_state, 'controls', temp_controls, 0.0, 4) 
+          do i=1,4 
+            t%init_state(i+13) = temp_controls(i)/t%controls(i)%display_units 
+            t%controls(i)%commanded_value = t%init_state(i+13) 
+          end do 
         end if     
       end subroutine 
     !----------------------------------------
@@ -619,7 +636,7 @@ module vehicle_m
         real, intent(in) :: x(9)
         integer, intent(in) :: n_free
         integer :: last
-        real :: FM(6) 
+        real :: FM(9) 
         real :: g, ac, xyzdot(3)
         real :: ca, cb, sa, sb, cp, sp, ct, st
         real :: u, v, w, euler(3)
@@ -931,7 +948,7 @@ module vehicle_m
         type(vehicle_t), intent(inout) :: t
         real :: time
         real, target :: state(24) 
-        real :: FM(6) 
+        real :: FMh(9) 
         real :: dstate_dt(24) 
         real :: acceleration(3), angular_accelerations(3), rhs(3), velocity(3), quat_change(4) 
         real :: quat_inv(4) 
@@ -974,13 +991,12 @@ module vehicle_m
         Iyz = t%inertia(2,3)
       
         ! Calculate forces and moments
-        FM = pseudo_aero(t, state)
-        gravity_ft_per_sec2 = gravity_English(-state(9))
+        FMh = pseudo_aero(t, state)
+        hxb = t%h(1) + FMh(7) 
+        hyb = t%h(2) + FMh(8) 
+        hzb = t%h(3) + FMh(9) 
 
-        ! Set gyroscopic effects
-        hxb = t%h(1)
-        hyb = t%h(2)
-        hzb = t%h(3)
+        gravity_ft_per_sec2 = gravity_English(-state(9))
 
         ! Set gyroscopic change and wind velocity to zero
         hxb_dot = 0.0
@@ -1060,9 +1076,9 @@ module vehicle_m
 
         ! Differential equations
         ! Roll, pitch, yaw accel
-        rhs(1) = FM(4) + hmat(1,1)*p + hmat(1,2)*q + hmat(1,3)*r + pqr_term(1) - hmat_dot(1)
-        rhs(2) = FM(5) + hmat(2,1)*p + hmat(2,2)*q + hmat(2,3)*r + pqr_term(2) - hmat_dot(2)
-        rhs(3) = FM(6) + hmat(3,1)*p + hmat(3,2)*q + hmat(3,3)*r + pqr_term(3) - hmat_dot(3)
+        rhs(1) = FMh(4) + hmat(1,1)*p + hmat(1,2)*q + hmat(1,3)*r + pqr_term(1) - hmat_dot(1)
+        rhs(2) = FMh(5) + hmat(2,1)*p + hmat(2,2)*q + hmat(2,3)*r + pqr_term(2) - hmat_dot(2)
+        rhs(3) = FMh(6) + hmat(3,1)*p + hmat(3,2)*q + hmat(3,3)*r + pqr_term(3) - hmat_dot(3)
 
         angular_accelerations(1) = Imat_inv(1,1)*rhs(1) + Imat_inv(1,2)*rhs(2) + Imat_inv(1,3)*rhs(3)
         angular_accelerations(2) = Imat_inv(2,1)*rhs(1) + Imat_inv(2,2)*rhs(2) + Imat_inv(2,3)*rhs(3)
@@ -1075,9 +1091,9 @@ module vehicle_m
         ac = (velocity(1)**2 + velocity(2)**2) / (earth_radius_ft - state(9))
 
         ! Aacceleration in body
-        acceleration(1) = FM(1)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(1) + angular_v_effect(1)
-        acceleration(2) = FM(2)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(2) + angular_v_effect(2)
-        acceleration(3) = FM(3)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(3) + angular_v_effect(3)
+        acceleration(1) = FMh(1)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(1) + angular_v_effect(1)
+        acceleration(2) = FMh(2)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(2) + angular_v_effect(2)
+        acceleration(3) = FMh(3)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(3) + angular_v_effect(3)
 
         ! Orientation rate of change
         quat_change(1) = 0.5 * (quat_matrix(1,1)*p + quat_matrix(1,2)*q + quat_matrix(1,3)*r)
@@ -1145,7 +1161,7 @@ module vehicle_m
           dstate_dt(22:24) = t%zdot 
 
         if (t%rk4_verbose) then 
-          write(t%iunit_rk4,'(A,X,6(ES19.12,1X))')  '    | pseudo aerodynamics (F,M) = ', FM
+          write(t%iunit_rk4,'(A,X,6(ES19.12,1X))')  '    | pseudo aerodynamics (F,M) = ', FMh
           write(t%iunit_rk4,'(A,X,24(ES19.12,1X))') '    |           diff_eq results = ', dstate_dt
         end if 
 
@@ -1157,12 +1173,12 @@ module vehicle_m
   !==================================================
     !----------------------------------------
     ! Aerodynamic Forces and Moments for f16
-      function pseudo_aero(t, state) result(FM)
+      function pseudo_aero(t, state) result(FMh)
         implicit none
         type(vehicle_t) :: t
         real, intent(in) :: state(24)
         real :: local_state(24) 
-        real :: FM(6) 
+        real :: FMh(9) 
         real :: Re, geometric_altitude_ft, geopotential_altitude_ft
         real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
         real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
@@ -1172,8 +1188,7 @@ module vehicle_m
         real :: CM1, CM2, mach_num
         real :: ca, cb, sa, sb
         real :: alpha_hat, beta_hat
-        real :: delta_a, delta_e, delta_r
-        real :: thrust, throttle
+        real :: delta_a, delta_e, delta_r, tau 
         real :: CL_s, CD_s, Cm_s 
         real :: sigma_D, sigma_L, sigma_m, sign_a
         real :: turbulence(6)
@@ -1184,7 +1199,7 @@ module vehicle_m
         real :: max_CL_factor, max_CD_factor, max_Cl_roll_factor
         real :: alphad, betad, ded, speedbrake, lef, Cxyzlmn(6) 
         real :: db1(1), db2(2), db3(3), db6(6)
-        real :: C_states(3), C_control(3,3)
+        integer :: i, throttle_ID
 
         local_state = state 
         
@@ -1227,15 +1242,13 @@ module vehicle_m
         if(t%type == 'aircraft') then 
           ! Pull out controls
           if(t%limit_controls) then 
-            delta_a  = max(t%controls(1)%mag_limit(1), min(t%controls(1)%mag_limit(2), state(14)))
-            delta_e  = max(t%controls(2)%mag_limit(1), min(t%controls(2)%mag_limit(2), state(15)))
-            delta_r  = max(t%controls(3)%mag_limit(1), min(t%controls(3)%mag_limit(2), state(16)))
-            throttle = max(t%controls(4)%mag_limit(1), min(t%controls(4)%mag_limit(2), state(17)))
+            delta_a  = max(t%controls(1)%mag_limit(1), min(t%controls(1)%mag_limit(2), state(t%aileron_ID)))
+            delta_e  = max(t%controls(2)%mag_limit(1), min(t%controls(2)%mag_limit(2), state(t%elevator_ID)))
+            delta_r  = max(t%controls(3)%mag_limit(1), min(t%controls(3)%mag_limit(2), state(t%rudder_ID)))
           else 
-            delta_a  = state(14)
-            delta_e  = state(15)
-            delta_r  = state(16)
-            throttle = state(17)
+            delta_a  = state(t%aileron_ID)
+            delta_e  = state(t%elevator_ID)
+            delta_r  = state(t%rudder_ID)
           end if 
 
           ! Database aerodynamics
@@ -1339,21 +1352,6 @@ module vehicle_m
             Cm      = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar + t%Cm_alphahat * alpha_hat + t%Cm_elevator * delta_e ! pitch moment
             Cn      = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar + (t%Cn_aileron + t%Cn_alpha_aileron * alpha) * delta_a + t%Cn_rudder * delta_r ! yaw moment         
  
-            C_states(1) = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar
-            C_states(2) = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar
-            C_states(3) = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar   
-            ! write(*,*) 'pseudo_aero C_states = ', C_states   
-
-            C_control = 0.0 
-            C_control(1,1) = t%Cl_aileron
-            C_control(1,3) = t%Cl_rudder
-            C_control(2,2) = t%Cm_elevator
-            C_control(3,1) = t%Cn_aileron + t%Cn_alpha_aileron * alpha
-            C_control(3,3) = t%Cn_rudder      
-            ! write(*,*) 'pseudo_aero C_control = ', C_control 
-
-            ! write(*,*) 'difference = ', C_states + matmul(C_control, state(14:16)) - [Cl_roll, Cm, Cn]
-
           end if                
 
         else if (t%type == 'arrow') then 
@@ -1462,33 +1460,40 @@ module vehicle_m
         end if 
 
         if(t%use_database) then 
-          FM(1:3) = Cxyzlmn(1:3) 
-          FM(4)   = Cxyzlmn(4) * t%lateral_length 
-          FM(5)   = Cxyzlmn(5) * t%longitudinal_length
-          FM(6)   = Cxyzlmn(6) * t%lateral_length
+          FMh(1:3) = Cxyzlmn(1:3) 
+          FMh(4)   = Cxyzlmn(4) * t%lateral_length 
+          FMh(5)   = Cxyzlmn(5) * t%longitudinal_length
+          FMh(6)   = Cxyzlmn(6) * t%lateral_length
 
-          FM(1:6) = FM(1:6) * dyn_pressure
+          FMh(1:6) = FMh(1:6) * dyn_pressure
         else 
           L =   CL * dyn_pressure
           S =   CS * dyn_pressure
           D =   CD * dyn_pressure
 
           ! Table 3.4.4
-          FM(1) = - (ca*(D*cb + S*sb) - L*sa)
-          FM(2) = (S*cb - D*sb)
-          FM(3) = - (sa*(D*cb + S*sb) + L*ca)
+          FMh(1) = - (ca*(D*cb + S*sb) - L*sa)
+          FMh(2) = (S*cb - D*sb)
+          FMh(3) = - (sa*(D*cb + S*sb) + L*ca)
 
-          FM(4) = Cl_roll  * dyn_pressure * t%lateral_length
-          FM(5) = Cm       * dyn_pressure * t%longitudinal_length
-          FM(6) = Cn       * dyn_pressure * t%lateral_length       
+          FMh(4) = Cl_roll  * dyn_pressure * t%lateral_length
+          FMh(5) = Cm       * dyn_pressure * t%longitudinal_length
+          FMh(6) = Cn       * dyn_pressure * t%lateral_length       
         end if 
   
-        ! Add thrust
-        thrust = throttle * t%T0 * (density_slugs_per_ft3/t%rho0) ** t%Ta
-        FM(1)  = FM(1) + thrust
+        ! Add propulsion
+        do i=1,t%num_props 
+          throttle_ID = t%props(i)%control_ID 
+          if(t%limit_controls) then 
+            tau = max(t%controls(throttle_ID)%mag_limit(1), min(t%controls(throttle_ID)%mag_limit(2), state(throttle_ID+13)))
+          else 
+            tau = state(throttle_ID + 13) 
+          end if 
+          FMh(:) = FMh(:) + propulsion_get_FMh(t%props(i), state, tau)
+        end do 
 
         ! Shift CG location 
-        FM(4:6) = FM(4:6) + cross_product(t%aero_ref_location, FM(1:3))
+        FMh(4:6) = FMh(4:6) + cross_product(t%aero_ref_location, FMh(1:3))
 
       end function pseudo_aero
 
