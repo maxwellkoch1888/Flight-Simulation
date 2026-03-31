@@ -15,7 +15,7 @@ module propulsion_m
         character(len=:), allocatable :: temp 
 
         t%name = j_propulsion%name 
-        write(*,*) 'INitializing Propulsion : ', trim(t%name) 
+        write(*,*) '    -Initializing Propulsion : ', trim(t%name) 
 
         call jsonx_get(j_propulsion, 'location[ft]', t%location, 0.0, 3) 
         call jsonx_get(j_propulsion, 'orientation[deg]', t%orientation_eul, 0.0, 3) 
@@ -40,7 +40,6 @@ module propulsion_m
                 call jsonx_get(j_propulsion, 'CN,alpha(J)', t%CNa_J, 0.0) 
                 call jsonx_get(j_propulsion, 'Cn,alpha(J)', t%Cnna_J, 0.0) 
         end select 
-
     end subroutine propulsion_init 
 
     function propulsion_get_FMh(t, states, tau) result(ans) 
@@ -66,6 +65,7 @@ module propulsion_m
         call std_atm_English(0.0, z_dum, t_dum, p_dum, rho0, a_dum, mu_dum) 
         call std_atm_English(-states(9), z_dum, t_dum, p_dum, rho, a_dum, mu_dum)
 
+        
         select case(t%type) 
             case("T=f(V)") 
                 thrust = tau*calc_polynomial(t%T_coeffs, Vc_mag) * (rho/rho0)**t%Ta 
@@ -77,21 +77,37 @@ module propulsion_m
                 Hz = tau/60.0 
                 omega = Hz*2*pi 
                 J = 2.0 * pi * Vc_mag/omega/t%diameter 
+                write(*,*) 'omega = ', omega 
+                write(*,*) 'J = ', J                 
+                write(*,*) 't%CT_J = ', t%CT_J
+                write(*,*) 't%CP_J = ', t%CP_J
+                write(*,*) 't%CNa_J = ', t%CNa_J
+                write(*,*) 't%Cnna_J = ', t%Cnna_J
 
                 thrust = calc_polynomial(t%CT_J,J)    * rho*(Hz**2)*(t%diameter**4) 
                 torque = calc_polynomial(t%CP_J,J)    * rho*(Hz**3)*(T%diameter**5) / omega 
                 normal = calc_polynomial(t%CNa_J,J)   * rho*(Hz**2)*(t%diameter**4) 
                 yaw    = calc_polynomial(t%Cnna_J,J)  * rho*(Hz**2)*(T%diameter**5) 
                 hxx = t%rotation_delta * t%Ixx * omega 
+                write(*,*) 
+                write(*,*) 'thrust =', thrust
+                write(*,*) 'torque =', torque
+                write(*,*) 'normal =', normal
+                write(*,*) 'yaw    =', yaw   
+                write(*,*) 'hxx    =', hxx
         end select 
 
         Fc = [thrust, 0.0, 0.0] + Normal*uN 
         Mc = -real(t%rotation_delta)*([torque, 0.0, 0.0] + yaw*uN) 
+        write(*,*)
+        write(*,*) t%name 
+        write(*,*) 'Fc,','Mc',',',Fc(1),',',Fc(2),',',Fc(3),',',Mc(1),',',Mc(2),',',Mc(3)
 
         ans(1:3) = quat_dependent_to_base(Fc, t%orientation_quat) 
         ans(4:6) = quat_dependent_to_base(Mc, t%orientation_quat) + cross_product(t%location, ans(1:3)) 
         ans(7:9) = quat_dependent_to_base([hxx, 0.0, 0.0], t%orientation_quat)
-
+        write(*,*) 'Fb',',','Mb',',',ans(1),',',ans(2),',',ans(3),',',ans(4),',',ans(5),',',ans(6)
+        write(*,*) 'hc',',','hb',',',hxx,',',0.0,',',0.0,',',ans(7),',',ans(8),',',ans(9)
     end function propulsion_get_FMh
 
     function calc_polynomial(coeffs, var) result(ans) 

@@ -85,9 +85,9 @@ module vehicle_m
           call jsonx_get(t%j_vehicle, 'aerodynamics.compressibility',                   t%compressibility, .false.)
           call jsonx_get(t%j_vehicle, 'aerodynamics.test_compressibility',              t%test_compressibility, .false.)
           call jsonx_get(t%j_vehicle, 'aerodynamics.sweep[deg]',                        t%sweep, 0.0)
-          call jsonx_get(t%j_vehicle, 'aerodynamics.reference.area[ft^2]',              t%planform_area)
-          call jsonx_get(t%j_vehicle, 'aerodynamics.reference.longitudinal_length[ft]', t%longitudinal_length)
-          call jsonx_get(t%j_vehicle, 'aerodynamics.reference.lateral_length[ft]',      t%lateral_length)
+          call jsonx_get(t%j_vehicle, 'aerodynamics.reference.area[ft^2]',              t%planform_area, 0.0)
+          call jsonx_get(t%j_vehicle, 'aerodynamics.reference.longitudinal_length[ft]', t%longitudinal_length, 0.0)
+          call jsonx_get(t%j_vehicle, 'aerodynamics.reference.lateral_length[ft]',      t%lateral_length, 0.0 )
           call jsonx_get(t%j_vehicle, 'aerodynamics.reference.location[ft]',            t%aero_ref_location, 0.0)
 
           if(t%type == 'arrow') then 
@@ -163,30 +163,12 @@ module vehicle_m
               end do 
             end if 
 
-            ! Control Effectors
-            write(*,*) '  -control effectors'
-            call jsonx_get(t%j_vehicle, 'control_effectors', j_control) 
-            call jsonx_get(j_control, '1', j_control_temp)
-            call init_control(t, j_control_temp, 1) 
-            call jsonx_get(j_control, '2', j_control_temp)
-            call init_control(t, j_control_temp, 2) 
-            call jsonx_get(j_control, '3', j_control_temp)
-            call init_control(t, j_control_temp, 3) 
-            call jsonx_get(j_control, '4', j_control_temp)
-            call init_control(t, j_control_temp, 4) 
-
             ! Controller
             call json_get(t%j_vehicle, 'controller', j_controller, found)
             if (found) then 
               write(*,*) '   -controller'
               call controller_init(t%controller, j_controller)
             end if 
-
-            do i = 1,3 
-              t%controls(i)%mag_limit   = t%controls(i)%mag_limit   * pi / 180.0
-              t%controls(i)%rate_limit  = t%controls(i)%rate_limit  * pi / 180.0
-              t%controls(i)%accel_limit = t%controls(i)%accel_limit * pi / 180.0
-            end do 
 
             ! Initialize integral error 
             t%zdot = 0.0 
@@ -227,6 +209,18 @@ module vehicle_m
             call json_value_get(j_propulsion, i, j_temp) 
             call propulsion_init(t%props(i), j_temp) 
           end do 
+
+          ! Control Effectors
+          write(*,*) '  -control effectors'
+          call jsonx_get(t%j_vehicle, 'control_effectors', j_control) 
+          call jsonx_get(j_control, '1', j_control_temp)
+          call init_control(t, j_control_temp, 1) 
+          call jsonx_get(j_control, '2', j_control_temp)
+          call init_control(t, j_control_temp, 2) 
+          call jsonx_get(j_control, '3', j_control_temp)
+          call init_control(t, j_control_temp, 3) 
+          call jsonx_get(j_control, '4', j_control_temp)
+          call init_control(t, j_control_temp, 4)           
 
           ! Initial conditions
           write(*,*) '- Initial Conditions'
@@ -292,6 +286,7 @@ module vehicle_m
           t%controls(ID)%display_units = 1.0 
         end if 
         call jsonx_get(j_control, 'magnitude_limits', t%controls(ID)%mag_limit, 0.0, 2) 
+        call jsonx_get(j_control, 'rate_limits[/s]', t%controls(ID)%rate_limit, 0.0, 2) 
         t%controls(ID)%mag_limit(:) = t%controls(ID)%mag_limit(:) / t%controls(ID)%display_units 
 
         ! First order dynamics 
@@ -383,7 +378,7 @@ module vehicle_m
         t%init_state(4:6) = t%init_state(4:6) * pi / 180.0 
 
         ! Read initial controls
-        if(t%type == 'aircraft') then 
+        if(t%type == 'aircraft' .or. t%type == 'quadrotor') then 
           call jsonx_get(j_state, 'controls', temp_controls, 0.0, 4) 
           do i=1,4 
             t%init_state(i+13) = temp_controls(i)/t%controls(i)%display_units 
@@ -754,7 +749,6 @@ module vehicle_m
         ! allocate(waypoints(3,N))
 
         x = t%state
-
         ! Step vehicle forward in time
         x1 = rk4(t, time, t%state, dt) 
 
@@ -829,6 +823,7 @@ module vehicle_m
         real :: rhat, Chat, Shat
         real :: cphi1, sphi1, ct, st, cg1, sg1
         real :: cg, sg, quat(4)        
+        write(*,*) 'spherical earth'
 
         ! Pull out change in coordinate
         dxf = y2(7) - y1(7)
@@ -1466,7 +1461,7 @@ module vehicle_m
           FMh(6)   = Cxyzlmn(6) * t%lateral_length
 
           FMh(1:6) = FMh(1:6) * dyn_pressure
-        else 
+        else if(t%type .ne. 'quadrotor') then 
           L =   CL * dyn_pressure
           S =   CS * dyn_pressure
           D =   CD * dyn_pressure
@@ -1480,7 +1475,7 @@ module vehicle_m
           FMh(5) = Cm       * dyn_pressure * t%longitudinal_length
           FMh(6) = Cn       * dyn_pressure * t%lateral_length       
         end if 
-  
+        
         ! Add propulsion
         do i=1,t%num_props 
           throttle_ID = t%props(i)%control_ID 
@@ -1494,7 +1489,6 @@ module vehicle_m
 
         ! Shift CG location 
         FMh(4:6) = FMh(4:6) + cross_product(t%aero_ref_location, FMh(1:3))
-
       end function pseudo_aero
 
 
