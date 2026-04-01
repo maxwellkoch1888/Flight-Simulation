@@ -823,7 +823,6 @@ module vehicle_m
         real :: rhat, Chat, Shat
         real :: cphi1, sphi1, ct, st, cg1, sg1
         real :: cg, sg, quat(4)        
-        write(*,*) 'spherical earth'
 
         ! Pull out change in coordinate
         dxf = y2(7) - y1(7)

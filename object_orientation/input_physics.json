@@ -1,7 +1,7 @@
 {
     "simulation" : {
-        "time_step[s]" : 0.0015,
-        "end_time[s]" : 0.0045,
+        "time_step[s]" : 0.01,
+        "end_time[s]" : 0.01,
         "rk4_verbose" : false,
         "save_states" : true,
         "save_lat_long" : false, 
@@ -29,7 +29,7 @@
     "vehicles" : {
         "F16" : {
             "type" : "aircraft",
-            "run_physics" : true,
+            "run_physics" : false,
             "mass" : {
                 "weight[lbf]" : 20500.0,
                 "Ixx[slug-ft^2]" : 9496.0,
@@ -289,7 +289,7 @@
         },
         "quadrotor" : {
             "type" : "quadrotor", 
-            "run_physics" : false, 
+            "run_physics" : true, 
             "mass" : {
                 "weight[lbf]" : 5.0, 
                 "Ixx[slug-ft^2]" : 0.0231, 

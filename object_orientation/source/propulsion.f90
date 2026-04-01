@@ -110,13 +110,13 @@ module propulsion_m
         Mc = -real(t%rotation_delta)*([torque, 0.0, 0.0] + yaw*uN) 
         write(*,*)
         write(*,*) t%name 
-        ! write(*,*) 'Fc,','Mc',',',Fc(1),',',Fc(2),',',Fc(3),',',Mc(1),',',Mc(2),',',Mc(3)
+        write(*,*) 'Fc,','Mc',',',Fc(1),',',Fc(2),',',Fc(3),',',Mc(1),',',Mc(2),',',Mc(3)
 
         ans(1:3) = quat_dependent_to_base(Fc, t%orientation_quat) 
         ans(4:6) = quat_dependent_to_base(Mc, t%orientation_quat) + cross_product(t%location, ans(1:3)) 
         ans(7:9) = quat_dependent_to_base([hxx, 0.0, 0.0], t%orientation_quat)
-        ! write(*,*) 'Fb',',','Mb',',',ans(1),',',ans(2),',',ans(3),',',ans(4),',',ans(5),',',ans(6)
-        ! write(*,*) 'hc',',','hb',',',hxx,',',0.0,',',0.0,',',ans(7),',',ans(8),',',ans(9)
+        write(*,*) 'Fb',',','Mb',',',ans(1),',',ans(2),',',ans(3),',',ans(4),',',ans(5),',',ans(6)
+        write(*,*) 'hc',',','hb',',',hxx,',',0.0,',',0.0,',',ans(7),',',ans(8),',',ans(9)
     end function propulsion_get_FMh
 
     function calc_polynomial(coeffs, var) result(ans) 

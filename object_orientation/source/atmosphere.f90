@@ -1,26 +1,7 @@
 module atmosphere_m 
   use koch_m
   use jsonx_m 
-  implicit none 
-  
-  type atmosphere_t 
-    real, allocatable :: wind(:) 
-    character(len=:), allocatable :: turb_model, turb_intensity 
-    real :: wingspan, hstab_dist, vstab_dist 
-    logical :: turb_repeatable, use_turb
-    real :: light_hag(3) = [2000.0, 8000.0, 17000.0]
-    real :: light_sig(3) = [5.0, 5.0, 3.0]
-    real :: moderate_hag(3) = [2000.0, 11000.0, 45000.0]
-    real :: moderate_sig(3) = [10.0, 10.0, 3.0] 
-    real :: severe_hag(4) = [2000.0, 4000.0, 20000.0, 80000.0]
-    real :: severe_sig(4) = [15.0, 21.0, 21.0, 3.0]
-
-    real, allocatable :: turb_hag(:), turb_sig(:)
-    real :: prev_turb(6), prev_xyz(3), prev_f, prev_g 
-    real :: Lu, Lv, Lw, Lb
-    real, allocatable :: time_history(:,:)
-    integer :: time_history_points
-  end type atmosphere_t
+  implicit none
 
   contains 
   
