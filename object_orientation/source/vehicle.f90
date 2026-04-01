@@ -1066,13 +1066,13 @@ module vehicle_m
         angular_accelerations(2) = Imat_inv(2,1)*rhs(1) + Imat_inv(2,2)*rhs(2) + Imat_inv(2,3)*rhs(3)
         angular_accelerations(3) = Imat_inv(3,1)*rhs(1) + Imat_inv(3,2)*rhs(2) + Imat_inv(3,3)*rhs(3)
 
-        ! Velocity in inertial
-        velocity = quat_base_to_dependent(state(1:3), state(10:13)) + wind_velocity
+        ! Velocity
+        velocity = quat_dependent_to_base(state(1:3), state(10:13)) + wind_velocity
 
         ! Gravity relief
         ac = (velocity(1)**2 + velocity(2)**2) / (earth_radius_ft - state(9))
 
-        ! Aacceleration in body
+        ! Acceleration in body
         acceleration(1) = FMh(1)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(1) + angular_v_effect(1)
         acceleration(2) = FMh(2)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(2) + angular_v_effect(2)
         acceleration(3) = FMh(3)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(3) + angular_v_effect(3)
@@ -1471,6 +1471,7 @@ module vehicle_m
           else 
             tau = state(throttle_ID + 13) 
           end if 
+          ! write(*,*) 'FMh prev'
           FMh(:) = FMh(:) + propulsion_get_FMh(t%props(i), state, tau)
         end do 
 

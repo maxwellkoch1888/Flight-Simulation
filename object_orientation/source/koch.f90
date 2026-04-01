@@ -201,8 +201,10 @@ module koch_m
     !     vec_quat = (/0.0, base_vec(1), base_vec(2), base_vec(3)/)
     !     quat_conj = (/quat(1), -quat(2), -quat(3), -quat(4)/)
 
-    !     temp_quat = quat_mult(quat_conj, vec_quat)
-    !     quat_sol  = quat_mult(temp_quat, quat)
+    !     ! temp_quat = quat_mult(quat_conj, vec_quat)
+    !     ! quat_sol  = quat_mult(temp_quat, quat)
+    !     temp_quat = quat_mult(quat, vec_quat)
+    !     quat_sol  = quat_mult(temp_quat, quat_conj)        
 
     !     dependent_vec = quat_sol(2:4)
 
