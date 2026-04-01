@@ -26,6 +26,13 @@
             }
         }
     },
+    "connections" : {
+        "graphics" : {
+            "type" : "send", 
+            "channel_type" : "udp", 
+            "port_ID" : 9000
+        }
+    },
     "vehicles" : {
         "F16" : {
             "type" : "aircraft",
