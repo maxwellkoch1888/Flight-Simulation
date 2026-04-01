@@ -25,7 +25,7 @@ module propulsion_m
 
         select case(t%type) 
             case("T=f(V)") 
-                call jsonx_get(j_propulsion, 'T_coefficients[lbf]', t%T_coeffs, 0.0) 
+                call jsonx_get(j_propulsion, 'T_coefficients[lbf]', t%T_coeffs) 
                 call jsonx_get(j_propulsion, 'Ta', t%Ta) 
                 t%rotation_delta = 1 
                 t%Ixx = 0.0 
@@ -98,18 +98,25 @@ module propulsion_m
                 yaw    = calc_polynomial(t%Cnna_J,J)  * rho*(Hz**2)*(T%diameter**5) 
                 hxx = t%rotation_delta * t%Ixx * omega 
                 write(*,*) 
-                ! write(*,*) 'thrust =', thrust
-                ! write(*,*) 'torque =', torque
-                ! write(*,*) 'normal =', normal
-                ! write(*,*) 'yaw    =', yaw   
-                ! write(*,*) 'hxx    =', hxx
-        end select 
-        ! write(*,*) 'uN = ', uN
 
+        end select 
+        write(*,*)
+        write(*,*) t%name    
+        write(*,*) 'tau', tau
+        write(*,*) 't%T_coeffs', t%T_coeffs
+        write(*,*) 'Vc_mag', Vc_mag
+        write(*,*) 'rho', rho
+        write(*,*) 'rho0',rho0 
+        write(*,*) 't%Ta ', t%Ta 
+        write(*,*) 'uN = ', uN
+        write(*,*) 'thrust =', thrust
+        write(*,*) 'torque =', torque
+        write(*,*) 'normal =', normal
+        write(*,*) 'yaw    =', yaw   
+        write(*,*) 'hxx    =', hxx
         Fc = [thrust, 0.0, 0.0] + Normal*uN 
         Mc = -real(t%rotation_delta)*([torque, 0.0, 0.0] + yaw*uN) 
-        write(*,*)
-        write(*,*) t%name 
+
         write(*,*) 'Fc,','Mc',',',Fc(1),',',Fc(2),',',Fc(3),',',Mc(1),',',Mc(2),',',Mc(3)
 
         ans(1:3) = quat_dependent_to_base(Fc, t%orientation_quat) 

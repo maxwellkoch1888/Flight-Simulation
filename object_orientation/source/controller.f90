@@ -97,6 +97,11 @@ module controller_m
         real :: pilot_command(3)
         ! Command angular rates
         ! real :: pilot_command(4)
+        real :: r_path(3), q_path(3)
+        real :: path_cmd(2)
+        real :: chi_c, h_c        
+        real :: chi, chi_error
+        real :: h, h_error
 
         u = states(1)
         v = states(2)
@@ -119,11 +124,33 @@ module controller_m
         g = gravity_English(-states(9))
 
         pilot_command = t%pilot_conn%recv([time], time)
+
+        ! Define a path
+        r_path = [0.0, 0.0, -1000.0]
+        q_path = [1.0, 0.0, 0.0]
+
+        ! Call guidance law
+        path_cmd = straight_line_follow(vehicle, r_path, q_path)
+        h_c   = path_cmd(1)
+        chi_c = path_cmd(2)    
+        
+        ! Current course angle
+        chi = atan2(v, u)
+        chi_error = chi_c - chi
+        chi_error = atan2(sin(chi_error), cos(chi_error))
+
+        ! Proportional turn law
+        bank_sp = 2.0 * chi_error  
+        
+        h = -states(9)
+        h_error = h_c - h
+        gamma_sp = 0.05 * h_error   
+        V_sp = 350.0     
         
         ! Command bank angle, climb angle, velocity
-        bank_sp  = pilot_command(1) * pi / 180.0 
-        gamma_sp = pilot_command(2) * pi /180.0 
-        V_sp     = pilot_command(3) 
+        ! bank_sp  = pilot_command(1) * pi / 180.0 
+        ! gamma_sp = pilot_command(2) * pi /180.0 
+        ! V_sp     = pilot_command(3) 
 
         p_sp = pid_get_command(t%bank_p, bank_sp, eul(1), time, dyp)
         q_sp = pid_get_command(t%gamma_q, gamma_sp, gamma, time, dyp)
@@ -358,5 +385,150 @@ module controller_m
 
       end function dynamic_inversion
     !----------------------------------------
-      
+  !==================================================
+  ! WAYPOINT FINDING
+  !==================================================
+    !----------------------------------------
+    ! Follow a straight line 
+      function straight_line_follow(t, r, q) result(command)
+      implicit none
+      type(vehicle_t) :: t
+      real, intent(in) :: r(3), q(3)
+      real :: command(2)
+      real :: chi_c, h_c
+      real :: chi_q
+      real :: chi_inf, k_path
+      real :: pn, pe, pd
+      real :: e_py
+      real :: s
+
+      chi_inf = 1.047      ! 60 deg
+      k_path  = 0.05
+
+      ! Vehicle position
+      pn = t%state(1)
+      pe = t%state(2)
+      pd = t%state(3)
+
+      ! Desired path course
+      chi_q = atan2(q(2), q(1))
+
+      ! Cross-track error
+      e_py = -(pn-r(1))*sin(chi_q) + (pe-r(2))*cos(chi_q)
+
+      ! Course command
+      chi_c = chi_q - chi_inf*(2.0/pi)*atan(k_path*e_py)
+
+      ! Along-track horizontal distance
+      s = sqrt((pn-r(1))**2 + (pe-r(2))**2)
+
+      ! Altitude command
+      h_c = -r(3) - s * q(3)/sqrt(q(1)**2 + q(2)**2)
+
+      command(1) = h_c
+      command(2) = chi_c
+
+      end function straight_line_follow
+    !----------------------------------------
+    ! Follow a circular orbit 
+        function follow_orbit(t, c, rho, lambda) result(command)
+        implicit none
+        type(vehicle_t) :: t
+        real, intent(in) :: c(3)
+        real, intent(in) :: rho
+        real, intent(in) :: lambda
+        real :: command(2)
+        real :: h_c, chi_c
+        real :: pn, pe
+        real :: d
+        real :: phi
+        real :: k_orbit
+
+        ! Guidance gain
+        k_orbit = 4.0
+
+        ! Vehicle position
+        pn = t%state(1)
+        pe = t%state(2)
+
+        ! Commanded altitude
+        h_c = -c(3)
+
+        ! Distance from orbit center
+        d = sqrt((pn-c(1))**2 + (pe-c(2))**2)
+
+        ! Angle from center to aircraft
+        phi = atan2(pe - c(2), pn - c(1))
+
+        ! Commanded course
+        chi_c = phi + lambda*(pi/2.0 + atan(k_orbit*(d-rho)/rho))
+
+        command(1) = h_c
+        command(2) = chi_c
+
+        end function follow_orbit 
+    !----------------------------------------
+    ! Follow filleted path 
+      function follow_wpp_fillet(w, N, p, radius) result(out)
+      implicit none
+      integer, intent(in) :: N
+      real, intent(in) :: w(3,N)
+      real, intent(in) :: p(3)
+      real, intent(in) :: radius
+      real :: out(11)
+      integer, save :: i = 2
+      integer, save :: state = 1
+      integer :: flag
+      real :: r(3), q(3), c(3)
+      real :: rho
+      real :: lambda
+      real :: qi_prev(3), qi(3)
+      real :: z(3)
+      real :: varrho
+      real :: normv
+
+      c = 0.0
+      rho = 0.0
+
+      ! unit vectors
+      qi_prev = (w(:,i) - w(:,i-1))
+      qi_prev = qi_prev / sqrt(sum(qi_prev**2))
+
+      qi = (w(:,i+1) - w(:,i))
+      qi = qi / sqrt(sum(qi**2))
+
+      ! angle between segments
+      varrho = acos(-dot_product(qi_prev,qi))
+
+      if (state == 1) then
+          flag = 1
+          r = w(:,i-1)
+          q = qi_prev
+          z = w(:,i) - (radius/tan(varrho/2.0))*qi_prev
+          if (dot_product(p-z, qi_prev) > 0.0) then
+              state = 2
+          end if
+      else if (state == 2) then
+          flag = 2
+          normv = sqrt(sum((qi_prev-qi)**2))
+          c = w(:,i) - (radius/sin(varrho/2.0)) * (qi_prev-qi)/normv
+          rho = radius
+          lambda = sign(1.0, qi_prev(1)*qi(2) - qi_prev(2)*qi(1))
+          z = w(:,i) + (radius/tan(varrho/2.0))*qi
+          if (dot_product(p-z, qi) > 0.0) then
+              if (i < N-1) then
+                  i = i + 1
+              end if
+              state = 1
+          end if
+      end if
+
+      out(1) = flag
+      out(2:4) = r
+      out(5:7) = q
+      out(8:10) = c
+      out(11) = rho
+
+      end function follow_wpp_fillet
+    !----------------------------------------
 end module controller_m 

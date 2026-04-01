@@ -52,7 +52,7 @@
                     "type" : "T=f(V)",
                     "location[ft]" : [0.0, 0.0, 0.0],
                     "orientation[deg]" : [0.0, 0.0, 0.0],
-                    "T0[lbf]" : 29550,
+                    "T_coefficients[lbf]" : 29550,
                     "Ta" : 0.84
                 }
             },
@@ -265,8 +265,8 @@
                 }
             },
             "initial" : {
-                "airspeed[ft/s]" : 6582.91440687328,
-                "altitude[ft]" : 60000.0,
+                "airspeed[ft/s]" : 350.0,
+                "altitude[ft]" : 1100.0,
                 "latitude[deg]" : 0.0,
                 "longitude[deg]" : 0.0,
                 "Euler_angles[deg]" : [5.0, 0.0, 0.0],

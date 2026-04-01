@@ -45,11 +45,11 @@ module sim_m
             write(*,*) 'Reading Atmospheric json Object...'
             call jsonx_get(j_main, 'atmosphere', j_atmosphere)
 
-            ! Initialize connections 
-            write(*,*) 'Reading connections json object...'
-            call jsonx_get(j_main, 'connections', j_connections) 
-            call jsonx_get(j_connections, 'graphics', j_graphics)
-            call graphics%init(j_graphics)
+            ! ! Initialize connections 
+            ! write(*,*) 'Reading connections json object...'
+            ! call jsonx_get(j_main, 'connections', j_connections) 
+            ! call jsonx_get(j_connections, 'graphics', j_graphics)
+            ! call graphics%init(j_graphics)
 
             ! Initialize vehicles
             do i=1,num_vehicles
@@ -116,10 +116,10 @@ module sim_m
                     end if 
                 end do 
 
-                ! SEND GRAPHICS OVER CONNECTION 
-                sent_state(1) = time
-                sent_state(2:14) = f16_state(1:13)
-                call graphics%send(sent_state)
+                ! ! Send graphics over UDP
+                ! sent_state(1) = time
+                ! sent_state(2:14) = f16_state(1:13)
+                ! call graphics%send(sent_state)
 
                 ! ! RECEIVE USER CONTROLS OVER CONNECTION
                 ! controls_input = user_controls%recv()
