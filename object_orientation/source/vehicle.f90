@@ -285,7 +285,7 @@ module vehicle_m
         else 
           t%controls(ID)%display_units = 1.0 
         end if 
-        call jsonx_get(j_control, 'magnitude_limits', t%controls(ID)%mag_limit, 0.0, 2) 
+        call jsonx_get(j_control, 'magnitude_limits', t%controls(ID)%mag_limit) 
         call jsonx_get(j_control, 'rate_limits[/s]', t%controls(ID)%rate_limit, 0.0, 2) 
         t%controls(ID)%mag_limit(:) = t%controls(ID)%mag_limit(:) / t%controls(ID)%display_units 
 
@@ -317,7 +317,8 @@ module vehicle_m
 
         t%controls(ID)%state_ID = 13 + ID 
 
-        t%controls(ID)%commanded_value = 0.0 
+        ! t%controls(ID)%commanded_value = 0.0 
+        t%controls(ID)%commanded_value = t%controls(ID)%state_ID
       end subroutine init_control 
     !----------------------------------------
     ! Write states to a file
@@ -746,10 +747,19 @@ module vehicle_m
         integer :: i, flag 
         
         x = t%state
+        ! write(*,*)
+        ! write(*,*) 'before rk4'
+        ! do i = 1,4 
+        !   write(*,*) t%controls(i)%commanded_value
+        ! end do 
+          
         ! Step vehicle forward in time
         x1 = rk4(t, time, t%state, dt) 
+        ! write(*,*) 
+        ! write(*,*) 'after rk4'
 
         do i = 1,4
+          ! write(*,*) t%controls(i)%commanded_value
           x1(13+i) = max(min(x1(13+i), t%controls(i)%mag_limit(2)),  t%controls(i)%mag_limit(1))
           x1(17+i) = max(min(x1(17+i), t%controls(i)%rate_limit(2)), t%controls(i)%rate_limit(1))
         end do 
@@ -761,24 +771,6 @@ module vehicle_m
 
         ! Normalize quaternion
         call quat_norm(t%state(10:13)) 
-
-        ! ! Path follower
-        ! out = follow_wpp_fillet(waypoints, n, position, radius)
-
-        ! flag   = int(out(1))
-        ! r      = out(2:4)
-        ! q      = out(5:7)
-        ! c      = out(8:10)
-        ! rho    = out(11)
-
-        ! if (flag == 1) then
-        !     cmd = straight_line_follow(t, r, q)
-        ! else
-        !     cmd = follow_orbit(t, c,rho,lambda)
-        ! end if
-
-        ! hc   = cmd(1)
-        ! chic = cmd(2)
         
         call get_controller_input(t, time+dt) 
         
@@ -794,6 +786,7 @@ module vehicle_m
         integer :: i 
 
         if(t%controller%running) then 
+          write(*,*) 'controller running'
           controls_setpoint(:) = controller_update(t%controller, t, t%state, time) 
           ! controls_setpoint(:) = dynamic_inversion(t, time, t%state, [0.0, 0.0, 0.0, 350.0])
           do i = 1,4 

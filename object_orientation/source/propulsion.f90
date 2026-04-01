@@ -53,21 +53,14 @@ module propulsion_m
         real :: Z_dum, T_dum, P_dum, rho, rho0, a_dum, mu_dum, dyp 
         real :: Hz, omega, J 
 
-        ! write(*,*) 'orientation_quat = ', t%orientation_quat
-        ! write(*,*) 'states(1:3) = ', states(1:3)
-        ! write(*,*) 'states(4:6) = ', states(4:6) 
-
         Vc = quat_base_to_dependent(states(1:3) + cross_product(states(4:6), t%location), t%orientation_quat)
         Vc_mag = sqrt(Vc(1)**2 + Vc(2)**2 + Vc(3)**2) 
         uc = Vc/Vc_mag 
-        ! write(*,*) 'Vc = ', Vc
-        ! write(*,*) 'Vc_mag = ', Vc_mag
-        ! write(*,*) 'uc = ', uc
         if(Vc_mag < tol) uc = [1.0, 0.0, 0.0] 
+
         vN = -[0.0, uc(2), uc(3)] 
         vN_mag = sqrt(vN(1)**2 + vN(2)**2 + vN(3)**2) 
         uN = vN/ vN_mag 
-        ! write(*,*) 'VN_mag = ', vN_mag
         if(vN_mag < tol) uN = [0.0, 0.0, 1.0] 
 
         call std_atm_English(0.0, z_dum, t_dum, p_dum, rho0, a_dum, mu_dum) 
@@ -85,12 +78,6 @@ module propulsion_m
                 Hz = tau/60.0 
                 omega = Hz*2*pi 
                 J = 2.0 * pi * Vc_mag/omega/t%diameter 
-                ! write(*,*) 'omega = ', omega 
-                ! write(*,*) 'J = ', J                 
-                ! write(*,*) 't%CT_J = ', t%CT_J
-                ! write(*,*) 't%CP_J = ', t%CP_J
-                ! write(*,*) 't%CNa_J = ', t%CNa_J
-                ! write(*,*) 't%Cnna_J = ', t%Cnna_J
 
                 thrust = calc_polynomial(t%CT_J,J)    * rho*(Hz**2)*(t%diameter**4) 
                 torque = calc_polynomial(t%CP_J,J)    * rho*(Hz**3)*(T%diameter**5) / omega 
@@ -100,30 +87,16 @@ module propulsion_m
                 write(*,*) 
 
         end select 
-        write(*,*)
-        write(*,*) t%name    
-        write(*,*) 'tau', tau
-        write(*,*) 't%T_coeffs', t%T_coeffs
-        write(*,*) 'Vc_mag', Vc_mag
-        write(*,*) 'rho', rho
-        write(*,*) 'rho0',rho0 
-        write(*,*) 't%Ta ', t%Ta 
-        write(*,*) 'uN = ', uN
-        write(*,*) 'thrust =', thrust
-        write(*,*) 'torque =', torque
-        write(*,*) 'normal =', normal
-        write(*,*) 'yaw    =', yaw   
-        write(*,*) 'hxx    =', hxx
+
         Fc = [thrust, 0.0, 0.0] + Normal*uN 
         Mc = -real(t%rotation_delta)*([torque, 0.0, 0.0] + yaw*uN) 
-
-        write(*,*) 'Fc,','Mc',',',Fc(1),',',Fc(2),',',Fc(3),',',Mc(1),',',Mc(2),',',Mc(3)
 
         ans(1:3) = quat_dependent_to_base(Fc, t%orientation_quat) 
         ans(4:6) = quat_dependent_to_base(Mc, t%orientation_quat) + cross_product(t%location, ans(1:3)) 
         ans(7:9) = quat_dependent_to_base([hxx, 0.0, 0.0], t%orientation_quat)
-        write(*,*) 'Fb',',','Mb',',',ans(1),',',ans(2),',',ans(3),',',ans(4),',',ans(5),',',ans(6)
-        write(*,*) 'hc',',','hb',',',hxx,',',0.0,',',0.0,',',ans(7),',',ans(8),',',ans(9)
+        ! write(*,*) 'Fc,','Mc',',',Fc(1),',',Fc(2),',',Fc(3),',',Mc(1),',',Mc(2),',',Mc(3)
+        ! write(*,*) 'Fb',',','Mb',',',ans(1),',',ans(2),',',ans(3),',',ans(4),',',ans(5),',',ans(6)
+        ! write(*,*) 'hc',',','hb',',',hxx,',',0.0,',',0.0,',',ans(7),',',ans(8),',',ans(9)
     end function propulsion_get_FMh
 
     function calc_polynomial(coeffs, var) result(ans) 

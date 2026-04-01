@@ -1,11 +1,11 @@
 {
     "simulation" : {
         "time_step[s]" : 0.01,
-        "end_time[s]" : 0.01,
+        "end_time[s]" : 10.0,
         "rk4_verbose" : false,
         "save_states" : true,
         "save_lat_long" : false, 
-        "geographic_model" : "sphere"
+        "geographic_model" : "none"
     },
     "atmosphere" : {
         "constant_wind[ft/s]" : [0.0, 0.0, 0.0], 
@@ -36,7 +36,7 @@
     "vehicles" : {
         "F16" : {
             "type" : "aircraft",
-            "run_physics" : false,
+            "run_physics" : true,
             "mass" : {
                 "weight[lbf]" : 20500.0,
                 "Ixx[slug-ft^2]" : 9496.0,
@@ -52,7 +52,7 @@
                     "type" : "T=f(V)",
                     "location[ft]" : [0.0, 0.0, 0.0],
                     "orientation[deg]" : [0.0, 0.0, 0.0],
-                    "T_coefficients[lbf]" : 29550,
+                    "T_coefficients[lbf]" : [29550],
                     "Ta" : 0.84
                 }
             },
@@ -61,7 +61,7 @@
                     "area[ft^2]" : 300.0,
                     "longitudinal_length[ft]" : 11.32,
                     "lateral_length[ft]" : 30.0,
-                    "location[ft]" : [0.0, 0.0, 0.0]
+                    "location[ft]" : [-1.0, 0.0, 0.0]
                 },
                 "stall" : {
                     "include_stall" : false,
@@ -161,7 +161,7 @@
                 "1" : {
                     "name" : "aileron",
                     "dynamics_order" : 2, 
-                    "magnitude_limits[deg]" : [-21.5, 21.5], 
+                    "magnitude_limits" : [-21.5, 21.5], 
                     "rate_limits[deg/s]" : [-80.0, 80.0], 
                     "acceleration_limits[deg/s^2]" : [-1000.0, 1000.0], 
                     "time_constant[1/s]" : 0.05, 
@@ -171,7 +171,7 @@
                 "2" : {
                     "name" : "elevator",
                     "dynamics_order" : 2, 
-                    "magnitude_limits[deg]" : [-25.0, 25.0], 
+                    "magnitude_limits" : [-25.0, 25.0], 
                     "rate_limits[deg/s]" : [-60.0, 60.0], 
                     "acceleration_limits[deg/s^2]" : [-1000.0, 1000.0], 
                     "time_constant[1/s]" : 0.05, 
@@ -181,7 +181,7 @@
                 "3" : {
                     "name" : "rudder",
                     "dynamics_order" : 2, 
-                    "magnitude_limits[deg]" : [-30.0, 30.0], 
+                    "magnitude_limits" : [-30.0, 30.0], 
                     "rate_limits[deg/s]" : [-120.0, 120.0], 
                     "acceleration_limits[deg/s^2]" : [-1000.0, 1000.0], 
                     "time_constant[1/s]" : 0.05, 
@@ -265,11 +265,11 @@
                 }
             },
             "initial" : {
-                "airspeed[ft/s]" : 350.0,
-                "altitude[ft]" : 1100.0,
+                "airspeed[ft/s]" : 220.0,
+                "altitude[ft]" : 500.0,
                 "latitude[deg]" : 0.0,
                 "longitude[deg]" : 0.0,
-                "Euler_angles[deg]" : [5.0, 0.0, 0.0],
+                "Euler_angles[deg]" : [0.0, 0.0, 0.0],
                 "type" : "trim",
                 "state" : {
                     "angle_of_attack[deg]" : -15.0,
@@ -282,7 +282,7 @@
                 "trim" : {
                     "type" : "shss",
                     "ref_climb_angle[deg]" : 0.0,
-                    "sideslip_angle[deg]" : 0.0,
+                    "_sideslip_angle[deg]" : 0.0,
                     "_load_factor" : 1.0,
                     "solver" : {
                         "finite_difference_step_size" : 0.01,
@@ -296,7 +296,7 @@
         },
         "quadrotor" : {
             "type" : "quadrotor", 
-            "run_physics" : true, 
+            "run_physics" : false, 
             "mass" : {
                 "weight[lbf]" : 5.0, 
                 "Ixx[slug-ft^2]" : 0.0231, 
