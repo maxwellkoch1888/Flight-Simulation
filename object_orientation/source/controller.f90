@@ -338,28 +338,15 @@ module controller_m
 
         omega = state(4:6)
 
-        ! ! Define desired angular acceleration with proportional controller
-        ! Kp = 0.0
-        ! Kp(1,1) = 5.0
-        ! Kp(2,2) = 5.0
-        ! Kp(3,3) = 5.0
-        ! Ki = 0.0 
-        ! Ki(1,1) = 1.0
-        ! Ki(2,2) = 1.0
-        ! Ki(3,3) = 1.0        
+        ! FOLLOW SETPOINT VALUES
+        error = omega - sp(1:3)
 
-        ! error = omega - sp(1:3)
-        ! int_error = state(22:24)
+        ! ! FOLLOW REFERENCE SIGNAL 
+        ! omega_ref = pi/180.0 * [5.0*sin(2.0*time), -2.0*sin(time), sin(time)]
+        ! omega_ref_dot = pi/180.0 * [10.0*cos(2.0*time), -2.0*cos(time), cos(time)] 
+        ! error = omega - omega_ref
 
-        ! omegadot_des = matmul(-Kp, error); ! desired is zero     
-
-        ! Define reference signal
-        omega_ref = pi/180.0 * [5.0*sin(2.0*time), -2.0*sin(time), sin(time)]
-        omega_ref_dot = pi/180.0 * [10.0*cos(2.0*time), -2.0*cos(time), cos(time)] 
-        error = omega - omega_ref
-
-        ! Define error
-        int_error = state(22:24) ! integral error
+        int_error = state(22:24)
 
         ! Define desired angular acceleration with proportional controller
         Kp = 0.0 
@@ -373,7 +360,7 @@ module controller_m
 
         omegadot_des = -matmul(Kp, error) - matmul(Ki, int_error) + omega_ref_dot  
 
-        ! Aircraft model
+        ! Aircraft model start
           ! Velocity and angles
           Vmag = sqrt(state(1)**2 + state(2)**2 + state(3)**2)
           alpha  = atan2(state(3) , state(1))
@@ -459,48 +446,7 @@ module controller_m
           C_control(3,3) = t%Cn_rudder
           ! write(*,*) 'controller C_control = ', C_control 
           
-          ! Compressibility model
-          ! if (t%compressibility) then 
-          !   CM1      = 2.13/ (t%sweep + 0.15)**2
-          !   CM2      = 15.35*t%sweep**2 - 19.64*t%sweep +16.86
-          !   mach_num = Vmag / sos_ft_per_sec
-
-          !   ! Mach breakpoints
-          !   m_low         = 0.60    ! only use prandtl-glauert
-          !   m_high        = 0.92    ! only use karman-tsien
-          !   m_trans_start = 0.88    ! start transsonic region
-
-          !   ! Prandtl-Glauert factor
-          !   sqrt_term = sqrt(max(1.0 - mach_num**2, tol))
-          !   pg_factor = 1.0 / sqrt_term
-
-          !   ! Karman-Tsien factor
-          !   kt_factor = pg_factor * (1.0 + mach_num**2 / (1.0 + sqrt_term))
-
-          !   ! Blending 
-          !   if (mach_num <= m_low) then
-          !     blend = 0.0
-          !   else if (mach_num >= m_high) then
-          !     blend = 1.0
-          !   else
-          !     blend = (mach_num - m_low) / (m_high - m_low)
-          !   end if
-
-          !   ! Final compressibility factor
-          !   moment_factor = lift_factor
-
-          !   ! Apply factors
-          !   max_Cl_roll_factor = 2.5
-
-          !   if (mach_num < 0.92) then ! accurate range
-          !     C_states  = C_states  * moment_factor
-          !     C_control = C_control * moment_factor
-          !   else
-          !     C_states  = C_states  * min(moment_factor, max_Cl_roll_factor)
-          !     C_control = C_control * min(moment_factor, max_Cl_roll_factor)          
-          !   end if
-
-          ! end if 
+        ! Aircraft model end
 
           ! Stall model 
           if (t%stall) then 
@@ -537,5 +483,150 @@ module controller_m
 
       end function dynamic_inversion
     !----------------------------------------
-      
+  !==================================================
+  ! WAYPOINT FINDING
+  !==================================================
+    !----------------------------------------
+    ! Follow a straight line 
+      function straight_line_follow(t, r, q) result(command)
+      implicit none
+      type(vehicle_t) :: t
+      real, intent(in) :: r(3), q(3)
+      real :: command(2)
+      real :: chi_c, h_c
+      real :: chi_q
+      real :: chi_inf, k_path
+      real :: pn, pe, pd
+      real :: e_py
+      real :: s
+
+      chi_inf = 1.047      ! 60 deg
+      k_path  = 0.05
+
+      ! MAV position
+      pn = t%state(1)
+      pe = t%state(2)
+      pd = t%state(3)
+
+      ! Desired path course
+      chi_q = atan2(q(2), q(1))
+
+      ! Cross-track error
+      e_py = -(pn-r(1))*sin(chi_q) + (pe-r(2))*cos(chi_q)
+
+      ! Course command
+      chi_c = chi_q - chi_inf*(2.0/pi)*atan(k_path*e_py)
+
+      ! Along-track horizontal distance
+      s = sqrt((pn-r(1))**2 + (pe-r(2))**2)
+
+      ! Altitude command
+      h_c = -r(3) - s * q(3)/sqrt(q(1)**2 + q(2)**2)
+
+      command(1) = h_c
+      command(2) = chi_c
+
+      end function straight_line_follow
+    !----------------------------------------
+    ! Follow a circular orbit 
+        function follow_orbit(t, c, rho, lambda) result(command)
+        implicit none
+        type(vehicle_t) :: t
+        real, intent(in) :: c(3)
+        real, intent(in) :: rho
+        real, intent(in) :: lambda
+        real :: command(2)
+        real :: h_c, chi_c
+        real :: pn, pe
+        real :: d
+        real :: phi
+        real :: k_orbit
+
+        ! Guidance gain
+        k_orbit = 4.0
+
+        ! Vehicle position
+        pn = t%state(1)
+        pe = t%state(2)
+
+        ! Commanded altitude
+        h_c = -c(3)
+
+        ! Distance from orbit center
+        d = sqrt((pn-c(1))**2 + (pe-c(2))**2)
+
+        ! Angle from center to aircraft
+        phi = atan2(pe - c(2), pn - c(1))
+
+        ! Commanded course
+        chi_c = phi + lambda*(pi/2.0 + atan(k_orbit*(d-rho)/rho))
+
+        command(1) = h_c
+        command(2) = chi_c
+
+        end function follow_orbit 
+    !----------------------------------------
+    ! Follow filleted path 
+      function follow_wpp_fillet(w, N, p, radius) result(out)
+      implicit none
+      integer, intent(in) :: N
+      real, intent(in) :: w(3,N)
+      real, intent(in) :: p(3)
+      real, intent(in) :: radius
+      real :: out(11)
+      integer, save :: i = 2
+      integer, save :: state = 1
+      integer :: flag
+      real :: r(3), q(3), c(3)
+      real :: rho
+      real :: lambda
+      real :: qi_prev(3), qi(3)
+      real :: z(3)
+      real :: varrho
+      real :: normv
+
+      c = 0.0
+      rho = 0.0
+
+      ! unit vectors
+      qi_prev = (w(:,i) - w(:,i-1))
+      qi_prev = qi_prev / sqrt(sum(qi_prev**2))
+
+      qi = (w(:,i+1) - w(:,i))
+      qi = qi / sqrt(sum(qi**2))
+
+      ! angle between segments
+      varrho = acos(-dot_product(qi_prev,qi))
+
+      if (state == 1) then
+          flag = 1
+          r = w(:,i-1)
+          q = qi_prev
+          z = w(:,i) - (radius/tan(varrho/2.0))*qi_prev
+          if (dot_product(p-z, qi_prev) > 0.0) then
+              state = 2
+          end if
+      else if (state == 2) then
+          flag = 2
+          normv = sqrt(sum((qi_prev-qi)**2))
+          c = w(:,i) - (radius/sin(varrho/2.0)) * (qi_prev-qi)/normv
+          rho = radius
+          lambda = sign(1.0, qi_prev(1)*qi(2) - qi_prev(2)*qi(1))
+          z = w(:,i) + (radius/tan(varrho/2.0))*qi
+          if (dot_product(p-z, qi) > 0.0) then
+              if (i < N-1) then
+                  i = i + 1
+              end if
+              state = 1
+          end if
+      end if
+
+      out(1) = flag
+      out(2:4) = r
+      out(5:7) = q
+      out(8:10) = c
+      out(11) = rho
+
+      end function follow_wpp_fillet
+    !----------------------------------------      
 end module controller_m 

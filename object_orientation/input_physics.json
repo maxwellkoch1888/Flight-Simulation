@@ -1,7 +1,7 @@
 {
     "simulation" : {
         "time_step[s]" : 0.01,
-        "end_time[s]" : 10.0,
+        "end_time[s]" : 50.0,
         "rk4_verbose" : false,
         "save_states" : true,
         "save_lat_long" : false, 
