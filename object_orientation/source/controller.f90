@@ -340,6 +340,7 @@ module controller_m
 
         ! FOLLOW SETPOINT VALUES
         error = omega - sp(1:3)
+        omega_ref_dot = 0.0 
 
         ! ! FOLLOW REFERENCE SIGNAL 
         ! omega_ref = pi/180.0 * [5.0*sin(2.0*time), -2.0*sin(time), sin(time)]
