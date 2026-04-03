@@ -85,7 +85,7 @@ module controller_m
         character(100) :: states_filename, rk4_filename, trim_filename, latlong_filename
 
         logical :: run_physics, use_database 
-        logical :: save_states, limit_controls = .true. 
+        logical :: save_states, limit_controls = .true., sigsev = .false. 
         integer :: aileron_ID, elevator_ID, rudder_ID 
         integer :: iunit_states, iunit_rk4, iunit_trim, iunit_latlong
 

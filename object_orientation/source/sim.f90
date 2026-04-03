@@ -18,7 +18,7 @@ module sim_m
             character(100), intent(in) :: filename
             type(json_value), pointer :: j_vehicles, j_temp, j_atmosphere, j_connections, j_graphics 
             integer :: i
-            logical :: save_states, rk4_verbose
+            logical :: save_states, rk4_verbose, sigsev
 
             ! Begin simulation
             write(*,*) 'Initializing Simulation...'            
@@ -34,6 +34,7 @@ module sim_m
             call jsonx_get(j_main, 'simulation.rk4_verbose',   rk4_verbose, .false.)
             call jsonx_get(j_main, 'simulation.save_states',   save_states, .false.)
             call jsonx_get(j_main, 'simulation.save_lat_long', save_lat_long, .false.)
+            call jsonx_get(j_main, 'simulator.sigsev_error', sigsev, .false.)
 
             ! Geographic model
             call jsonx_get(j_main, 'simulation.geographic_model', geographic_model, 'none')
@@ -55,6 +56,7 @@ module sim_m
             do i=1,num_vehicles
                 vehicles(i)%save_states = save_states
                 vehicles(i)%rk4_verbose = rk4_verbose
+                vehicles(i)%sigsev = sigsev
             end do    
 
             do i = 1,num_vehicles

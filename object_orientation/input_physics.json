@@ -1,10 +1,11 @@
 {
     "simulation" : {
         "time_step[s]" : 0.01,
-        "end_time[s]" : 50.0,
+        "end_time[s]" : 0.01,
         "rk4_verbose" : false,
         "save_states" : true,
         "save_lat_long" : false, 
+        "sigsev_error" : false, 
         "geographic_model" : "none"
     },
     "connections" : {
@@ -37,7 +38,7 @@
     "vehicles" : {
         "F16" : {
             "type" : "aircraft",
-            "run_physics" : true,
+            "run_physics" : false,
             "mass" : {
                 "weight[lbf]" : 20500.0,
                 "Ixx[slug-ft^2]" : 9496.0,
@@ -297,6 +298,131 @@
                     }
                 }
             }
-        }
+        },
+        "quadrotor" : {
+            "type" : "quadrotor", 
+            "run_physics" : true, 
+            "mass" : {
+                "weight[lbf]" : 5.0, 
+                "Ixx[slug-ft^2]" : 0.0231, 
+                "Iyy[slug-ft^2]" : 0.0231, 
+                "Izz[slug-ft^2]" : 0.0391, 
+                "Ixy[slug-ft^2]" : 0.0, 
+                "Ixz[slug-ft^2]" : 0.0, 
+                "Iyz[slug-ft^2]" : 0.0 
+            },
+            "propulsion" : {
+                "prop_1" : {
+                    "type" : "propeller_polynomial",
+                    "location[ft]" : [1.0, 1.0, -0.25], 
+                    "orientation[deg]" : [0.0, 90.0, 0.0],
+                    "diameter[ft]" : 1.0,
+                    "Ixx[slug-ft^2]" : 0.000095231, 
+                    "rotation" : "RH", 
+                    "CT(J)" : [0.0560, -0.0704, -0.1027], 
+                    "CPb(J)" : [0.0137, 0.0144, -0.0850], 
+                    "CN,alpha(J)" : [0.0, 0.0036, 0.0160, 0.0148], 
+                    "Cn,alpha(J)" : [0.0, -0.0112, 0.0029, 0.0050]
+                },
+                "prop_2" : {
+                    "type" : "propeller_polynomial",
+                    "location[ft]" : [-1.0, 1.0, -0.25], 
+                    "orientation[deg]" : [0.0, 90.0, 0.0],
+                    "diameter[ft]" : 1.0,
+                    "Ixx[slug-ft^2]" : 0.000095231, 
+                    "rotation" : "LH", 
+                    "CT(J)" : [0.0560, -0.0704, -0.1027], 
+                    "CPb(J)" : [0.0137, 0.0144, -0.0850], 
+                    "CN,alpha(J)" : [0.0, 0.0036, 0.0160, 0.0148], 
+                    "Cn,alpha(J)" : [0.0, -0.0112, 0.0029, 0.0050]
+                },
+                "prop_3" : {
+                    "type" : "propeller_polynomial",
+                    "location[ft]" : [-1.0, -1.0, -0.25], 
+                    "orientation[deg]" : [0.0, 90.0, 0.0],
+                    "diameter[ft]" : 1.0,
+                    "Ixx[slug-ft^2]" : 0.000095231, 
+                    "rotation" : "RH", 
+                    "CT(J)" : [0.0560, -0.0704, -0.1027], 
+                    "CPb(J)" : [0.0137, 0.0144, -0.0850], 
+                    "CN,alpha(J)" : [0.0, 0.0036, 0.0160, 0.0148], 
+                    "Cn,alpha(J)" : [0.0, -0.0112, 0.0029, 0.0050]
+                },
+                "prop_4" : {
+                    "type" : "propeller_polynomial",
+                    "location[ft]" : [1.0, -1.0, -0.25], 
+                    "orientation[deg]" : [0.0, 90.0, 0.0],
+                    "diameter[ft]" : 1.0,
+                    "Ixx[slug-ft^2]" : 0.000095231, 
+                    "rotation" : "LH", 
+                    "CT(J)" : [0.0560, -0.0704, -0.1027], 
+                    "CPb(J)" : [0.0137, 0.0144, -0.0850], 
+                    "CN,alpha(J)" : [0.0, 0.0036, 0.0160, 0.0148], 
+                    "Cn,alpha(J)" : [0.0, -0.0112, 0.0029, 0.0050]
+                }                                                
+            },
+            "aerodynamics" : {
+                "reference" : {
+                    "aera[ft^2]" : 0.0, 
+                    "longitudinal_length[ft]" : 0.5, 
+                    "lateral_length[ft]" : 1.0 
+                }
+            },
+            "control_effectors" : {
+                "1" : {
+                    "name" : "prop_1", 
+                    "units" : "RPM", 
+                    "dynamics_order" : 0, 
+                    "magnitude_limits" : [0,10000]
+                },
+                "2" : {
+                    "name" : "prop_2", 
+                    "units" : "RPM", 
+                    "dynamics_order" : 0, 
+                    "magnitude_limits" : [0,10000]
+                },
+                "3" : {
+                    "name" : "prop_3", 
+                    "units" : "RPM", 
+                    "dynamics_order" : 0, 
+                    "magnitude_limits" : [0,10000]
+                },
+                "4" : {
+                    "name" : "prop_4", 
+                    "units" : "RPM", 
+                    "dynamics_order" : 0, 
+                    "magnitude_limits" : [0,10000]
+                }                                                
+            },
+            "initial" : {
+                "airspeed[ft/s]" : 0.0, 
+                "altitude[ft]" : 10000.0, 
+                "latitude[deg]" : 0.0, 
+                "longitude[deg]" : 0.0, 
+                "Euler_angles[deg]" : [0.0, 0.0, 0.0], 
+                "type" : "state" ,
+                "state" : {
+                    "angle_of_attack[deg]" : 0.0, 
+                    "sideslip_angle[deg]" : 0.0, 
+                    "p[deg/s]" : 0.0, 
+                    "q[deg/s]" : 0.0, 
+                    "r[deg/s]" : 0.0, 
+                    "controls" : [7000.0, 7000.0, 7000.0, 7000.0]
+                },
+                "trim" : {
+                    "type" : "shss",
+                    "ref_climb_angle[deg]" : 0.0,
+                    "sideslip_angle[deg]" : 0.0,
+                    "_load_factor" : 1.0,
+                    "solver" : {
+                        "finite_difference_step_size" : 0.01,
+                        "relaxation_factor" : 0.9,
+                        "tolerance" : 1.0e-14,
+                        "max_iterations" : 1000,
+                        "verbose" : true
+                    }
+                }
+            } 
+        }       
     }
 }
