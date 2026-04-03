@@ -1,7 +1,7 @@
 {
     "simulation" : {
-        "time_step[s]" : 0.0,
-        "end_time[s]" : 100.0,
+        "time_step[s]" : 0.01,
+        "end_time[s]" : 50.0,
         "rk4_verbose" : false,
         "save_states" : true,
         "save_lat_long" : false, 
@@ -48,11 +48,14 @@
                 "Iyz[slug-ft^2]" : 0.0,
                 "h[slug-ft^2/s]" : [160.0, 0.0, 0.0]
             },
-            "thrust" : {
-                "location[ft]" : [0.0, 0.0, 0.0],
-                "orientation[deg]" : [0.0, 0.0, 0.0],
-                "T0[lbf]" : 29550,
-                "Ta" : 0.84
+            "propulsion" : {
+                "engine" : {
+                    "type" : "T=f(V)",
+                    "location[ft]" : [0.0, 0.0, 0.0],
+                    "orientation[deg]" : [0.0, 0.0, 0.0],
+                    "T_coefficients[lbf]" : [29550],
+                    "Ta" : 0.84
+                }
             },
             "aerodynamics" : {
                 "reference" : {
@@ -156,38 +159,42 @@
                 }
             },
             "control_effectors" : {
-                "aileron" : {
+                "1" : {
+                    "name" : "aileron",
                     "dynamics_order" : 2, 
-                    "magnitude_limits[deg]" : [-21.5, 21.5], 
-                    "rate_limits[deg/s]" : [-80.0, 80.0], 
-                    "acceleration_limits[deg/s^2]" : [-1000.0, 1000.0], 
+                    "magnitude_limits" : [-21.5, 21.5], 
+                    "rate_limits[/s]" : [-80.0, 80.0], 
+                    "acceleration_limits[/s^2]" : [-1000.0, 1000.0], 
                     "time_constant[1/s]" : 0.05, 
                     "natural_frequency[rad/s]" : 20.0, 
                     "damping_ratio" : 0.7 
                 },
-                "elevator" : {
+                "2" : {
+                    "name" : "elevator",
                     "dynamics_order" : 2, 
-                    "magnitude_limits[deg]" : [-25.0, 25.0], 
-                    "rate_limits[deg/s]" : [-60.0, 60.0], 
-                    "acceleration_limits[deg/s^2]" : [-1000.0, 1000.0], 
+                    "magnitude_limits" : [-25.0, 25.0], 
+                    "rate_limits[/s]" : [-60.0, 60.0], 
+                    "acceleration_limits[/s^2]" : [-1000.0, 1000.0], 
                     "time_constant[1/s]" : 0.05, 
                     "natural_frequency[rad/s]" : 20.0, 
                     "damping_ratio" : 0.7 
                 },
-                "rudder" : {
+                "3" : {
+                    "name" : "rudder",
                     "dynamics_order" : 2, 
-                    "magnitude_limits[deg]" : [-30.0, 30.0], 
-                    "rate_limits[deg/s]" : [-120.0, 120.0], 
-                    "acceleration_limits[deg/s^2]" : [-1000.0, 1000.0], 
+                    "magnitude_limits" : [-30.0, 30.0], 
+                    "rate_limits[/s]" : [-120.0, 120.0], 
+                    "acceleration_limits[/s^2]" : [-1000.0, 1000.0], 
                     "time_constant[1/s]" : 0.05, 
                     "natural_frequency[rad/s]" : 20.0, 
                     "damping_ratio" : 0.7 
                 },
-                "throttle" : {
+                "4" : {
+                    "name" : "engine",
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0.0, 1.0], 
-                    "rate_limits" : [-1.0, 1.0], 
-                    "acceleration_limits" : [-1.0, 1.0], 
+                    "rate_limits[/s]" : [-1.0, 1.0], 
+                    "acceleration_limits[/s^2]" : [-1.0, 1.0], 
                     "time_constant[1/s]" : 3.0, 
                     "natural_frequency[rad/s]" : 1.5, 
                     "damping_ratio" : 1.0
