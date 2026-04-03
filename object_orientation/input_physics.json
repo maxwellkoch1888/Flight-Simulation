@@ -1,12 +1,20 @@
 {
     "simulation" : {
-        "time_step[s]" : 0.01,
-        "end_time[s]" : 50.0,
+        "time_step[s]" : 0.0,
+        "end_time[s]" : 100.0,
         "rk4_verbose" : false,
         "save_states" : true,
         "save_lat_long" : false, 
         "geographic_model" : "none"
     },
+    "connections" : {
+        "graphics" : {
+            "type" : "send", 
+            "channel_type" : "udp", 
+            "port_ID" : 9000,
+            "number_of_values" : 14
+        }
+    },    
     "atmosphere" : {
         "constant_wind[ft/s]" : [0.0, 0.0, 0.0], 
         "_turbulence" : {
@@ -252,7 +260,7 @@
             },
             "initial" : {
                 "airspeed[ft/s]" : 350.0,
-                "altitude[ft]" : 1000.0,
+                "altitude[ft]" : 5000.0,
                 "latitude[deg]" : 0.0,
                 "longitude[deg]" : 0.0,
                 "Euler_angles[deg]" : [5.0, 0.0, 0.0],

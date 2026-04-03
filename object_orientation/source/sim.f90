@@ -7,6 +7,7 @@ module sim_m
     type(json_value), pointer :: j_main
     type(vehicle_t), allocatable :: vehicles(:)
     type(atmosphere_t) :: atm
+    type(connection) :: graphics
     integer :: num_vehicles
 
     contains 
@@ -15,7 +16,7 @@ module sim_m
         subroutine init(filename)
             implicit none 
             character(100), intent(in) :: filename
-            type(json_value), pointer :: j_vehicles, j_temp, j_atmosphere
+            type(json_value), pointer :: j_vehicles, j_temp, j_atmosphere, j_connections, j_graphics 
             integer :: i
             logical :: save_states, rk4_verbose
 
@@ -44,6 +45,12 @@ module sim_m
             write(*,*) 'Reading Atmospheric JSON Object...'
             call jsonx_get(j_main, 'atmosphere', j_atmosphere)
 
+            ! Initialize connections 
+            write(*,*) 'Reading connections json object...'
+            call jsonx_get(j_main, 'connections', j_connections) 
+            call jsonx_get(j_connections, 'graphics', j_graphics)
+            call graphics%init(j_graphics)
+
             ! Initialize vehicles
             do i=1,num_vehicles
                 vehicles(i)%save_states = save_states
@@ -64,6 +71,7 @@ module sim_m
             real :: time, dt, tf
             real :: cpu_start_time, cpu_end_time, actual_time, integrated_time, time_error
             real :: time_1 = 0.0, time_2 = 0.0 
+            real :: sent_state(14), f16_state(24)
             integer :: i
             logical :: real_time = .false. 
 
@@ -105,8 +113,19 @@ module sim_m
                 do i=1,num_vehicles
                     if(vehicles(i)%run_physics) then 
                         call vehicle_tick_state(vehicles(i), time, dt)     
+                        if(vehicles(i)%name == 'F16') f16_state = vehicles(i)%state 
                     end if 
                 end do 
+
+                ! SEND GRAPHICS OVER CONNECTION 
+                sent_state(1) = time
+                sent_state(2:14) = f16_state(1:13)
+                call graphics%send(sent_state)
+
+                ! ! RECEIVE USER CONTROLS OVER CONNECTION
+                ! controls_input = user_controls%recv()
+                ! controls_input(2:4) = controls_input(2:4) * pi / 180
+                ! controls = controls_input(2:5)                
 
                 ! UPDATE THE TIME        
                 if(real_time) then

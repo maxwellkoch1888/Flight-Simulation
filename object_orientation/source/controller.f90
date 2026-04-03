@@ -338,14 +338,14 @@ module controller_m
 
         omega = state(4:6)
 
-        ! FOLLOW SETPOINT VALUES
-        error = omega - sp(1:3)
-        omega_ref_dot = 0.0 
+        ! ! FOLLOW SETPOINT VALUES
+        ! error = omega - sp(1:3)
+        ! omega_ref_dot = 0.0 
 
-        ! ! FOLLOW REFERENCE SIGNAL 
-        ! omega_ref = pi/180.0 * [5.0*sin(2.0*time), -2.0*sin(time), sin(time)]
-        ! omega_ref_dot = pi/180.0 * [10.0*cos(2.0*time), -2.0*cos(time), cos(time)] 
-        ! error = omega - omega_ref
+        ! FOLLOW REFERENCE SIGNAL 
+        omega_ref = pi/180.0 * [30.0*sin(2.0*time), -20.0*sin(time), 30.0*sin(time)]
+        omega_ref_dot = pi/180.0 * [60.0*cos(2.0*time), -20.0*cos(time), 30.0*cos(time)] 
+        error = omega - omega_ref
 
         int_error = state(22:24)
 
