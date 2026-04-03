@@ -49,9 +49,9 @@ module propulsion_m
         real :: ans(9) 
         real :: Vc(3), Vc_mag, uc(3), vN(3), vN_mag, uN(3) 
         real :: Fc(3), Mc(3) 
-        real :: thrust, normal, torque, yaw, hxx 
+        real :: thrust, normal, torque, yaw, hxx, alpha_c 
         real :: Z_dum, T_dum, P_dum, rho, rho0, a_dum, mu_dum, dyp 
-        real :: Hz, omega, J 
+        real :: Hz, omega, J
 
         ! write(*,*) 'orientation_quat = ', t%orientation_quat
         ! write(*,*) 'states(1:3) = ', states(1:3)
@@ -60,11 +60,9 @@ module propulsion_m
         Vc = quat_base_to_dependent(states(1:3) + cross_product(states(4:6), t%location), t%orientation_quat)
         Vc_mag = sqrt(Vc(1)**2 + Vc(2)**2 + Vc(3)**2) 
         uc = Vc/Vc_mag 
-        alpha_c = acos(uc(1))
-        ! write(*,*) 'Vc = ', Vc
-        ! write(*,*) 'Vc_mag = ', Vc_mag
-        ! write(*,*) 'uc = ', uc
         if(Vc_mag < tol) uc = [1.0, 0.0, 0.0] 
+        alpha_c = acos(uc(1))
+
         vN = -[0.0, uc(2), uc(3)] 
         vN_mag = sqrt(vN(1)**2 + vN(2)**2 + vN(3)**2) 
         uN = vN/ vN_mag 
@@ -95,14 +93,15 @@ module propulsion_m
 
                 thrust = calc_polynomial(t%CT_J,J)    * rho*(Hz**2)*(t%diameter**4) 
                 torque = calc_polynomial(t%CP_J,J)    * rho*(Hz**3)*(T%diameter**5) / omega 
-                normal = calc_polynomial(t%CNa_J,J)   * rho*(Hz**2)*(t%diameter**4) 
-                yaw    = calc_polynomial(t%Cnna_J,J)  * rho*(Hz**2)*(T%diameter**5) 
+                normal = calc_polynomial(t%CNa_J,J)   * rho*(Hz**2)*(t%diameter**4) * alpha_c 
+                yaw    = calc_polynomial(t%Cnna_J,J)  * rho*(Hz**2)*(T%diameter**5) * alpha_c 
                 hxx = t%rotation_delta * t%Ixx * omega 
-                ! write(*,*) 
+                write(*,*) 
                 ! write(*,*) 'thrust =', thrust
                 ! write(*,*) 'torque =', torque
                 ! write(*,*) 'normal =', normal
                 ! write(*,*) 'yaw    =', yaw   
+                ! write(*,*) 'alpha_c = ', alpha_c 
                 ! write(*,*) 'hxx    =', hxx
         end select 
         ! write(*,*) 'uN = ', uN
