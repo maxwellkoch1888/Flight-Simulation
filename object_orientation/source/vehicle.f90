@@ -8,7 +8,6 @@ module vehicle_m
   use propulsion_m 
 
   implicit none
-  real :: rho0
   real, parameter :: earth_radius_ft = 6366707.01949371/0.3048
   integer :: geographic_model_ID
   character(len=:), allocatable :: geographic_model 
@@ -26,6 +25,7 @@ module vehicle_m
         type(json_value), pointer :: j_vehicle_input, j_controller, j_control, j_control_temp, j_propulsion, j_temp 
         character(len=:), allocatable :: init_type 
         real :: geopotential_altitude_ft,temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec
+        real :: Z_dum, T_dum, P_dum, rho, rho0, a_dum, mu_dum, dyp 
         integer :: i 
         logical :: found, allow_saturation
 
@@ -201,6 +201,8 @@ module vehicle_m
 
           ! Thrust coefficients
           write(*,*) '- propulsion'
+          call std_atm_English(0.0, z_dum, t_dum, p_dum, rho0, a_dum, mu_dum) 
+          t%rho0 = rho0
           call json_get(t%j_vehicle, 'propulsion', j_propulsion) 
           t%num_props = json_value_count(j_propulsion) 
           allocate(t%props(t%num_props)) 
@@ -262,7 +264,6 @@ module vehicle_m
         write(*,*) 'Finished vehicle initialization.'
         
       end subroutine vehicle_init
-
     !----------------------------------------
     ! Control effector initialization
       subroutine init_control(t, j_control, ID) 
@@ -278,7 +279,7 @@ module vehicle_m
         if(t%controls(ID)%name == 'elevator') t%elevator_ID = ID + 13
         if(t%controls(ID)%name == 'rudder') t%rudder_ID = ID + 13
 
-        call jsonx_get(j_control, 'dynamics_order', t%controls(ID)%dynamics_order, 0) 
+        call jsonx_get(j_control, 'dynamics_order', t%controls(ID)%dynamics_order) 
         call jsonx_get(j_control, 'units', t%controls(ID)%units, 'none') 
         if(t%controls(ID)%units == 'deg') then 
           t%controls(ID)%display_units = 180.0/pi 
@@ -286,22 +287,21 @@ module vehicle_m
           t%controls(ID)%display_units = 1.0 
         end if 
         call jsonx_get(j_control, 'magnitude_limits', t%controls(ID)%mag_limit) 
-        call jsonx_get(j_control, 'rate_limits[/s]', t%controls(ID)%rate_limit, 0.0, 2) 
         t%controls(ID)%mag_limit(:) = t%controls(ID)%mag_limit(:) / t%controls(ID)%display_units 
 
         ! First order dynamics 
         if(t%controls(ID)%dynamics_order == 1) then 
-          call jsonx_get(j_control, 'rate_limits[/s]', t%controls(ID)%rate_limit, 0.0, 2) 
+          call jsonx_get(j_control, 'rate_limits[/s]', t%controls(ID)%rate_limit) 
           t%controls(ID)%rate_limit(:) = t%controls(ID)%rate_limit(:) / t%controls(ID)%display_units 
           call jsonx_get(j_control, 'time_constant[s]', t%controls(ID)%time_constant) 
         end if 
 
         ! Second order dynamics 
         if(t%controls(ID)%dynamics_order == 2) then 
-          call jsonx_get(j_control, 'rate_limits[/s]', t%controls(ID)%rate_limit, 0.0, 2) 
+          call jsonx_get(j_control, 'rate_limits[/s]', t%controls(ID)%rate_limit) 
           t%controls(ID)%rate_limit(:) = t%controls(ID)%rate_limit(:) / t%controls(ID)%display_units 
 
-          call jsonx_get(j_control, 'acceleration_limits[/s^2]', t%controls(ID)%accel_limit, 0.0, 2) 
+          call jsonx_get(j_control, 'acceleration_limits[/s^2]', t%controls(ID)%accel_limit) 
           t%controls(ID)%accel_limit(:) = t%controls(ID)%accel_limit(:) / t%controls(ID)%display_units 
 
           call jsonx_get(j_control, 'natural_frequency[rad/s]', t%controls(ID)%natural_frequency)
@@ -317,8 +317,7 @@ module vehicle_m
 
         t%controls(ID)%state_ID = 13 + ID 
 
-        ! t%controls(ID)%commanded_value = 0.0 
-        t%controls(ID)%commanded_value = t%controls(ID)%state_ID
+        t%controls(ID)%commanded_value = 0.0 
       end subroutine init_control 
     !----------------------------------------
     ! Write states to a file
@@ -353,9 +352,9 @@ module vehicle_m
         implicit none 
         type(vehicle_t) :: t
         type(json_value), pointer :: j_initial, j_state 
-        real :: alpha, beta
+        real :: alpha, beta 
         real, allocatable :: temp_controls(:)
-        integer :: i  
+        integer :: i          
 
         write(*,*) '    - setting prescribed state'
         ! Get json state object 
@@ -379,13 +378,31 @@ module vehicle_m
         t%init_state(4:6) = t%init_state(4:6) * pi / 180.0 
 
         ! Read initial controls
+        ! if(t%type == 'aircraft' .or. t%type == 'quadrotor') then 
+        !   call jsonx_get(j_state, 'aileron[deg]' ,  t%state(14))
+        !   call jsonx_get(j_state, 'elevator[deg]' , t%state(15))
+        !   call jsonx_get(j_state, 'rudder[deg]' ,   t%state(16))
+        !   call jsonx_get(j_state, 'throttle' ,      t%state(17))
+
+        !   t%state(14) = t%state(14) * pi / 180.0
+        !   t%state(15) = t%state(15) * pi / 180.0
+        !   t%state(16) = t%state(16) * pi / 180.0
+
+        !   t%state(18:24) = 0.0 
+
+        !   t%controls(1)%commanded_value = t%state(14)
+        !   t%controls(2)%commanded_value = t%state(15)
+        !   t%controls(3)%commanded_value = t%state(16)
+        !   t%controls(4)%commanded_value = t%state(17)
+        ! end if     
+
         if(t%type == 'aircraft' .or. t%type == 'quadrotor') then 
           call jsonx_get(j_state, 'controls', temp_controls, 0.0, 4) 
           do i=1,4 
             t%init_state(i+13) = temp_controls(i)/t%controls(i)%display_units 
             t%controls(i)%commanded_value = t%init_state(i+13) 
           end do 
-        end if     
+        end if           
       end subroutine 
     !----------------------------------------
     ! Trim initial condition
@@ -745,7 +762,10 @@ module vehicle_m
         real :: rho, lambda, radius
         real :: hc, chic, cmd(2)      
         integer :: i, flag 
+        if (t%sigsev) write(*,*) 'call vehicle_tick_state...'
         
+        ! allocate(waypoints(3,N))
+
         x = t%state
         ! write(*,*)
         ! write(*,*) 'before rk4'
@@ -759,12 +779,17 @@ module vehicle_m
         ! write(*,*) 'after rk4'
 
         do i = 1,4
-          ! write(*,*) t%controls(i)%commanded_value
+          if (t%sigsev) then 
+            write(*,*) 'dynamics_order = ', t%controls(i)%dynamics_order
+            write(*,*) 'unbounded control = ', x1(13+i)
+          end if 
           x1(13+i) = max(min(x1(13+i), t%controls(i)%mag_limit(2)),  t%controls(i)%mag_limit(1))
-          x1(17+i) = max(min(x1(17+i), t%controls(i)%rate_limit(2)), t%controls(i)%rate_limit(1))
+          if(t%controls(i)%dynamics_order > 0) x1(17+i) = max(min(x1(17+i), t%controls(i)%rate_limit(2)), t%controls(i)%rate_limit(1))
         end do 
 
+        if (t%sigsev)write(*,*) 'update state...'
         t%state = x1 
+        if (t%sigsev)write(*,*) 'update state success...'
 
         ! Call geographic model 
         if(geographic_model_ID > 0) call spherical_earth(t, x, x1)
@@ -773,7 +798,7 @@ module vehicle_m
         call quat_norm(t%state(10:13)) 
         
         call get_controller_input(t, time+dt) 
-        
+        if (t%sigsev) write(*,*) 'vehicle_tick_state success...'
       end subroutine
 
     !----------------------------------------   
@@ -784,16 +809,17 @@ module vehicle_m
         real, intent(in) :: time 
         real :: controls_setpoint(4) 
         integer :: i 
+        if (t%sigsev) write(*,*) 'call get_controller_input...'
 
         if(t%controller%running) then 
           write(*,*) 'controller running'
           controls_setpoint(:) = controller_update(t%controller, t, t%state, time) 
-          ! controls_setpoint(:) = dynamic_inversion(t, time, t%state, [0.0, 0.0, 0.0, 350.0])
           do i = 1,4 
             t%controls(i)%commanded_value = controls_setpoint(i)
             if(t%controls(i)%dynamics_order == 0) t%state(13+i) = max(min(t%controls(i)%commanded_value, t%controls(i)%mag_limit(2)), t%controls(i)%mag_limit(1))
           end do 
         end if 
+        if (t%sigsev) write(*,*) 'get_controller_input success...'
 
       end subroutine get_controller_input
     !----------------------------------------   
@@ -810,7 +836,8 @@ module vehicle_m
         real :: xhat, yhat, zhat, xhat_prime, yhat_prime, zhat_prime
         real :: rhat, Chat, Shat
         real :: cphi1, sphi1, ct, st, cg1, sg1
-        real :: cg, sg, quat(4)        
+        real :: cg, sg, quat(4)   
+        if (t%sigsev) write(*,*) 'call spherical_earth...'     
 
         ! Pull out change in coordinate
         dxf = y2(7) - y1(7)
@@ -867,6 +894,7 @@ module vehicle_m
           quat(4) =  t%state(10)
           t%state(10:13) = cg * t%state(10:13) + sg*quat(:)              
         end if 
+        if (t%sigsev) write(*,*) 'spherical_earth success...'     
 
       end subroutine 
 
@@ -881,6 +909,11 @@ module vehicle_m
         type(vehicle_t) :: t
         real, intent(in) :: t0, delta_t, x1(24)
         real, dimension(24) :: state, k1, k2, k3, k4
+        
+        if (t%sigsev) then 
+          write(*,*)
+          write(*,*) 'call rk4...'
+        end if 
 
         if(t%rk4_verbose) then 
           write(t%iunit_rk4,*)
@@ -920,6 +953,7 @@ module vehicle_m
           write(t%iunit_rk4,'(X,22(ES19.12,1X))') t0+delta_t, state
           write(t%iunit_rk4,*) ' --------------------------- End of single RK4 integration step. ---------------------------'
         end if 
+        if (t%sigsev) write(*,*) 'rk4 success...'
 
       end function rk4
     
@@ -933,7 +967,7 @@ module vehicle_m
         real :: FMh(9) 
         real :: dstate_dt(24) 
         real :: acceleration(3), angular_accelerations(3), rhs(3), velocity(3), quat_change(4) 
-        real :: quat_inv(4) 
+        real :: quat_inv(4), v1(4), v2(4)
         real :: orientation_effect(3), angular_v_effect(3), hmat_dot(3)
         real :: pqr_term(3), wind_velocity(3), hmat(3,3) 
         real :: quat_matrix(4,3) 
@@ -947,6 +981,7 @@ module vehicle_m
         integer :: i 
         real :: wn, zeta
         real :: delta, d_delta, dd_delta
+        if (t%sigsev) write(*,*) 'diff_eq call...'
 
         if (t%rk4_verbose) then 
           write(t%iunit_rk4,'(A,X,ES19.12,1X)') '    |                  time [s] = ', time 
@@ -1066,8 +1101,10 @@ module vehicle_m
         angular_accelerations(2) = Imat_inv(2,1)*rhs(1) + Imat_inv(2,2)*rhs(2) + Imat_inv(2,3)*rhs(3)
         angular_accelerations(3) = Imat_inv(3,1)*rhs(1) + Imat_inv(3,2)*rhs(2) + Imat_inv(3,3)*rhs(3)
 
-        ! Velocity
-        velocity = quat_dependent_to_base(state(1:3), state(10:13)) + wind_velocity
+        ! Velocity in inertial
+        v1 = quat_mult(state(10:13), (/0.0, state(1:3)/))
+        v2 = quat_mult(v1, quat_inv)
+        velocity = v2(2:4) + wind_velocity
 
         ! Gravity relief
         ac = (velocity(1)**2 + velocity(2)**2) / (earth_radius_ft - state(9))
@@ -1146,6 +1183,7 @@ module vehicle_m
           write(t%iunit_rk4,'(A,X,6(ES19.12,1X))')  '    | pseudo aerodynamics (F,M) = ', FMh
           write(t%iunit_rk4,'(A,X,24(ES19.12,1X))') '    |           diff_eq results = ', dstate_dt
         end if 
+        if (t%sigsev) write(*,*) 'diff_eq success...'
 
       end function diff_eq
 
@@ -1170,7 +1208,7 @@ module vehicle_m
         real :: CM1, CM2, mach_num
         real :: ca, cb, sa, sb
         real :: alpha_hat, beta_hat
-        real :: delta_a, delta_e, delta_r, tau 
+        real :: delta_a, delta_e, delta_r, throttle, thrust 
         real :: CL_s, CD_s, Cm_s 
         real :: sigma_D, sigma_L, sigma_m, sign_a
         real :: turbulence(6)
@@ -1182,6 +1220,7 @@ module vehicle_m
         real :: alphad, betad, ded, speedbrake, lef, Cxyzlmn(6) 
         real :: db1(1), db2(2), db3(3), db6(6)
         integer :: i, throttle_ID
+        if (t%sigsev) write(*,*) 'call pseudo_aero'
 
         local_state = state 
         
@@ -1333,7 +1372,6 @@ module vehicle_m
             Cl_roll = t%Cl_beta * beta + t%Cl_pbar * pbar + (t%Cl_rbar + t%Cl_alpha_rbar * alpha) * rbar + t%Cl_aileron * delta_a + t%Cl_rudder * delta_r  ! roll moment
             Cm      = t%Cm_0 + t%Cm_alpha * alpha + t%Cm_qbar * qbar + t%Cm_alphahat * alpha_hat + t%Cm_elevator * delta_e ! pitch moment
             Cn      = t%Cn_beta * beta + (t%Cn_pbar + t%Cn_alpha_pbar * alpha) * pbar + t%Cn_rbar * rbar + (t%Cn_aileron + t%Cn_alpha_aileron * alpha) * delta_a + t%Cn_rudder * delta_r ! yaw moment         
- 
           end if                
 
         else if (t%type == 'arrow') then 
@@ -1462,21 +1500,26 @@ module vehicle_m
           FMh(5) = Cm       * dyn_pressure * t%longitudinal_length
           FMh(6) = Cn       * dyn_pressure * t%lateral_length       
         end if 
-        
+  
         ! Add propulsion
         do i=1,t%num_props 
           throttle_ID = t%props(i)%control_ID 
           if(t%limit_controls) then 
-            tau = max(t%controls(throttle_ID)%mag_limit(1), min(t%controls(throttle_ID)%mag_limit(2), state(throttle_ID+13)))
+            throttle = max(t%controls(throttle_ID)%mag_limit(1), min(t%controls(throttle_ID)%mag_limit(2), state(throttle_ID+13)))
           else 
-            tau = state(throttle_ID + 13) 
+            throttle = state(throttle_ID + 13) 
           end if 
-          ! write(*,*) 'FMh prev'
-          FMh(:) = FMh(:) + propulsion_get_FMh(t%props(i), state, tau)
+          FMh(:) = FMh(:) + propulsion_get_FMh(t%props(i), state, throttle)
         end do 
+
+        ! Add thrust
+      
+        ! thrust = throttle * 29550 * (density_slugs_per_ft3/t%rho0) ** 0.84
+        ! FMh(1)  = FMh(1) + thrust        
 
         ! Shift CG location 
         FMh(4:6) = FMh(4:6) + cross_product(t%aero_ref_location, FMh(1:3))
+        if (t%sigsev) write(*,*) 'pseudo_aero success...'
       end function pseudo_aero
 
 

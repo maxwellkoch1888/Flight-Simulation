@@ -5,6 +5,142 @@ module controller_m
   use connection_m 
   implicit none 
   
+  !==================================================
+  ! TYPE DECLARATIONS
+  !==================================================
+    !----------------------------------------
+    ! PID type 
+      type pid_t 
+        character(len=:), allocatable :: name 
+        real :: KP, KI, KD 
+        real :: error, prev_error, error_int, error_deriv 
+        real :: prev_time, prev_ans, update_rate 
+        real, allocatable :: limit(:)
+        character(len=:), allocatable :: units 
+        real :: display_units = 1.0 
+        logical :: dyp_schedule
+      end type pid_t
+    !----------------------------------------
+    ! Controller type
+      type controller_t 
+        type (pid_t) :: p_da, q_de, r_dr, bank_p, gamma_q, V_tau
+        integer :: num_pid 
+        type(connection) :: pilot_conn 
+        logical :: running = .false. 
+      end type controller_t 
+    !----------------------------------------    
+    ! Trim solver type
+      type trim_solver_t
+        real :: step_size, relaxation_factor, tolerance, max_iterations
+      end type trim_solver_t
+    !----------------------------------------
+    ! Trim settings type
+      type trim_settings_t
+        character(len=:), allocatable :: type 
+
+        logical, allocatable :: free_vars(:) 
+        real :: climb_angle, sideslip_angle
+        real :: load_factor
+        logical :: verbose, solve_relative_climb_angle, solve_load_factor
+
+        type(trim_solver_t) :: solver 
+      end type trim_settings_t
+    !----------------------------------------
+    ! Control type
+      type control_t 
+        character(len=:), allocatable :: name, units 
+        integer :: dynamics_order, state_ID 
+        real :: commanded_value
+        real, allocatable :: mag_limit(:), rate_limit(:), accel_limit(:) 
+        real :: time_constant, natural_frequency, damping_ratio
+        real :: display_units = 1.0 
+      end type control_t       
+    !----------------------------------------              
+    ! Propulsion type 
+      type propulsion_t 
+          character(len=:), allocatable :: name, type, units 
+          real, allocatable :: location(:), orientation_eul(:) 
+          real :: orientation_quat(4) 
+          integer :: control_ID ! ID of controls array associated with this propulsion element 
+
+          ! For type T=f(V) 
+          real, allocatable :: T_coeffs(:) 
+          real :: Ta 
+
+          ! For type propeller_polynomial 
+          real :: diameter, Ixx 
+          integer :: rotation_delta 
+          real, allocatable :: CT_J(:), CP_J(:), CNa_J(:), Cnna_J(:) 
+      end type propulsion_t        
+    !----------------------------------------        
+    ! Vehicle type
+      
+      type vehicle_t
+        type(json_value), pointer :: j_vehicle
+            
+        character(len=:), allocatable :: name
+        character(len=:), allocatable :: type
+        character(100) :: states_filename, rk4_filename, trim_filename, latlong_filename
+
+        logical :: run_physics, use_database 
+        logical :: save_states, limit_controls = .true., sigsev = .false. 
+        integer :: aileron_ID, elevator_ID, rudder_ID 
+        integer :: iunit_states, iunit_rk4, iunit_trim, iunit_latlong
+
+        ! Location 
+        real :: latitude, longitude, prev_latitude, prev_longitude
+        real :: course_angle
+
+        ! Mass
+        real :: mass
+        real :: inertia(3,3)
+        real :: inertia_inv(3,3)
+        real, allocatable :: h(:)
+
+        ! Aerodynamics
+        real, allocatable :: aero_ref_location(:)
+        real :: planform_area, longitudinal_length, lateral_length, sweep
+        real :: CL0, CL_alpha, CL_alphahat, CL_qbar, CL_elevator
+        real :: CS_beta, CS_pbar, CS_alpha_pbar, CS_rbar, CS_aileron, CS_rudder
+        real :: CD_L0, CD_L1, CD_L1_L1, CD_CS_CS, CD_qbar, CD_alpha_qbar, CD_elevator, CD_alpha_elevator, CD_elevator_elevator
+        real :: Cl_l0, Cl_beta, Cl_pbar, Cl_rbar, Cl_alpha_rbar, Cl_aileron, Cl_rudder
+        real :: Cm_0, Cm_alpha, Cm_qbar, Cm_alphahat, Cm_elevator
+        real :: Cn_beta, Cn_pbar, Cn_alpha_pbar, Cn_rbar, Cn_aileron, Cn_alpha_aileron, Cn_rudder
+        real :: Cm_alpha_0, Cm_alpha_s, Cm_min
+
+        ! Aerodynamic database
+        character(len=:), allocatable :: db_path 
+        character(len=200), allocatable, dimension(:) :: db_fn(:)
+        type(db_rect), allocatable :: db(:) 
+        integer :: n_db 
+        real :: speed_brake, le_flap
+
+        ! Propulsion
+        integer :: num_props 
+        type(propulsion_t), allocatable :: props(:) 
+        real :: rho0
+
+        ! Debugging
+        logical :: compressibility = .false., rk4_verbose, print_states, test_compressibility
+
+        ! Stall model 
+        logical :: stall = .false., test_stall
+        real :: CL_lambda_b, CL_alpha_0, CL_alpha_s, CD_lambda_b, CD_alpha_0, CD_alpha_s, Cm_lambda_b
+        
+        ! Initialization constants
+        real :: init_airspeed, init_alt, init_state(24)
+        real, allocatable :: init_eul(:) ! has to be allocatable because will be read from json object
+
+        ! States/controls
+        real :: state(24)
+        type(control_t) :: controls(4)
+        type(controller_t) :: controller 
+        type(atmosphere_t) :: atm
+        real :: zdot(3) ! Integral error
+
+        type(trim_settings_t) :: trim
+      end type vehicle_t
+    !----------------------------------------   
   contains 
   !==================================================
   ! INITIALIZATION FUNCTIONS
@@ -243,18 +379,16 @@ module controller_m
 
         omega = state(4:6)
 
-        ! ! TRACK DESIRED EULER ANGLES
-        ! ! Define desired angular acceleration with proportional controller
-        ! error = omega - sp(1:3)
-        ! int_error = state(22:24)
-        ! omega_ref_dot = 0.0
+        ! FOLLOW SETPOINT VALUES
+        error = omega - sp(1:3)
+        omega_ref_dot = 0.0 
 
-        ! TRACK A REFERENCE SIGNAL
-        ! Define reference signal
-        omega_ref = pi/180.0 * [5.0*sin(2.0*time), -2.0*sin(time), sin(time)]
-        omega_ref_dot = pi/180.0 * [10.0*cos(2.0*time), -2.0*cos(time), cos(time)] 
-        error = omega - omega_ref
-        int_error = state(22:24) ! integral error
+        ! ! FOLLOW REFERENCE SIGNAL 
+        ! omega_ref = pi/180.0 * [30.0*sin(2.0*time), -20.0*sin(time), 30.0*sin(time)]
+        ! omega_ref_dot = pi/180.0 * [60.0*cos(2.0*time), -20.0*cos(time), 30.0*cos(time)] 
+        ! error = omega - omega_ref
+
+        int_error = state(22:24)
 
         ! Define desired angular acceleration with proportional controller
         Kp = 0.0 
@@ -349,6 +483,9 @@ module controller_m
           C_control(2,2) = t%Cm_elevator
           C_control(3,1) = t%Cn_aileron + t%Cn_alpha_aileron * alpha
           C_control(3,3) = t%Cn_rudder
+          ! write(*,*) 'controller C_control = ', C_control 
+          
+        ! Aircraft model end
 
           ! Stall model 
           if (t%stall) then 
@@ -405,7 +542,7 @@ module controller_m
       chi_inf = 1.047      ! 60 deg
       k_path  = 0.05
 
-      ! Vehicle position
+      ! MAV position
       pn = t%state(1)
       pe = t%state(2)
       pd = t%state(3)
@@ -530,5 +667,5 @@ module controller_m
       out(11) = rho
 
       end function follow_wpp_fillet
-    !----------------------------------------
+    !----------------------------------------      
 end module controller_m 

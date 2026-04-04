@@ -25,7 +25,7 @@ module propulsion_m
 
         select case(t%type) 
             case("T=f(V)") 
-                call jsonx_get(j_propulsion, 'T_coefficients[lbf]', t%T_coeffs) 
+                call jsonx_get(j_propulsion, 'T_coefficients[lbf]', t%T_coeffs, 0.0) 
                 call jsonx_get(j_propulsion, 'Ta', t%Ta) 
                 t%rotation_delta = 1 
                 t%Ixx = 0.0 
@@ -49,18 +49,24 @@ module propulsion_m
         real :: ans(9) 
         real :: Vc(3), Vc_mag, uc(3), vN(3), vN_mag, uN(3) 
         real :: Fc(3), Mc(3) 
-        real :: thrust, normal, torque, yaw, hxx 
+        real :: thrust, normal, torque, yaw, hxx, alpha_c 
         real :: Z_dum, T_dum, P_dum, rho, rho0, a_dum, mu_dum, dyp 
-        real :: Hz, omega, J 
+        real :: Hz, omega, J
+
+        ! write(*,*) 'orientation_quat = ', t%orientation_quat
+        ! write(*,*) 'states(1:3) = ', states(1:3)
+        ! write(*,*) 'states(4:6) = ', states(4:6) 
 
         Vc = quat_base_to_dependent(states(1:3) + cross_product(states(4:6), t%location), t%orientation_quat)
         Vc_mag = sqrt(Vc(1)**2 + Vc(2)**2 + Vc(3)**2) 
         uc = Vc/Vc_mag 
         if(Vc_mag < tol) uc = [1.0, 0.0, 0.0] 
+        alpha_c = acos(uc(1))
 
         vN = -[0.0, uc(2), uc(3)] 
         vN_mag = sqrt(vN(1)**2 + vN(2)**2 + vN(3)**2) 
         uN = vN/ vN_mag 
+        ! write(*,*) 'VN_mag = ', vN_mag
         if(vN_mag < tol) uN = [0.0, 0.0, 1.0] 
 
         call std_atm_English(0.0, z_dum, t_dum, p_dum, rho0, a_dum, mu_dum) 
@@ -78,14 +84,27 @@ module propulsion_m
                 Hz = tau/60.0 
                 omega = Hz*2*pi 
                 J = 2.0 * pi * Vc_mag/omega/t%diameter 
+                ! write(*,*) 'omega = ', omega 
+                ! write(*,*) 'J = ', J                 
+                ! write(*,*) 't%CT_J = ', t%CT_J
+                ! write(*,*) 't%CP_J = ', t%CP_J
+                ! write(*,*) 't%CNa_J = ', t%CNa_J
+                ! write(*,*) 't%Cnna_J = ', t%Cnna_J
 
                 thrust = calc_polynomial(t%CT_J,J)    * rho*(Hz**2)*(t%diameter**4) 
                 torque = calc_polynomial(t%CP_J,J)    * rho*(Hz**3)*(T%diameter**5) / omega 
-                normal = calc_polynomial(t%CNa_J,J)   * rho*(Hz**2)*(t%diameter**4) 
-                yaw    = calc_polynomial(t%Cnna_J,J)  * rho*(Hz**2)*(T%diameter**5) 
+                normal = calc_polynomial(t%CNa_J,J)   * rho*(Hz**2)*(t%diameter**4) * alpha_c 
+                yaw    = calc_polynomial(t%Cnna_J,J)  * rho*(Hz**2)*(T%diameter**5) * alpha_c 
                 hxx = t%rotation_delta * t%Ixx * omega 
-
+                write(*,*) 
+                ! write(*,*) 'thrust =', thrust
+                ! write(*,*) 'torque =', torque
+                ! write(*,*) 'normal =', normal
+                ! write(*,*) 'yaw    =', yaw   
+                ! write(*,*) 'alpha_c = ', alpha_c 
+                ! write(*,*) 'hxx    =', hxx
         end select 
+        ! write(*,*) 'uN = ', uN
 
         Fc = [thrust, 0.0, 0.0] + Normal*uN 
         Mc = -real(t%rotation_delta)*([torque, 0.0, 0.0] + yaw*uN) 
@@ -93,11 +112,11 @@ module propulsion_m
         ans(1:3) = quat_dependent_to_base(Fc, t%orientation_quat) 
         ans(4:6) = quat_dependent_to_base(Mc, t%orientation_quat) + cross_product(t%location, ans(1:3)) 
         ans(7:9) = quat_dependent_to_base([hxx, 0.0, 0.0], t%orientation_quat)
-        write(*,*) 
-        write(*,*) t%name
-        write(*,*) 'Fc,','Mc',',',Fc(1),',',Fc(2),',',Fc(3),',',Mc(1),',',Mc(2),',',Mc(3)
-        write(*,*) 'Fb',',','Mb',',',ans(1),',',ans(2),',',ans(3),',',ans(4),',',ans(5),',',ans(6)
-        write(*,*) 'hc',',','hb',',',hxx,',',0.0,',',0.0,',',ans(7),',',ans(8),',',ans(9)
+        ! write(*,*)
+        ! write(*,*) t%name 
+        ! write(*,*) 'Fc,','Mc',',',Fc(1),',',Fc(2),',',Fc(3),',',Mc(1),',',Mc(2),',',Mc(3)        
+        ! write(*,*) 'Fb',',','Mb',',',ans(1),',',ans(2),',',ans(3),',',ans(4),',',ans(5),',',ans(6)
+        ! write(*,*) 'hc',',','hb',',',hxx,',',0.0,',',0.0,',',ans(7),',',ans(8),',',ans(9)
     end function propulsion_get_FMh
 
     function calc_polynomial(coeffs, var) result(ans) 

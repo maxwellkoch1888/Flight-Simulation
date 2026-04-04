@@ -8,6 +8,7 @@ module sim_m
     type(vehicle_t), allocatable :: vehicles(:)
     type(atmosphere_t) :: atm
     type(connection) :: graphics
+    type(connection) :: graphics
     integer :: num_vehicles
 
     contains 
@@ -18,7 +19,7 @@ module sim_m
             character(100), intent(in) :: filename
             type(json_value), pointer :: j_vehicles, j_temp, j_atmosphere, j_connections, j_graphics 
             integer :: i
-            logical :: save_states, rk4_verbose
+            logical :: save_states, rk4_verbose, sigsev
 
             ! Begin simulation
             write(*,*) 'Initializing Simulation...'            
@@ -34,6 +35,7 @@ module sim_m
             call jsonx_get(j_main, 'simulation.rk4_verbose',   rk4_verbose, .false.)
             call jsonx_get(j_main, 'simulation.save_states',   save_states, .false.)
             call jsonx_get(j_main, 'simulation.save_lat_long', save_lat_long, .false.)
+            call jsonx_get(j_main, 'simulator.sigsev_error', sigsev, .false.)
 
             ! Geographic model
             call jsonx_get(j_main, 'simulation.geographic_model', geographic_model, 'none')
@@ -45,16 +47,17 @@ module sim_m
             write(*,*) 'Reading Atmospheric json Object...'
             call jsonx_get(j_main, 'atmosphere', j_atmosphere)
 
-            ! ! Initialize connections 
-            ! write(*,*) 'Reading connections json object...'
-            ! call jsonx_get(j_main, 'connections', j_connections) 
-            ! call jsonx_get(j_connections, 'graphics', j_graphics)
-            ! call graphics%init(j_graphics)
+            ! Initialize connections 
+            write(*,*) 'Reading connections json object...'
+            call jsonx_get(j_main, 'connections', j_connections) 
+            call jsonx_get(j_connections, 'graphics', j_graphics)
+            call graphics%init(j_graphics)
 
             ! Initialize vehicles
             do i=1,num_vehicles
                 vehicles(i)%save_states = save_states
                 vehicles(i)%rk4_verbose = rk4_verbose
+                vehicles(i)%sigsev = sigsev
             end do    
 
             do i = 1,num_vehicles
@@ -111,20 +114,20 @@ module sim_m
                 ! CALCULATE THE NEW STATES FOR EACH VEHICLE
                 do i=1,num_vehicles
                     if(vehicles(i)%run_physics) then 
-                        call vehicle_tick_state(vehicles(i), time, dt)    
+                        call vehicle_tick_state(vehicles(i), time, dt)     
                         if(vehicles(i)%name == 'F16') f16_state = vehicles(i)%state 
                     end if 
                 end do 
 
-                ! ! Send graphics over UDP
-                ! sent_state(1) = time
-                ! sent_state(2:14) = f16_state(1:13)
-                ! call graphics%send(sent_state)
+                ! SEND GRAPHICS OVER CONNECTION 
+                sent_state(1) = time
+                sent_state(2:14) = f16_state(1:13)
+                call graphics%send(sent_state)
 
                 ! ! RECEIVE USER CONTROLS OVER CONNECTION
                 ! controls_input = user_controls%recv()
                 ! controls_input(2:4) = controls_input(2:4) * pi / 180
-                ! controls = controls_input(2:5)
+                ! controls = controls_input(2:5)                
 
                 ! UPDATE THE TIME        
                 if(real_time) then
