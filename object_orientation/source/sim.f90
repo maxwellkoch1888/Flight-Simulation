@@ -8,6 +8,7 @@ module sim_m
     type(vehicle_t), allocatable :: vehicles(:)
     type(atmosphere_t) :: atm
     type(connection) :: graphics
+    type(connection) :: graphics
     integer :: num_vehicles
 
     contains 
@@ -43,7 +44,7 @@ module sim_m
             if (geographic_model == 'ellipse') geographic_model_ID = 2
 
             ! Initialize atmosphere
-            write(*,*) 'Reading Atmospheric JSON Object...'
+            write(*,*) 'Reading Atmospheric json Object...'
             call jsonx_get(j_main, 'atmosphere', j_atmosphere)
 
             ! Initialize connections 
@@ -101,7 +102,6 @@ module sim_m
 
             ! SAVE THE TIMESTAMP WHEN THE SIMULATION BEGINS
             cpu_start_time = get_time()
-
             ! START THE SIMULATION
             do i=1,num_vehicles
                 if(vehicles(i)%run_physics) then 
@@ -109,7 +109,7 @@ module sim_m
                     if(save_lat_long) call vehicle_write_lat_long(vehicles(i), time)
                 end if 
             end do     
-                    
+
             do while (time < tf - tol)
                 ! CALCULATE THE NEW STATES FOR EACH VEHICLE
                 do i=1,num_vehicles

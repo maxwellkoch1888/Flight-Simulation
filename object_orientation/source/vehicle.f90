@@ -759,7 +759,6 @@ module vehicle_m
         real :: x1(24), x(24), out(11)
         real :: r(3), q(3), c(3), position(3)
         integer :: N
-        real, allocatable :: waypoints(:,:)
         real :: rho, lambda, radius
         real :: hc, chic, cmd(2)      
         integer :: i, flag 
@@ -768,9 +767,16 @@ module vehicle_m
         ! allocate(waypoints(3,N))
 
         x = t%state
-
+        ! write(*,*)
+        ! write(*,*) 'before rk4'
+        ! do i = 1,4 
+        !   write(*,*) t%controls(i)%commanded_value
+        ! end do 
+          
         ! Step vehicle forward in time
         x1 = rk4(t, time, t%state, dt) 
+        ! write(*,*) 
+        ! write(*,*) 'after rk4'
 
         do i = 1,4
           if (t%sigsev) then 
@@ -790,24 +796,6 @@ module vehicle_m
 
         ! Normalize quaternion
         call quat_norm(t%state(10:13)) 
-
-        ! ! Path follower
-        ! out = follow_wpp_fillet(waypoints, n, position, radius)
-
-        ! flag   = int(out(1))
-        ! r      = out(2:4)
-        ! q      = out(5:7)
-        ! c      = out(8:10)
-        ! rho    = out(11)
-
-        ! if (flag == 1) then
-        !     cmd = straight_line_follow(t, r, q)
-        ! else
-        !     cmd = follow_orbit(t, c,rho,lambda)
-        ! end if
-
-        ! hc   = cmd(1)
-        ! chic = cmd(2)
         
         call get_controller_input(t, time+dt) 
         if (t%sigsev) write(*,*) 'vehicle_tick_state success...'
@@ -824,6 +812,7 @@ module vehicle_m
         if (t%sigsev) write(*,*) 'call get_controller_input...'
 
         if(t%controller%running) then 
+          write(*,*) 'controller running'
           controls_setpoint(:) = controller_update(t%controller, t, t%state, time) 
           do i = 1,4 
             t%controls(i)%commanded_value = controls_setpoint(i)
@@ -1120,7 +1109,7 @@ module vehicle_m
         ! Gravity relief
         ac = (velocity(1)**2 + velocity(2)**2) / (earth_radius_ft - state(9))
 
-        ! Aacceleration in body
+        ! Acceleration in body
         acceleration(1) = FMh(1)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(1) + angular_v_effect(1)
         acceleration(2) = FMh(2)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(2) + angular_v_effect(2)
         acceleration(3) = FMh(3)/t%mass + (gravity_ft_per_sec2 - ac)*orientation_effect(3) + angular_v_effect(3)
@@ -1274,15 +1263,13 @@ module vehicle_m
         if(t%type == 'aircraft') then 
           ! Pull out controls
           if(t%limit_controls) then 
-            delta_a  = max(t%controls(1)%mag_limit(1), min(t%controls(1)%mag_limit(2), state(14)))
-            delta_e  = max(t%controls(2)%mag_limit(1), min(t%controls(2)%mag_limit(2), state(15)))
-            delta_r  = max(t%controls(3)%mag_limit(1), min(t%controls(3)%mag_limit(2), state(16)))
-            throttle = max(t%controls(4)%mag_limit(1), min(t%controls(4)%mag_limit(2), state(17)))
+            delta_a  = max(t%controls(1)%mag_limit(1), min(t%controls(1)%mag_limit(2), state(t%aileron_ID)))
+            delta_e  = max(t%controls(2)%mag_limit(1), min(t%controls(2)%mag_limit(2), state(t%elevator_ID)))
+            delta_r  = max(t%controls(3)%mag_limit(1), min(t%controls(3)%mag_limit(2), state(t%rudder_ID)))
           else 
-            delta_a  = state(14)
-            delta_e  = state(15)
-            delta_r  = state(16)
-            throttle = state(17)
+            delta_a  = state(t%aileron_ID)
+            delta_e  = state(t%elevator_ID)
+            delta_r  = state(t%rudder_ID)
           end if 
 
           ! Database aerodynamics

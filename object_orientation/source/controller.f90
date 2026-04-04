@@ -3,8 +3,6 @@ module controller_m
   use jsonx_m 
   use linalg_mod
   use connection_m 
-  use atmosphere_m 
-  use database_m 
   implicit none 
   
   !==================================================
@@ -235,6 +233,11 @@ module controller_m
         real :: pilot_command(3)
         ! Command angular rates
         ! real :: pilot_command(4)
+        real :: r_path(3), q_path(3)
+        real :: path_cmd(2)
+        real :: chi_c, h_c        
+        real :: chi, chi_error
+        real :: h, h_error
 
         u = states(1)
         v = states(2)
@@ -257,11 +260,33 @@ module controller_m
         g = gravity_English(-states(9))
 
         pilot_command = t%pilot_conn%recv([time], time)
+
+        ! Define a path
+        r_path = [0.0, 0.0, -1000.0]
+        q_path = [1.0, 0.0, 0.0]
+
+        ! Call guidance law
+        path_cmd = straight_line_follow(vehicle, r_path, q_path)
+        h_c   = path_cmd(1)
+        chi_c = path_cmd(2)    
+        
+        ! Current course angle
+        chi = atan2(v, u)
+        chi_error = chi_c - chi
+        chi_error = atan2(sin(chi_error), cos(chi_error))
+
+        ! Proportional turn law
+        bank_sp = 2.0 * chi_error  
+        
+        h = -states(9)
+        h_error = h_c - h
+        gamma_sp = 0.05 * h_error   
+        V_sp = 350.0     
         
         ! Command bank angle, climb angle, velocity
-        bank_sp  = pilot_command(1) * pi / 180.0 
-        gamma_sp = pilot_command(2) * pi /180.0 
-        V_sp     = pilot_command(3) 
+        ! bank_sp  = pilot_command(1) * pi / 180.0 
+        ! gamma_sp = pilot_command(2) * pi /180.0 
+        ! V_sp     = pilot_command(3) 
 
         p_sp = pid_get_command(t%bank_p, bank_sp, eul(1), time, dyp)
         q_sp = pid_get_command(t%gamma_q, gamma_sp, gamma, time, dyp)
@@ -338,16 +363,12 @@ module controller_m
       function dynamic_inversion(t, time, state, sp) result(u)
         implicit none 
         type(vehicle_t) :: t
-        type(pid_t) :: tau_controller
         real, intent(in) :: time, state(24), sp(4)
         real :: u(4)
-        real :: pilot_command(3)
         real :: omega(3), omegadot_des(3), omega_ref(3), omega_ref_dot(3)
         real :: Kp(3,3), Ki(3,3)
         real :: Vmag, alpha, beta, dyp
-        real :: geometric_altitude_ft, geopotential_altitude_ft
-        real :: temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3
-        real :: dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec      
+        real :: altitude, gh_dum, T_dum, P_dum, rho, mu_dum, a_dum    
         real :: Ixx, Iyy, Izz, Ixy, Ixz, Iyz, Imat(3,3), Imat_inv(3,3)
         real :: hxb, hyb, hzb, hmat(3,3)
         real :: sign_a, sa, Cm_s, sigma_m, pos, neg 
@@ -388,11 +409,8 @@ module controller_m
           beta   = asin(state(2) / Vmag)
 
           ! Density
-            geometric_altitude_ft = -state(9)
-            call std_atm_English(&
-              geometric_altitude_ft, geopotential_altitude_ft,     & 
-              temp_R, pressure_lbf_per_ft2, density_slugs_per_ft3, & 
-              dyn_viscosity_slug_per_ft_sec, sos_ft_per_sec)      
+          altitude = -state(9)
+          call std_atm_English(altitude, gh_dum, T_dum, P_dum, rho, mu_dum, a_dum )      
 
           ! Inertia
           Ixx = t%inertia(1,1)
@@ -444,7 +462,7 @@ module controller_m
 
           ! Dynamic Pressure
           dyn_pressure_mat = 0.0
-          dyp = 0.5 * density_slugs_per_ft3 * Vmag**2
+          dyp = 0.5 * rho * Vmag**2
           dyn_pressure_mat(1,1) = dyp * t%planform_area * t%lateral_length
           dyn_pressure_mat(2,2) = dyp * t%planform_area * t%longitudinal_length
           dyn_pressure_mat(3,3) = dyp * t%planform_area * t%lateral_length
@@ -471,7 +489,6 @@ module controller_m
 
           ! Stall model 
           if (t%stall) then 
-            write(*,*) 'using stall '
             sign_a  = sign(1.0,alpha)
             sa = sin(alpha)
 
@@ -484,6 +501,7 @@ module controller_m
             C_control(2, 2) = C_control(2, 2) * (1 - sigma_m) + Cm_s * sigma_m 
             C_states(2)     = C_states(2)     * (1 - sigma_m) + Cm_s * sigma_m 
           end if 
+        ! Aircraft model end 
 
         ! f(x)
         f = matmul(Imat_inv, matmul(dyn_pressure_mat,C_states) + pqr_term + matmul(hmat,omega))
