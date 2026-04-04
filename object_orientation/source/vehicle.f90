@@ -326,12 +326,14 @@ module vehicle_m
         type(vehicle_t) :: t 
         real, intent(in) :: time 
 
-        write(t%iunit_states,'(*(g0,","))') &
-            time, t%state(1), t%state(2), t%state(3), t%state(4), t%state(5), t%state(6), &
-            t%state(7), t%state(8), t%state(9), t%state(10), t%state(11), t%state(12), t%state(13), &
-            t%state(14)*180.0/pi, t%state(15)*180.0/pi, t%state(16)*180.0/pi, &
-            t%state(17), t%state(18)*180.0/pi, t%state(19)*180.0/pi, &
-            t%state(20)*180/pi, t%state(21), t%state(22)*180.0/pi, t%state(23)*180.0/pi, t%state(24)*180.0/pi
+        write(t%iunit_states,'(g0,",",g0,",",g0,",",g0,",",g0,",",g0,",",g0,",", &
+                              g0,",",g0,",",g0,",",g0,",",g0,",",g0,",",g0,",",g0,",", &
+                              g0,",",g0,",",g0,",",g0,",",g0,",",g0,",",g0,",",g0,",",g0,",",g0)') &
+                time, t%state(1), t%state(2), t%state(3), t%state(4), t%state(5), t%state(6), &
+                t%state(7), t%state(8), t%state(9), t%state(10), t%state(11), t%state(12), t%state(13), &
+                t%state(14)*180.0/pi, t%state(15)*180.0/pi, t%state(16)*180.0/pi, &
+                t%state(17), t%state(18)*180.0/pi, t%state(19)*180.0/pi, &
+                t%state(20)*180.0/pi, t%state(21), t%state(22)*180.0/pi, t%state(23)*180.0/pi, t%state(24)*180.0/pi
 
       end subroutine 
     !----------------------------------------
