@@ -38,7 +38,7 @@
     "vehicles" : {
         "F16" : {
             "type" : "aircraft",
-            "run_physics" : false,
+            "run_physics" : true,
             "mass" : {
                 "weight[lbf]" : 20500.0,
                 "Ixx[slug-ft^2]" : 9496.0,
@@ -301,7 +301,7 @@
         },
         "quadrotor" : {
             "type" : "quadrotor", 
-            "run_physics" : true, 
+            "run_physics" : false, 
             "mass" : {
                 "weight[lbf]" : 5.0, 
                 "Ixx[slug-ft^2]" : 0.0231, 
