@@ -53,10 +53,6 @@ module propulsion_m
         real :: Z_dum, T_dum, P_dum, rho, rho0, a_dum, mu_dum, dyp 
         real :: Hz, omega, J
 
-        ! write(*,*) 'orientation_quat = ', t%orientation_quat
-        ! write(*,*) 'states(1:3) = ', states(1:3)
-        ! write(*,*) 'states(4:6) = ', states(4:6) 
-
         Vc = quat_base_to_dependent(states(1:3) + cross_product(states(4:6), t%location), t%orientation_quat)
         Vc_mag = sqrt(Vc(1)**2 + Vc(2)**2 + Vc(3)**2) 
         uc = Vc/Vc_mag 
@@ -66,13 +62,11 @@ module propulsion_m
         vN = -[0.0, uc(2), uc(3)] 
         vN_mag = sqrt(vN(1)**2 + vN(2)**2 + vN(3)**2) 
         uN = vN/ vN_mag 
-        ! write(*,*) 'VN_mag = ', vN_mag
         if(vN_mag < tol) uN = [0.0, 0.0, 1.0] 
 
         call std_atm_English(0.0, z_dum, t_dum, p_dum, rho0, a_dum, mu_dum) 
         call std_atm_English(-states(9), z_dum, t_dum, p_dum, rho, a_dum, mu_dum)
 
-        
         select case(t%type) 
             case("T=f(V)") 
                 thrust = tau*calc_polynomial(t%T_coeffs, Vc_mag) * (rho/rho0)**t%Ta 
@@ -81,29 +75,41 @@ module propulsion_m
                 yaw = 0.0
                 hxx = 0.0 
             case("propeller_polynomial") 
-                Hz = tau/60.0 
-                omega = Hz*2*pi 
-                J = 2.0 * pi * Vc_mag/omega/t%diameter 
-                ! write(*,*) 'omega = ', omega 
-                ! write(*,*) 'J = ', J                 
-                ! write(*,*) 't%CT_J = ', t%CT_J
-                ! write(*,*) 't%CP_J = ', t%CP_J
-                ! write(*,*) 't%CNa_J = ', t%CNa_J
-                ! write(*,*) 't%Cnna_J = ', t%Cnna_J
+                select case(t%units)
+                    case("RPM")
+                        Hz = tau/60.0 
+                        omega = Hz*2*pi 
+                    case ("thrust[lbf]")
+                        omega = -Vc_mag * t%CT_J(2) + sqrt(Vc_mag**2 * t%CT_J(2)**2 - 4.0 * t%CT_J(1)*(Vc_mag**2*t%CT_J(3) - tau / rho/ t%diameter**2) )
+                        omega = omega * pi /t%diameter / t%CT_J(1) 
+                        Hz = omega / 2.0 / pi 
+                    case("torque[ft-lbf]") 
+                        omega = -Vc_mag * t%CP_J(2) + sqrt(Vc_mag**2*t%CP_J(2)**2 - 4.0 * t%CP_J(1)*(Vc_mag**2*t%CP_J(3) - tau *2.0 * pi / rho / t%diameter**3) ) 
+                        omega = omega * pi / t%diameter / t%CP_J(1) 
+                        Hz = omega / 2.0 / pi 
+                end select
 
-                thrust = calc_polynomial(t%CT_J,J)    * rho*(Hz**2)*(t%diameter**4) 
-                torque = calc_polynomial(t%CP_J,J)    * rho*(Hz**3)*(T%diameter**5) / omega 
-                normal = calc_polynomial(t%CNa_J,J)   * rho*(Hz**2)*(t%diameter**4) * alpha_c 
-                yaw    = calc_polynomial(t%Cnna_J,J)  * rho*(Hz**2)*(T%diameter**5) * alpha_c 
-                hxx = t%rotation_delta * t%Ixx * omega 
-                write(*,*) 
-                ! write(*,*) 'thrust =', thrust
-                ! write(*,*) 'torque =', torque
-                ! write(*,*) 'normal =', normal
-                ! write(*,*) 'yaw    =', yaw   
-                ! write(*,*) 'alpha_c = ', alpha_c 
-                ! write(*,*) 'hxx    =', hxx
-        end select 
+                    ! write(*,*) 'omega = ', omega 
+                    ! write(*,*) 'J = ', J                 
+                    ! write(*,*) 't%CT_J = ', t%CT_J
+                    ! write(*,*) 't%CP_J = ', t%CP_J
+                    ! write(*,*) 't%CNa_J = ', t%CNa_J
+                    ! write(*,*) 't%Cnna_J = ', t%Cnna_J
+
+                    J = 2.0 * pi * Vc_mag/omega/t%diameter 
+                    thrust = calc_polynomial(t%CT_J,J)    * rho*(Hz**2)*(t%diameter**4) 
+                    torque = calc_polynomial(t%CP_J,J)    * rho*(Hz**3)*(T%diameter**5) / omega 
+                    normal = calc_polynomial(t%CNa_J,J)   * rho*(Hz**2)*(t%diameter**4) * alpha_c 
+                    yaw    = calc_polynomial(t%Cnna_J,J)  * rho*(Hz**2)*(T%diameter**5) * alpha_c 
+                    hxx = t%rotation_delta * t%Ixx * omega 
+                    ! write(*,*) 
+                    ! write(*,*) 'thrust =', thrust
+                    ! write(*,*) 'torque =', torque
+                    ! write(*,*) 'normal =', normal
+                    ! write(*,*) 'yaw    =', yaw   
+                    ! write(*,*) 'alpha_c = ', alpha_c 
+                    ! write(*,*) 'hxx    =', hxx
+            end select 
         ! write(*,*) 'uN = ', uN
 
         Fc = [thrust, 0.0, 0.0] + Normal*uN 

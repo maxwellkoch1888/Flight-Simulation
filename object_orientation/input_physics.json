@@ -1,7 +1,7 @@
 {
     "simulation" : {
         "time_step[s]" : 0.01,
-        "end_time[s]" : 100.0,
+        "end_time[s]" : 0.01,
         "rk4_verbose" : false,
         "save_states" : true,
         "save_lat_long" : false, 
@@ -371,32 +371,32 @@
             "control_effectors" : {
                 "1" : {
                     "name" : "prop_1", 
-                    "units" : "thrust[lbf]", 
+                    "units" : "torque[ft-lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
                 "2" : {
                     "name" : "prop_2", 
-                    "units" : "thrust[lbf]", 
+                    "units" : "torque[ft-lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
                 "3" : {
                     "name" : "prop_3", 
-                    "units" : "thrust[lbf]", 
+                    "units" : "torque[ft-lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
                 "4" : {
                     "name" : "prop_4", 
-                    "units" : "thrust[lbf]", 
+                    "units" : "torque[ft-lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 }                                                
             },
             "initial" : {
                 "airspeed[ft/s]" : 0.0, 
-                "altitude[ft]" : 0.0, 
+                "altitude[ft]" : 10000.0, 
                 "latitude[deg]" : 0.0, 
                 "longitude[deg]" : 0.0, 
                 "Euler_angles[deg]" : [0.0, 0.0, 0.0], 
@@ -407,7 +407,7 @@
                     "p[deg/s]" : 0.0, 
                     "q[deg/s]" : 0.0, 
                     "r[deg/s]" : 0.0, 
-                    "controls" : [1.25, 1.25, 1.25, 1.25]
+                    "controls" : [0.05, 0.05, 0.05, 0.05]
                 },
                 "trim" : {
                     "type" : "shss",
