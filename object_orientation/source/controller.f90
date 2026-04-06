@@ -14,7 +14,7 @@ module controller_m
     ! PID type 
       type pid_t 
         character(len=:), allocatable :: name 
-        real :: KP, KI, KD 
+        real :: KP, KI, KD, bias 
         real :: error, prev_error, error_int, error_deriv 
         real :: prev_time, prev_ans, update_rate 
         real, allocatable :: limit(:)
@@ -30,7 +30,7 @@ module controller_m
         type(connection) :: pilot_conn 
         logical :: running = .false. 
       end type controller_t 
-    !----------------------------------------    
+    !----------------------------------------
     ! Trim solver type
       type trim_solver_t
         real :: step_size, relaxation_factor, tolerance, max_iterations
@@ -57,7 +57,7 @@ module controller_m
         real :: time_constant, natural_frequency, damping_ratio
         real :: display_units = 1.0 
       end type control_t       
-    !----------------------------------------              
+    !----------------------------------------
     ! Propulsion type 
       type propulsion_t 
           character(len=:), allocatable :: name, type, units 
@@ -74,9 +74,8 @@ module controller_m
           integer :: rotation_delta 
           real, allocatable :: CT_J(:), CP_J(:), CNa_J(:), Cnna_J(:) 
       end type propulsion_t        
-    !----------------------------------------        
-    ! Vehicle type
-      
+    !----------------------------------------
+    ! Vehicle type      
       type vehicle_t
         type(json_value), pointer :: j_vehicle
             
@@ -142,7 +141,7 @@ module controller_m
 
         type(trim_settings_t) :: trim
       end type vehicle_t
-    !----------------------------------------   
+    !----------------------------------------
   contains 
   !==================================================
   ! INITIALIZATION FUNCTIONS
@@ -214,6 +213,8 @@ module controller_m
         call jsonx_get(j_pid, 'dyp_schedule', t%dyp_schedule, .false.)
         t%limit(:) = t%limit(:)/t%display_units 
 
+        t%bias = 0.0 
+
       end subroutine pid_init 
   !==================================================
   ! UPDATE FUNCTIONS
@@ -231,10 +232,7 @@ module controller_m
         real :: Vmag, gamma, g 
         real :: Z, temp, Pressure, rho, a, mu, dyp 
         real :: bank_sp, gamma_sp, V_sp, p_sp, q_sp, r_sp, setpoint(4)
-        ! Command bank and climb angles
         real :: pilot_command(3)
-        ! Command angular rates
-        ! real :: pilot_command(4)
 
         u = states(1)
         v = states(2)
@@ -262,7 +260,6 @@ module controller_m
         bank_sp  = pilot_command(1) * pi / 180.0 
         gamma_sp = pilot_command(2) * pi /180.0 
         V_sp     = pilot_command(3) 
-
         p_sp = pid_get_command(t%bank_p, bank_sp, eul(1), time, dyp)
         q_sp = pid_get_command(t%gamma_q, gamma_sp, gamma, time, dyp)
         r_sp = (g*sp*ct + p*w)/u ! neglect gravity relief
@@ -273,7 +270,7 @@ module controller_m
         ! r_sp = pilot_command(3) * pi / 180.0 
         ! V_sp = pilot_command(4) 
 
-        ! PID Controller
+        ! ! PID Controller
         ! ans(1) = pid_get_command(t%p_da,  p_sp, p,    time, dyp)
         ! ans(2) = pid_get_command(t%q_de,  q_sp, q,    time, dyp)
         ! ans(3) = pid_get_command(t%r_dr,  r_sp, r,    time, dyp)
@@ -288,7 +285,7 @@ module controller_m
 
       end function controller_update
     !----------------------------------------
-    ! Get commanded values for a controller
+    ! Get commanded values for a pid controller
       function pid_get_command(t, commanded, actual, time, dyp) result(ans) 
         implicit none 
         type(pid_t), intent(inout) :: t 
@@ -300,7 +297,7 @@ module controller_m
           t%prev_error  = commanded - actual 
           t%error_int   = 0.0 
           t%error_deriv = 0.0 
-          ans           = t%KP * t%prev_error 
+          ans           = t%KP * t%prev_error + t%bias
           if(t%dyp_schedule) ans = ans/dyp 
           t%prev_ans    = ans 
           return 
@@ -323,7 +320,7 @@ module controller_m
           if (dt>tol) t%error_deriv = (t%error  - t%prev_error) / dt 
 
           ! PID equation 
-          ans = (t%KP*t%error + t%KI*t%error_int + t%KD*t%error_deriv) 
+          ans = t%KP*t%error + t%KI*t%error_int + t%KD*t%error_deriv + t%bias
           if(t%dyp_schedule) ans = ans/dyp 
 
           t%prev_error = t%error 
@@ -332,6 +329,7 @@ module controller_m
         else ! don't update if not correct frequency 
           ans = t%prev_ans 
         end if 
+        ! write(*,*) t%bias 
       end function pid_get_command
     !----------------------------------------
     ! Dynamic Inversion Controller
@@ -358,26 +356,29 @@ module controller_m
 
         omega = state(4:6)
 
-        ! FOLLOW SETPOINT VALUES
-        error = omega - sp(1:3)
-        omega_ref_dot = 0.0 
+        if(time > 52.0) then 
+          ! FOLLOW SETPOINT VALUES
+          error = omega - sp(1:3)
+          omega_ref_dot = 0.0 
+        else 
 
-        ! ! FOLLOW REFERENCE SIGNAL 
-        ! omega_ref = pi/180.0 * [30.0*sin(2.0*time), -20.0*sin(time), 30.0*sin(time)]
-        ! omega_ref_dot = pi/180.0 * [60.0*cos(2.0*time), -20.0*cos(time), 30.0*cos(time)] 
-        ! error = omega - omega_ref
+          ! FOLLOW REFERENCE SIGNAL 
+          omega_ref = pi/180.0 * [5.0*sin(2.0*time), -3.0*sin(time), 8.0*sin(time)]
+          omega_ref_dot = pi/180.0 * [10.0*cos(2.0*time), -3.0*cos(time), 8.0*cos(time)] 
+          error = omega - omega_ref
+        end if 
 
         int_error = state(22:24)
 
         ! Define desired angular acceleration with proportional controller
         Kp = 0.0 
         Ki = 0.0
-        Kp(1,1) = 4.0
-        Kp(2,2) = 2.0
-        Kp(3,3) = 4.0 
-        Ki(1,1) = 1.0
-        Ki(2,2) = 1.0
-        Ki(3,3) = 1.0
+        Kp(1,1) = 8.0
+        Kp(2,2) = 10.0
+        Kp(3,3) = 8.0 
+        Ki(1,1) = 1.5
+        Ki(2,2) = 1.5
+        Ki(3,3) = 1.5
 
         omegadot_des = -matmul(Kp, error) - matmul(Ki, int_error) + omega_ref_dot  
 
@@ -467,11 +468,10 @@ module controller_m
           C_control(3,3) = t%Cn_rudder
           ! write(*,*) 'controller C_control = ', C_control 
           
-        ! Aircraft model end
 
           ! Stall model 
           if (t%stall) then 
-            write(*,*) 'using stall '
+            ! write(*,*) 'using stall '
             sign_a  = sign(1.0,alpha)
             sa = sin(alpha)
 
@@ -484,6 +484,7 @@ module controller_m
             C_control(2, 2) = C_control(2, 2) * (1 - sigma_m) + Cm_s * sigma_m 
             C_states(2)     = C_states(2)     * (1 - sigma_m) + Cm_s * sigma_m 
           end if 
+        ! Aircraft model end
 
         ! f(x)
         f = matmul(Imat_inv, matmul(dyn_pressure_mat,C_states) + pqr_term + matmul(hmat,omega))

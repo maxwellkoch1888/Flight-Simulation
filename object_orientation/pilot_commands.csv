@@ -1,4 +1,7 @@
 parameter,independent_variables,1
 time,bank[deg],climb[deg],V[ft/s]
 0,0,0,350
-150,30,0,350
+10,0,0,350
+24,0,0,350
+25,0,0,350
+150,0,0,350

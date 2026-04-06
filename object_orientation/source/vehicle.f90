@@ -256,7 +256,12 @@ module vehicle_m
           t%course_angle   = t%init_eul(3)
           t%prev_latitude  = t%latitude - cos(t%course_angle)
           t%prev_longitude = t% longitude - sin(t%course_angle) 
-          t%atm%prev_xyz = t%init_state(7:9)      
+          t%atm%prev_xyz = t%init_state(7:9)  
+          
+          ! Set throttle bias 
+          if (t%controller%V_tau%name == 'V->throttle') then
+              t%controller%V_tau%bias = t%state(17)
+          end if
 
           ! call get_controller_input(t, 0.0)
 

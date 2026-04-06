@@ -38,7 +38,7 @@
     "vehicles" : {
         "F16" : {
             "type" : "aircraft",
-            "run_physics" : true,
+            "run_physics" : false,
             "mass" : {
                 "weight[lbf]" : 20500.0,
                 "Ixx[slug-ft^2]" : 9496.0,
@@ -66,7 +66,7 @@
                     "location[ft]" : [0.0, 0.0, 0.0]
                 },
                 "stall" : {
-                    "include_stall" : false,
+                    "include_stall" : true,
                     "CL" : {
                         "alpha_0[deg]" : 0.0,
                         "alpha_s[deg]" : 43.0,
@@ -201,7 +201,7 @@
                     "damping_ratio" : 1.0
                 }                                                
             },
-            "_controller": {
+            "controller": {
                 "connections" : {
                     "receive_pilot_commands": {
                         "type": "receive", 
@@ -301,7 +301,7 @@
         },
         "quadrotor" : {
             "type" : "quadrotor", 
-            "run_physics" : false, 
+            "run_physics" : true, 
             "mass" : {
                 "weight[lbf]" : 5.0, 
                 "Ixx[slug-ft^2]" : 0.0231, 
@@ -371,43 +371,43 @@
             "control_effectors" : {
                 "1" : {
                     "name" : "prop_1", 
-                    "units" : "RPM", 
+                    "units" : "thrust[lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
                 "2" : {
                     "name" : "prop_2", 
-                    "units" : "RPM", 
+                    "units" : "thrust[lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
                 "3" : {
                     "name" : "prop_3", 
-                    "units" : "RPM", 
+                    "units" : "thrust[lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
                 "4" : {
                     "name" : "prop_4", 
-                    "units" : "RPM", 
+                    "units" : "thrust[lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 }                                                
             },
             "initial" : {
-                "airspeed[ft/s]" : 10.0, 
-                "altitude[ft]" : 10000.0, 
+                "airspeed[ft/s]" : 0.0, 
+                "altitude[ft]" : 0.0, 
                 "latitude[deg]" : 0.0, 
                 "longitude[deg]" : 0.0, 
-                "Euler_angles[deg]" : [0.0, -5.0, 0.0], 
+                "Euler_angles[deg]" : [0.0, 0.0, 0.0], 
                 "type" : "state" ,
                 "state" : {
-                    "angle_of_attack[deg]" : -5.0, 
+                    "angle_of_attack[deg]" : 0.0, 
                     "sideslip_angle[deg]" : 0.0, 
                     "p[deg/s]" : 0.0, 
                     "q[deg/s]" : 0.0, 
                     "r[deg/s]" : 0.0, 
-                    "controls" : [7000.0, 7000.0, 7000.0, 7000.0]
+                    "controls" : [1.25, 1.25, 1.25, 1.25]
                 },
                 "trim" : {
                     "type" : "shss",

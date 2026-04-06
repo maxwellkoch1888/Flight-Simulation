@@ -109,7 +109,9 @@ module sim_m
                     if(save_lat_long) call vehicle_write_lat_long(vehicles(i), time)
                 end if 
             end do     
-                    
+            
+            write(*,*) 'Simulation Running...'
+            if(abs(dt) < tol) write(*,*) 'Real time Simulation, check Unreal Engine...'
             do while (time < tf - tol)
                 ! CALCULATE THE NEW STATES FOR EACH VEHICLE
                 do i=1,num_vehicles
@@ -138,7 +140,7 @@ module sim_m
 
                 time = time + dt
                 integrated_time = integrated_time + dt
-                write(*,*) time, dt
+                ! write(*,*) time, dt
                 
                 do i=1,num_vehicles
                     if(vehicles(i)%run_physics) then 
