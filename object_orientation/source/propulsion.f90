@@ -136,6 +136,32 @@ module propulsion_m
         end do 
     end function calc_polynomial 
 
+    function electric_propulsion(tau, Vc, gamma, tolerance) result(Nr)
+        real, intent(in) :: tau, Vc, gamma, tolerance 
+        real :: Nr, error 
+        real :: lw, ls, lr, lm, Im, eta_c, B, C, Em, Nm, Ns, error 
+        real :: Eb, Ib 
+        real :: Gm, eta_g, Kv, CI, Im0, Rc, Eb0, Rb, Rm, Rc
+
+        Nr = 1000 
+        error = 1.0 
+        do while (error > tolerance)
+            ls = lr 
+            lm = ls/(eta_g * Gm) 
+            Im = lm * Kv/CI + Im0 
+            eta_c = 1 - 0.078*(1-tau) 
+            B = 2*Im*Rc - tau*Eb0 + tau**2/eta_c *Im * Rb 
+            C = Im**2 * Rc**2 - tau*Eb0*Im*Rc 
+            Em = 0.5*(-B + sqrt(B**2 -4C))
+            Nm = Kv * (Em - Im*Rm)
+            Ns = Nm/Gm 
+            error = Ns - Nr 
+            Nr = Nr + gamma*(Ns-Nr)
+        end do 
+        Eb = (Nm/Kv + Im*(Rm+Rc))/tau 
+        Ib = (Eb0 - Eb)/Rb 
+
+
 end module propulsion_m
 
 
