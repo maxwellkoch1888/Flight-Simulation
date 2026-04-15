@@ -437,18 +437,70 @@
                 "Iyz[slug-ft^2]" : 0.0 
             },
             "propulsion" : {
-                "motor": {
-                    "Kv": 450,
-                    "no_load_current[amps]": 0.3,
-                    "resistance[ohms]": 0.12
+                "prop_1" : {
+                    "type" : "electric_propulsion",
+                    "motor": {
+                        "Kv": 450,
+                        "no_load_current[amps]": 0.3,
+                        "gear_ratio" : 1.0, 
+                        "resistance[ohms]": 0.12
+                    },
+                    "battery": {
+                        "no_load_voltage[volts]": 22.2,
+                        "resistance[ohms]": 0.025
+                    },
+                    "esc": {
+                        "resistance[ohms]": 0.01
+                    }
                 },
-                "battery": {
-                    "no_load_voltage[volts]": 22.2,
-                    "resistance[ohms]": 0.025
+                "prop_2" : {
+                    "type" : "electric_propulsion",
+                    "motor": {
+                        "Kv": 450,
+                        "no_load_current[amps]": 0.3,
+                        "gear_ratio" : 1.0, 
+                        "resistance[ohms]": 0.12
+                    },
+                    "battery": {
+                        "no_load_voltage[volts]": 22.2,
+                        "resistance[ohms]": 0.025
+                    },
+                    "esc": {
+                        "resistance[ohms]": 0.01
+                    }
                 },
-                "esc": {
-                    "resistance[ohms]": 0.01
-                }
+                "prop_3" : {
+                    "type" : "electric_propulsion",
+                    "motor": {
+                        "Kv": 450,
+                        "no_load_current[amps]": 0.3,
+                        "gear_ratio" : 1.0, 
+                        "resistance[ohms]": 0.12
+                    },
+                    "battery": {
+                        "no_load_voltage[volts]": 22.2,
+                        "resistance[ohms]": 0.025
+                    },
+                    "esc": {
+                        "resistance[ohms]": 0.01
+                    }
+                },
+                "prop_4" : {
+                    "type" : "electric_propulsion",
+                    "motor": {
+                        "Kv": 450,
+                        "no_load_current[amps]": 0.3,
+                        "gear_ratio" : 1.0, 
+                        "resistance[ohms]": 0.12
+                    },
+                    "battery": {
+                        "no_load_voltage[volts]": 22.2,
+                        "resistance[ohms]": 0.025
+                    },
+                    "esc": {
+                        "resistance[ohms]": 0.01
+                    }
+                }                             
             },
             "aerodynamics" : {
                 "reference" : {
@@ -464,24 +516,24 @@
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
-                "2" : {
+               "2" : {
                     "name" : "prop_2", 
                     "units" : "torque[ft-lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
-                "3" : {
+               "3" : {
                     "name" : "prop_3", 
                     "units" : "torque[ft-lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
-                "4" : {
+               "4" : {
                     "name" : "prop_4", 
                     "units" : "torque[ft-lbf]", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
-                }                                                
+                }                                                                                             
             },
             "initial" : {
                 "airspeed[ft/s]" : 0.0, 

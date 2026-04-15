@@ -69,8 +69,8 @@ module controller_m
           real, allocatable :: T_coeffs(:) 
           real :: Ta 
 
-          ! For type Throttle
-          real :: motor_Kv, motor_Im0, 
+          ! For type electric_propulsion
+          real :: Kv, Im0, Gm, Rm, Eb0, Rb, Rc
 
           ! For type propeller_polynomial 
           real :: diameter, Ixx 

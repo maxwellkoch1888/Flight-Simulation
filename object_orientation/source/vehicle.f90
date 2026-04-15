@@ -279,7 +279,7 @@ module vehicle_m
 
         call jsonx_get(j_control, 'name', t%controls(ID)%name) 
         write(*,*) '      -reading control effector: ', t%controls(ID)%name 
-        
+
         if(t%controls(ID)%name == 'aileron') t%aileron_ID = ID + 13
         if(t%controls(ID)%name == 'elevator') t%elevator_ID = ID + 13
         if(t%controls(ID)%name == 'rudder') t%rudder_ID = ID + 13

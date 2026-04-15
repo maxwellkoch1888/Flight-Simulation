@@ -39,6 +39,14 @@ module propulsion_m
                 call jsonx_get(j_propulsion, 'CPb(J)', t%CP_J, 0.0) 
                 call jsonx_get(j_propulsion, 'CN,alpha(J)', t%CNa_J, 0.0) 
                 call jsonx_get(j_propulsion, 'Cn,alpha(J)', t%Cnna_J, 0.0) 
+            case("electric_propulsion") 
+                call jsonx_get(j_propulsion, 'motor.Kv', t%Kv)
+                call jsonx_get(j_propulsion, 'motor.no_load_current[amps]', t%Im0)
+                call jsonx_get(j_propulsion, 'motor.gear_ratio', t%Gm)
+                call jsonx_get(j_propulsion, 'motor.resistance[ohms]', t%Rm)
+                call jsonx_get(j_propulsion, 'battery.no_load_voltage[volts]', t%Eb0)
+                call jsonx_get(j_propulsion, 'battery.resistance[ohms]', t%Rb)
+                call jsonx_get(j_propulsion, 'esc.resistance[ohms]', t%Rc)
         end select 
     end subroutine propulsion_init 
 
@@ -52,6 +60,7 @@ module propulsion_m
         real :: thrust, normal, torque, yaw, hxx, alpha_c 
         real :: Z_dum, T_dum, P_dum, rho, rho0, a_dum, mu_dum, dyp 
         real :: Hz, omega, J
+        real :: Nr 
 
         Vc = quat_base_to_dependent(states(1:3) + cross_product(states(4:6), t%location), t%orientation_quat)
         Vc_mag = sqrt(Vc(1)**2 + Vc(2)**2 + Vc(3)**2) 
@@ -109,7 +118,9 @@ module propulsion_m
                     ! write(*,*) 'yaw    =', yaw   
                     ! write(*,*) 'alpha_c = ', alpha_c 
                     ! write(*,*) 'hxx    =', hxx
-            end select 
+            case ("electric_propulsion")
+                Nr = solve_electric_propulsion(t, tau, Vc_mag, 0.9, tol)
+        end select 
         ! write(*,*) 'uN = ', uN
 
         Fc = [thrust, 0.0, 0.0] + Normal*uN 
@@ -136,31 +147,48 @@ module propulsion_m
         end do 
     end function calc_polynomial 
 
-    function electric_propulsion(tau, Vc, gamma, tolerance) result(Nr)
+    function solve_electric_propulsion(t, tau, Vc, gamma, tolerance) result(Nr)
+        type(propulsion_t), intent(inout) :: t 
         real, intent(in) :: tau, Vc, gamma, tolerance 
         real :: Nr, error 
-        real :: lw, ls, lr, lm, Im, eta_c, B, C, Em, Nm, Ns, error 
+        real :: lw, ls, lr, lm, Im, eta_c, B, C, Em, Nm, Ns 
         real :: Eb, Ib 
-        real :: Gm, eta_g, Kv, CI, Im0, Rc, Eb0, Rb, Rm, Rc
+        real :: eta_g, CI
+
+        CI = 4.4482216152605*0.3048*2*pi/60.0
+        eta_g = 1.0         
 
         Nr = 1000 
         error = 1.0 
         do while (error > tolerance)
             ls = lr 
-            lm = ls/(eta_g * Gm) 
-            Im = lm * Kv/CI + Im0 
+            lm = ls/(eta_g * t%Gm) 
+            Im = lm * t%Kv/CI + t%Im0 
             eta_c = 1 - 0.078*(1-tau) 
-            B = 2*Im*Rc - tau*Eb0 + tau**2/eta_c *Im * Rb 
-            C = Im**2 * Rc**2 - tau*Eb0*Im*Rc 
-            Em = 0.5*(-B + sqrt(B**2 -4C))
-            Nm = Kv * (Em - Im*Rm)
-            Ns = Nm/Gm 
+            B = 2*Im*t%Rc - tau*t%Eb0 + tau**2/eta_c *Im * t%Rb 
+            C = Im**2 * t%Rc**2 - tau*t%Eb0*Im*t%Rc 
+            Em = 0.5*(-B + sqrt(B**2 -4*C))
+            Nm = t%Kv * (Em - Im*t%Rm)
+            Ns = Nm/t%Gm 
             error = Ns - Nr 
             Nr = Nr + gamma*(Ns-Nr)
+            write(*,*)
+            write(*,*) 'lr =', lr
+            write(*,*) 'ls =', ls
+            write(*,*) 'lm =', lm
+            write(*,*) 'Im =', Im
+            write(*,*) 'eta_c =', eta_c
+            write(*,*) 'B =', B
+            write(*,*) 'C =', C
+            write(*,*) 'Em =', Em
+            write(*,*) 'Nm =', Nm
+            write(*,*) 'Ns =', Ns
+            write(*,*) 'error =', error
+            write(*,*) 'Nr =', Nr
         end do 
-        Eb = (Nm/Kv + Im*(Rm+Rc))/tau 
-        Ib = (Eb0 - Eb)/Rb 
-
+        Eb = (Nm/t%Kv + Im*(t%Rm+t%Rc))/tau 
+        Ib = (t%Eb0 - Eb)/t%Rb 
+    end function solve_electric_propulsion
 
 end module propulsion_m
 
