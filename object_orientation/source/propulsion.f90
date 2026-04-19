@@ -39,14 +39,13 @@ module propulsion_m
                 call jsonx_get(j_propulsion, 'CPb(J)', t%CP_J, 0.0) 
                 call jsonx_get(j_propulsion, 'CN,alpha(J)', t%CNa_J, 0.0) 
                 call jsonx_get(j_propulsion, 'Cn,alpha(J)', t%Cnna_J, 0.0) 
-            case("electric_propulsion") 
-                call jsonx_get(j_propulsion, 'motor.Kv', t%Kv)
-                call jsonx_get(j_propulsion, 'motor.no_load_current[amps]', t%Im0)
-                call jsonx_get(j_propulsion, 'motor.gear_ratio', t%Gm)
-                call jsonx_get(j_propulsion, 'motor.resistance[ohms]', t%Rm)
-                call jsonx_get(j_propulsion, 'battery.no_load_voltage[volts]', t%Eb0)
-                call jsonx_get(j_propulsion, 'battery.resistance[ohms]', t%Rb)
-                call jsonx_get(j_propulsion, 'esc.resistance[ohms]', t%Rc)
+                call jsonx_get(j_propulsion, 'motor.Kv', t%Kv, 0.0)
+                call jsonx_get(j_propulsion, 'motor.no_load_current[amps]', t%Im0, 0.0)
+                call jsonx_get(j_propulsion, 'motor.gear_ratio', t%Gm, 0.0)
+                call jsonx_get(j_propulsion, 'motor.resistance[ohms]', t%Rm, 0.0)
+                call jsonx_get(j_propulsion, 'battery.no_load_voltage[volts]', t%Eb0, 0.0)
+                call jsonx_get(j_propulsion, 'battery.resistance[ohms]', t%Rb, 0.0)
+                call jsonx_get(j_propulsion, 'esc.resistance[ohms]', t%Rc, 0.0)
         end select 
     end subroutine propulsion_init 
 
@@ -96,14 +95,10 @@ module propulsion_m
                         omega = -Vc_mag * t%CP_J(2) + sqrt(Vc_mag**2*t%CP_J(2)**2 - 4.0 * t%CP_J(1)*(Vc_mag**2*t%CP_J(3) - tau *2.0 * pi / rho / t%diameter**3) ) 
                         omega = omega * pi / t%diameter / t%CP_J(1) 
                         Hz = omega / 2.0 / pi 
+                    case('throttle') 
+                        omega = solve_electric_propulsion(t, tau, Vc_mag, rho, 0.9, tol)
+                        Hz = omega / 2.0 / pi 
                 end select
-
-                    ! write(*,*) 'omega = ', omega 
-                    ! write(*,*) 'J = ', J                 
-                    ! write(*,*) 't%CT_J = ', t%CT_J
-                    ! write(*,*) 't%CP_J = ', t%CP_J
-                    ! write(*,*) 't%CNa_J = ', t%CNa_J
-                    ! write(*,*) 't%Cnna_J = ', t%Cnna_J
 
                     J = 2.0 * pi * Vc_mag/omega/t%diameter 
                     thrust = calc_polynomial(t%CT_J,J)    * rho*(Hz**2)*(t%diameter**4) 
@@ -111,16 +106,9 @@ module propulsion_m
                     normal = calc_polynomial(t%CNa_J,J)   * rho*(Hz**2)*(t%diameter**4) * alpha_c 
                     yaw    = calc_polynomial(t%Cnna_J,J)  * rho*(Hz**2)*(T%diameter**5) * alpha_c 
                     hxx = t%rotation_delta * t%Ixx * omega 
-                    ! write(*,*) 
-                    ! write(*,*) 'thrust =', thrust
-                    ! write(*,*) 'torque =', torque
-                    ! write(*,*) 'normal =', normal
-                    ! write(*,*) 'yaw    =', yaw   
-                    ! write(*,*) 'alpha_c = ', alpha_c 
-                    ! write(*,*) 'hxx    =', hxx
-            case ("electric_propulsion")
-                Nr = solve_electric_propulsion(t, tau, Vc_mag, 0.9, tol)
-        end select 
+
+  
+            end select 
         ! write(*,*) 'uN = ', uN
 
         Fc = [thrust, 0.0, 0.0] + Normal*uN 
@@ -147,20 +135,27 @@ module propulsion_m
         end do 
     end function calc_polynomial 
 
-    function solve_electric_propulsion(t, tau, Vc, gamma, tolerance) result(Nr)
+    function solve_electric_propulsion(t, tau, Vc, rho, gamma, tolerance) result(Nr)
         type(propulsion_t), intent(inout) :: t 
-        real, intent(in) :: tau, Vc, gamma, tolerance 
+        real, intent(in) :: tau, Vc, gamma, tolerance, rho 
         real :: Nr, error 
         real :: lw, ls, lr, lm, Im, eta_c, B, C, Em, Nm, Ns 
         real :: Eb, Ib 
         real :: eta_g, CI
+        real :: J, Hz, omega, Nr_print
 
-        CI = 4.4482216152605*0.3048*2*pi/60.0
+        ! CI = 4.4482216152605*0.3048*2*pi/60.0
+        CI = 7.04319971369755
         eta_g = 1.0         
 
         Nr = 1000 
         error = 1.0 
-        do while (error > tolerance)
+        do while (abs(error) > tolerance)
+            Nr_print = Nr
+            omega = Nr * pi / 30.0 
+            Hz = omega / 2.0 / pi             
+            J = 2.0 * pi * Vc/omega/t%diameter 
+            lr = calc_polynomial(t%CP_J,J)    * rho*(Hz**3)*(T%diameter**5) / omega 
             ls = lr 
             lm = ls/(eta_g * t%Gm) 
             Im = lm * t%Kv/CI + t%Im0 
@@ -170,24 +165,13 @@ module propulsion_m
             Em = 0.5*(-B + sqrt(B**2 -4*C))
             Nm = t%Kv * (Em - Im*t%Rm)
             Ns = Nm/t%Gm 
-            error = Ns - Nr 
+            error = Nr-Ns
             Nr = Nr + gamma*(Ns-Nr)
-            write(*,*)
-            write(*,*) 'lr =', lr
-            write(*,*) 'ls =', ls
-            write(*,*) 'lm =', lm
-            write(*,*) 'Im =', Im
-            write(*,*) 'eta_c =', eta_c
-            write(*,*) 'B =', B
-            write(*,*) 'C =', C
-            write(*,*) 'Em =', Em
-            write(*,*) 'Nm =', Nm
-            write(*,*) 'Ns =', Ns
-            write(*,*) 'error =', error
-            write(*,*) 'Nr =', Nr
         end do 
+
         Eb = (Nm/t%Kv + Im*(t%Rm+t%Rc))/tau 
         Ib = (t%Eb0 - Eb)/t%Rb 
+           
     end function solve_electric_propulsion
 
 end module propulsion_m
