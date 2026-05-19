@@ -3,7 +3,7 @@
         "time_step[s]" : 0.0,
         "end_time[s]" : 100.0,
         "rk4_verbose" : false,
-        "save_states" : true,
+        "save_states" : false,
         "save_lat_long" : false, 
         "sigsev_error" : false, 
         "geographic_model" : "none"
@@ -15,7 +15,7 @@
             "port_ID" : 9000,
             "number_of_values" : 14
         },
-        "_user_controls": {
+        "user_controls": {
             "type": "receive", 
             "number_of_values": 6, 
             "refresh_rate": 60,
@@ -301,7 +301,7 @@
                         "relaxation_factor" : 0.9,
                         "tolerance" : 1.0e-14,
                         "max_iterations" : 1000,
-                        "verbose" : true
+                        "verbose" : false
                     }
                 }
             }
