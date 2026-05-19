@@ -158,8 +158,8 @@ module sim_m
                 if(input_controls) then 
                     controls_input = user_controls%recv()
 
-                    commands(1) = -40.0 * controls_input(2)
-                    commands(2) = -30.0 * controls_input(3)
+                    commands(1) = -60.0 * controls_input(2)
+                    commands(2) = -60.0 * controls_input(3)
                     commands(3) = commands(3) + controls_input(5) * 0.001
                     vehicles(1)%state(14:17) = user_controller(vehicles(1)%controller, commands, vehicles(1), vehicles(1)%state, time)
                 end if           
