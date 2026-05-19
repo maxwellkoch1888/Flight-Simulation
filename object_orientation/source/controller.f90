@@ -296,7 +296,6 @@ module controller_m
         real :: dt, ans 
 
         if(t%prev_time < 0.0) then ! first iteration update
-          write(*,*) 'first iteration'
           t%prev_time   = time 
           t%prev_error  = commanded - actual 
           t%error_int   = 0.0 
