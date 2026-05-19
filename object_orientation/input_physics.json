@@ -26,7 +26,7 @@
     "atmosphere" : {
         "constant_wind[ft/s]" : [0.0, 0.0, 0.0], 
         "_turbulence" : {
-            "model": "dryden_beal", 
+            "model": "none", 
             "wingspan[ft]" : 30.0, 
             "hstab_distance[ft]" : 15.0, 
             "vstab_distance[ft]" : 15.0, 
@@ -306,9 +306,9 @@
                 }
             }
         },
-        "quadrotor" : {
+        "quadrotor_electric" : {
             "type" : "quadrotor", 
-            "run_physics" : false, 
+            "run_physics" : true, 
             "mass" : {
                 "weight[lbf]" : 5.0, 
                 "Ixx[slug-ft^2]" : 0.0231, 
@@ -319,11 +319,11 @@
                 "Iyz[slug-ft^2]" : 0.0 
             },
             "propulsion" : {
-                "prop_1" : {
+                "prop_1" : {                    
                     "type" : "propeller_polynomial",
                     "location[ft]" : [1.0, 1.0, -0.25], 
                     "orientation[deg]" : [0.0, 90.0, 0.0],
-                    "diameter[ft]" : 1.0,
+                    "diameter[ft]" : 1.25,
                     "Ixx[slug-ft^2]" : 0.000095231, 
                     "rotation" : "RH", 
                     "CT(J)" : [0.0560, -0.0704, -0.1027], 
@@ -461,7 +461,16 @@
                     }
                 },
                 "prop_2" : {
-                    "type" : "electric_propulsion",
+                    "type" : "propeller_polynomial",
+                    "location[ft]" : [-1.0, 1.0, -0.25], 
+                    "orientation[deg]" : [0.0, 90.0, 0.0],
+                    "diameter[ft]" : 1.25,
+                    "Ixx[slug-ft^2]" : 0.000095231, 
+                    "rotation" : "LH", 
+                    "CT(J)" : [0.0560, -0.0704, -0.1027], 
+                    "CPb(J)" : [0.0137, 0.0144, -0.0850], 
+                    "CN,alpha(J)" : [0.0, 0.0036, 0.0160, 0.0148], 
+                    "Cn,alpha(J)" : [0.0, -0.0112, 0.0029, 0.0050],                    
                     "motor": {
                         "Kv": 450,
                         "no_load_current[amps]": 0.3,
@@ -477,7 +486,16 @@
                     }
                 },
                 "prop_3" : {
-                    "type" : "electric_propulsion",
+                    "type" : "propeller_polynomial",
+                    "location[ft]" : [-1.0, -1.0, -0.25], 
+                    "orientation[deg]" : [0.0, 90.0, 0.0],
+                    "diameter[ft]" : 1.25,
+                    "Ixx[slug-ft^2]" : 0.000095231, 
+                    "rotation" : "RH", 
+                    "CT(J)" : [0.0560, -0.0704, -0.1027], 
+                    "CPb(J)" : [0.0137, 0.0144, -0.0850], 
+                    "CN,alpha(J)" : [0.0, 0.0036, 0.0160, 0.0148], 
+                    "Cn,alpha(J)" : [0.0, -0.0112, 0.0029, 0.0050],                    
                     "motor": {
                         "Kv": 450,
                         "no_load_current[amps]": 0.3,
@@ -493,7 +511,16 @@
                     }
                 },
                 "prop_4" : {
-                    "type" : "electric_propulsion",
+                    "type" : "propeller_polynomial",
+                    "location[ft]" : [1.0, -1.0, -0.25], 
+                    "orientation[deg]" : [0.0, 90.0, 0.0],
+                    "diameter[ft]" : 1.25,
+                    "Ixx[slug-ft^2]" : 0.000095231, 
+                    "rotation" : "LH", 
+                    "CT(J)" : [0.0560, -0.0704, -0.1027], 
+                    "CPb(J)" : [0.0137, 0.0144, -0.0850], 
+                    "CN,alpha(J)" : [0.0, 0.0036, 0.0160, 0.0148], 
+                    "Cn,alpha(J)" : [0.0, -0.0112, 0.0029, 0.0050],                    
                     "motor": {
                         "Kv": 450,
                         "no_load_current[amps]": 0.3,
@@ -519,25 +546,25 @@
             "control_effectors" : {
                 "1" : {
                     "name" : "prop_1", 
-                    "units" : "torque[ft-lbf]", 
+                    "units" : "throttle", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
                "2" : {
                     "name" : "prop_2", 
-                    "units" : "torque[ft-lbf]", 
+                    "units" : "throttle", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
                "3" : {
                     "name" : "prop_3", 
-                    "units" : "torque[ft-lbf]", 
+                    "units" : "throttle", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 },
                "4" : {
                     "name" : "prop_4", 
-                    "units" : "torque[ft-lbf]", 
+                    "units" : "throttle", 
                     "dynamics_order" : 0, 
                     "magnitude_limits" : [0,10000]
                 }                                                                                             
