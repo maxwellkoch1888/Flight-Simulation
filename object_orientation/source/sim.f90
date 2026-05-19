@@ -7,8 +7,9 @@ module sim_m
     type(json_value), pointer :: j_main
     type(vehicle_t), allocatable :: vehicles(:)
     type(atmosphere_t) :: atm
-    type(connection) :: graphics
+    type(connection) :: graphics, user_controls
     integer :: num_vehicles
+    logical :: input_controls = .false. 
 
     contains 
     !----------------------------------------
@@ -16,9 +17,9 @@ module sim_m
         subroutine init(filename)
             implicit none 
             character(100), intent(in) :: filename
-            type(json_value), pointer :: j_vehicles, j_temp, j_atmosphere, j_connections, j_graphics 
+            type(json_value), pointer :: j_vehicles, j_temp, j_atmosphere, j_connections, j_graphics, j_user_controls
             integer :: i
-            logical :: save_states, rk4_verbose, sigsev
+            logical :: save_states, rk4_verbose, sigsev, found 
 
             ! Begin simulation
             write(*,*) 'Initializing Simulation...'            
@@ -49,8 +50,16 @@ module sim_m
             ! Initialize connections 
             write(*,*) 'Reading connections json object...'
             call jsonx_get(j_main, 'connections', j_connections) 
+
             call jsonx_get(j_connections, 'graphics', j_graphics)
             call graphics%init(j_graphics)
+
+            call json_get(j_connections, 'user_controls', j_user_controls, found)
+            if (found) then 
+                input_controls = .true. 
+                call user_controls%init(j_user_controls)
+            end if 
+
 
             ! Initialize vehicles
             do i=1,num_vehicles
@@ -74,17 +83,18 @@ module sim_m
             real :: cpu_start_time, cpu_end_time, actual_time, integrated_time, time_error
             real :: time_1 = 0.0, time_2 = 0.0 
             real :: sent_state(14), f16_state(24)
+            real :: controls_input(6), commands(3)
             integer :: i
             logical :: real_time = .false. 
 
             call jsonx_get(j_main, 'simulation.time_step[s]',  dt, 0.0)
             call jsonx_get(j_main, 'simulation.end_time[s]', tf)
 
-            ! INITIALIZE TIME AND STATE
+            ! Initialize time and state
             time = 0.0 
             integrated_time = 0.0
 
-            ! SWITCH TO REAL TIME SIMULATION IF SPECIFIED
+            ! Switch to real time sim if specified
             if(abs(dt) < tol) then
                 real_time = .true.
                 time_1 = get_time()
@@ -99,10 +109,28 @@ module sim_m
                 end do 
             end if
 
-            ! SAVE THE TIMESTAMP WHEN THE SIMULATION BEGINS
+            ! Save timestamp when sim begins
             cpu_start_time = get_time()
 
-            ! START THE SIMULATION
+            ! Set velocity and controller gains if user controls turned on 
+            if(input_controls) then 
+                vehicles(1)%controller%gamma_q%KP = 0.4
+                vehicles(1)%controller%gamma_q%KI = 0.05
+                vehicles(1)%controller%gamma_q%KD = 0.0
+                vehicles(1)%controller%gamma_q%update_rate = 1000
+                vehicles(1)%controller%gamma_q%limit = [-1000.0, 1000.0]
+                vehicles(1)%controller%gamma_q%display_units = 180.0/ pi 
+
+                vehicles(1)%controller%V_tau%KP = 0.01 
+                vehicles(1)%controller%V_tau%KI = 0.002
+                vehicles(1)%controller%V_tau%KD = 0.0     
+                vehicles(1)%controller%V_tau%update_rate = 1000
+                vehicles(1)%controller%V_tau%limit = [0.0, 1.0]
+                vehicles(1)%controller%V_tau%display_units = 1.0                
+                commands(3) = sqrt(vehicles(1)%state(1)**2 + vehicles(1)%state(2)**2 + vehicles(1)%state(3)**2)
+            end if 
+
+            ! Start sim
             do i=1,num_vehicles
                 if(vehicles(i)%run_physics) then 
                     if(vehicles(i)%save_states) call vehicle_write_state(vehicles(i), time)
@@ -113,7 +141,7 @@ module sim_m
             write(*,*) 'Simulation Running...'
             if(abs(dt) < tol) write(*,*) 'Real time Simulation, check Unreal Engine...'
             do while (time < tf - tol)
-                ! CALCULATE THE NEW STATES FOR EACH VEHICLE
+                ! New state for each vehicle
                 do i=1,num_vehicles
                     if(vehicles(i)%run_physics) then 
                         call vehicle_tick_state(vehicles(i), time, dt)     
@@ -121,17 +149,22 @@ module sim_m
                     end if 
                 end do 
 
-                ! SEND GRAPHICS OVER CONNECTION 
+                ! Send graphics over connection
                 sent_state(1) = time
                 sent_state(2:14) = f16_state(1:13)
                 call graphics%send(sent_state)
 
-                ! ! RECEIVE USER CONTROLS OVER CONNECTION
-                ! controls_input = user_controls%recv()
-                ! controls_input(2:4) = controls_input(2:4) * pi / 180
-                ! controls = controls_input(2:5)                
+                ! Receive user controls 
+                if(input_controls) then 
+                    controls_input = user_controls%recv()
 
-                ! UPDATE THE TIME        
+                    commands(1) = -40.0 * controls_input(2)
+                    commands(2) = -30.0 * controls_input(3)
+                    commands(3) = commands(3) + controls_input(5) * 0.001
+                    vehicles(1)%state(14:17) = user_controller(vehicles(1)%controller, commands, vehicles(1), vehicles(1)%state, time)
+                end if           
+
+                ! Update time      
                 if(real_time) then
                     time_2 = get_time()
                     dt = time_2 - time_1
@@ -160,12 +193,12 @@ module sim_m
                 
             end do 
 
-            ! SAVE THE TIMESTAMP FOR WHEN THE SIMULATION STOPPED
+            ! Save timestamp
             cpu_end_time = get_time()
             actual_time = cpu_end_time - cpu_start_time
             time_error = actual_time - integrated_time
 
-            ! WRITE OUT THE TIME DIFFERENCES
+            ! Write time differences
             write(*,*) "Actual Time Elapsed", actual_time
             write(*,*) "Integrated Time", integrated_time
             write(*,*) "Time Error", time_error

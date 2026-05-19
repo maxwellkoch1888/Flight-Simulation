@@ -1,6 +1,6 @@
 {
     "simulation" : {
-        "time_step[s]" : 0.01,
+        "time_step[s]" : 0.0,
         "end_time[s]" : 100.0,
         "rk4_verbose" : false,
         "save_states" : true,
@@ -14,6 +14,13 @@
             "channel_type" : "udp", 
             "port_ID" : 9000,
             "number_of_values" : 14
+        },
+        "_user_controls": {
+            "type": "receive", 
+            "number_of_values": 6, 
+            "refresh_rate": 60,
+            "channel_type": "udp",
+            "port_ID": 9001
         }
     },    
     "atmosphere" : {
@@ -38,7 +45,7 @@
     "vehicles" : {
         "F16" : {
             "type" : "aircraft",
-            "run_physics" : false,
+            "run_physics" : true,
             "mass" : {
                 "weight[lbf]" : 20500.0,
                 "Ixx[slug-ft^2]" : 9496.0,
@@ -426,7 +433,7 @@
         },
         "quadrotor_electric" : {
             "type" : "quadrotor", 
-            "run_physics" : true, 
+            "run_physics" : false, 
             "mass" : {
                 "weight[lbf]" : 5.0, 
                 "Ixx[slug-ft^2]" : 0.0231, 
