@@ -208,7 +208,7 @@
                     "damping_ratio" : 1.0
                 }                                                
             },
-            "_controller": {
+            "controller": {
                 "connections" : {
                     "receive_pilot_commands": {
                         "type": "receive", 

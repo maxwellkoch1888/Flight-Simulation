@@ -82,7 +82,7 @@ module sim_m
             real :: time, dt, tf
             real :: cpu_start_time, cpu_end_time, actual_time, integrated_time, time_error
             real :: time_1 = 0.0, time_2 = 0.0 
-            real :: sent_state(14), f16_state(24)
+            real :: unreal_engine_state(14)
             real :: controls_input(6), commands(3)
             integer :: i
             logical :: real_time = .false. 
@@ -145,14 +145,13 @@ module sim_m
                 do i=1,num_vehicles
                     if(vehicles(i)%run_physics) then 
                         call vehicle_tick_state(vehicles(i), time, dt)     
-                        if(vehicles(i)%name == 'F16') f16_state = vehicles(i)%state 
+                        if(vehicles(i)%name == 'F16') unreal_engine_state(2:14) = vehicles(i)%state(1:13)
                     end if 
                 end do 
 
                 ! Send graphics over connection
-                sent_state(1) = time
-                sent_state(2:14) = f16_state(1:13)
-                call graphics%send(sent_state)
+                unreal_engine_state(1) = time
+                call graphics%send(unreal_engine_state)
 
                 ! Receive user controls 
                 if(input_controls) then 

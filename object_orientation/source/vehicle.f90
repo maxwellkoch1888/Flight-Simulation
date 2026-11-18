@@ -816,7 +816,7 @@ module vehicle_m
         ! hc   = cmd(1)
         ! chic = cmd(2)
         
-        call get_controller_input(t, time+dt) 
+        ! call get_controller_input(t, time+dt) 
         if (t%sigsev) write(*,*) 'vehicle_tick_state success...'
       end subroutine
 
